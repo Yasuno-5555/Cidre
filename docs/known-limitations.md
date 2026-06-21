@@ -1,0 +1,18 @@
+# Cidre Known Limitations
+
+This document lists all known limits, caveats, and risk factors regarding the Cidre desktop layer.
+
+## Caveats & Limits
+
+1. **Hardware Verification Status**:
+   - **real-hardware clean install not yet fully verified**: Real hardware testing on Apple Silicon Macs is currently deferred to the v1.0.0 milestone. All present tests utilize static analysis, sandboxes, and simulated dry-runs.
+2. **Composition & Compositor Limits**:
+   - Cidre configures `niri` settings tailored for standard Asahi display constraints but does not modify bootloaders, device tree blocks (DTBs), or m1n1 variables.
+3. **No Full System Rollback**:
+   - `cidre-snapshot` and `cidre-recovery` manage user-level configurations under the Home directory. They do **not** provide full filesystem transactional updates, root rollbacks, or Snapper/Timeshift/Btrfs-level OS rollback hooks.
+4. **Input Method (fcitx5)**:
+   - IME activation is managed through systemd user units. Startup behavior depends on standard pam-session loading and environment configs, which can fail to map if launching nested wayland compositors.
+5. **Audio Buffer pop-noise prevention**:
+   - Pop-noise mitigations depend on specific speakersafetyd and PipeWire versions. Real hardware outputs may vary depending on firmware versions.
+6. **Installer Automation (v0.11.0 Limitation)**:
+   - Cidre now provides a guided `./preinstall` dashboard/wizard for the root phase, but it still does **not** replace the standard ALARM minimal installer, disk partitioning, bootloader work, or m1n1/DTB configuration. Cidre v1.0.0 remains reserved for a simpler, near-Ubuntu installation experience.

@@ -4,7 +4,21 @@ Cidre features a guided onboarding process to verify, preview, and apply configu
 
 ## Recommended Installation Path
 
-Instead of manually managing package steps, clone the repository and run the guided installer entrypoint:
+Instead of manually managing package steps, split installation into the root phase and the user phase.
+
+### Root Phase
+
+From a fresh ALARM root shell:
+
+```bash
+./preinstall
+```
+
+This opens the base setup dashboard/wizard, checks network and pacman readiness, prepares the normal user, and prints the handoff command for the user phase.
+
+### User Phase
+
+After the preinstall handoff:
 
 ```bash
 ./install

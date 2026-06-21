@@ -8,6 +8,9 @@ VERBOSE_MODE=false
 LAST_MODE=false
 HISTORY_MODE=false
 SUGGESTIONS_MODE=false
+MAINTENANCE_MODE=false
+RC_READINESS_MODE=false
+BASE_READINESS_MODE=false
 
 STATE_DIR="${HOME}/.local/state/cidre"
 DOCTOR_DIR="${STATE_DIR}/doctor"
@@ -23,6 +26,12 @@ show_help() {
   echo "  --last              Show details from the last diagnostic run"
   echo "  --history           Show recent diagnostic execution history"
   echo "  --fix-suggestions   Show recovery suggestions based on previous diagnostics"
+  echo "  --maintenance       Run maintenance status and update readiness checks"
+  echo "  --update-readiness  Alias for --maintenance"
+  echo "  --state             Alias for --maintenance"
+  echo "  --rc-readiness      Verify if repository state is ready for release candidate"
+  echo "  --base-readiness    Verify root-phase base setup readiness for ./preinstall"
+  echo "  --summary           Can be combined with --base-readiness for condensed output"
   echo "  --help              Show this help message"
 }
 
@@ -35,6 +44,9 @@ while [ $# -gt 0 ]; do
     --last) LAST_MODE=true; shift ;;
     --history) HISTORY_MODE=true; shift ;;
     --fix-suggestions) SUGGESTIONS_MODE=true; shift ;;
+    --maintenance|--update-readiness|--state) MAINTENANCE_MODE=true; shift ;;
+    --rc-readiness) RC_READINESS_MODE=true; shift ;;
+    --base-readiness) BASE_READINESS_MODE=true; shift ;;
     --help) show_help; exit 0 ;;
     *) echo "Unknown option: $1" >&2; show_help; exit 1 ;;
   esac
@@ -64,8 +76,8 @@ if [ "$SUGGESTIONS_MODE" = true ]; then
   echo "=== Recommended Recovery & Fix Suggestions ==="
   # Analyze last summary or report defaults
   if [ -f "$LAST_SUMMARY" ]; then
-    if grep -q "FAIL" "$LAST_SUMMARY"; then
-      echo "Critical failures detected in the last run. Suggested fixes:"
+    if grep -q -E "FAIL|WARN" "$LAST_SUMMARY"; then
+      echo "Issues/warnings detected in the last run. Suggested fixes:"
       if grep -q "Niri configuration" "$LAST_SUMMARY" | grep -q "missing"; then
         echo "  * Niri Config Missing: Run 'cidre-recovery reset-niri'"
       fi
@@ -74,6 +86,18 @@ if [ "$SUGGESTIONS_MODE" = true ]; then
       fi
       if grep -q "missing on the system" "$LAST_SUMMARY"; then
         echo "  * Core Tools Missing: Re-run guided installer via './install'"
+      fi
+      if grep -q "Cidre-managed config drift" "$LAST_SUMMARY" || grep -q "drift" "$LAST_SUMMARY"; then
+        echo "  * Configuration Drift: Run 'cidre-maintenance drift' to review, and 'cidre-user-setup apply' to re-align."
+      fi
+      if grep -q "snapshots found; consider" "$LAST_SUMMARY" || grep -q "large" "$LAST_SUMMARY"; then
+        echo "  * Cleanup Needed: Run 'cidre-maintenance prune' to clean old snapshots/logs."
+      fi
+      if grep -q "Pacman sync database is" "$LAST_SUMMARY" && grep -q "old" "$LAST_SUMMARY"; then
+        echo "  * Packages Stale: Run 'cidre-update --check' followed by 'cidre-update --apply' to update."
+      fi
+      if grep -q "command.*missing" "$LAST_SUMMARY"; then
+        echo "  * Missing utilities: Ensure cidre commands are in your PATH."
       fi
     else
       echo "All critical items were OK on last check. For config issues, you can run:"
@@ -131,120 +155,447 @@ print_result() {
   esac
 }
 
-# 1. Session check
-if [ "${XDG_SESSION_TYPE:-}" = "wayland" ]; then
-  print_result OK "Graphical session is Wayland."
+if [ "$BASE_READINESS_MODE" = true ]; then
+  # 1. User status check
+  if [ "$EUID" -eq 0 ]; then
+    print_result OK "Running as root for root-phase preparation."
+  else
+    print_result WARN "Running as normal user (${USER:-$(id -un)}); preparation changes require root."
+  fi
+
+  # 2. Arch/ALARM Check
+  if [ -f /etc/arch-release ]; then
+    print_result OK "Arch/ALARM-like base system detected."
+  else
+    print_result WARN "Base system is not Arch/ALARM-like."
+  fi
+
+  # 3. Pacman availability
+  if command -v pacman >/dev/null 2>&1; then
+    print_result OK "pacman package manager is available."
+  else
+    print_result FAIL "pacman is missing."
+  fi
+
+  # 4. Pacman database state
+  if [ -d "/var/lib/pacman/sync" ] && [ -n "$(ls -A /var/lib/pacman/sync 2>/dev/null)" ]; then
+    print_result OK "Pacman sync database is initialized."
+  else
+    print_result FAIL "Pacman sync database is uninitialized or empty. Run 'pacman -Sy'."
+  fi
+
+  # 5. Network connectivity & DNS resolution
+  if ip -o link show up 2>/dev/null | grep -qv "LOOPBACK"; then
+    print_result OK "Network interface is up."
+  else
+    print_result FAIL "No active non-loopback link detected."
+  fi
+
+  if ip route show default 2>/dev/null | grep -q '^default'; then
+    print_result OK "Default route is present."
+  else
+    print_result WARN "Default route is missing."
+  fi
+
+  if ping -c 1 -W 2 archlinux.org >/dev/null 2>&1 || ping -c 1 -W 2 google.com >/dev/null 2>&1; then
+    print_result OK "Repository hosts are reachable."
+    if host archlinux.org >/dev/null 2>&1 || nslookup archlinux.org >/dev/null 2>&1 || ping -c 1 -W 2 archlinux.org >/dev/null 2>&1; then
+      print_result OK "DNS resolution works."
+    else
+      print_result FAIL "DNS resolution appears to fail."
+    fi
+  else
+    print_result WARN "Repository reachability could not be verified."
+  fi
+
+  # 6. System clock sanity
+  year=$(date +%Y)
+  if [ "$year" -ge 2026 ]; then
+    print_result OK "System clock is sane (Year: $year)."
+  else
+    print_result FAIL "System clock is set to the past (Year: $year). Please set date/time."
+  fi
+
+  # 7. User account existence & wheel presence
+  NORMAL_USERS=$(awk -F: '$3 >= 1000 && $1 != "nobody" {print $1}' /etc/passwd || echo "")
+  if [ -n "$NORMAL_USERS" ]; then
+    print_result OK "Normal user account(s) exist: $(echo "$NORMAL_USERS" | tr '\n' ' ')."
+    WHEEL_USERS=""
+    for u in $NORMAL_USERS; do
+      if id -nG "$u" | grep -qw "wheel"; then
+        WHEEL_USERS="$WHEEL_USERS $u"
+      fi
+    done
+    if [ -n "$WHEEL_USERS" ]; then
+      print_result OK "Normal user(s) with wheel privileges found: $WHEEL_USERS."
+    else
+      print_result WARN "No normal user has wheel privileges."
+    fi
+  else
+    print_result FAIL "No normal user accounts detected (UID >= 1000)."
+  fi
+
+  # 8. Sudo availability
+  if command -v sudo >/dev/null 2>&1; then
+    if [ -f /etc/sudoers.d/cidre-wheel ] && grep -q '^%wheel ALL=(ALL:ALL) ALL$' /etc/sudoers.d/cidre-wheel 2>/dev/null; then
+      print_result OK "sudo utility and cidre wheel policy are available."
+    else
+      print_result WARN "sudo is installed but /etc/sudoers.d/cidre-wheel is not configured."
+    fi
+  else
+    print_result FAIL "sudo utility is missing."
+  fi
+
+  # 9. Git & curl availability
+  for tool in git curl; do
+    if command -v "$tool" >/dev/null 2>&1; then
+      print_result OK "Tool '$tool' is available."
+    else
+      print_result WARN "Tool '$tool' is missing."
+    fi
+  done
+
+  # 10. Filesystem writability & disk space
+  if [ -w /tmp ]; then
+    print_result OK "Filesystem is writable."
+  else
+    print_result FAIL "Filesystem is read-only or /tmp is not writable."
+  fi
+
+  # Disk space check
+  free_space=$(df / --output=avail | tail -n 1 || echo 99999999)
+  if [ "$free_space" -gt 5242880 ]; then
+    print_result OK "Disk space is sufficient."
+  else
+    print_result WARN "Available disk space is low."
+  fi
+
+  # 11. Apple Silicon/Asahi hints
+  if [ -d /proc/device-tree/asahi ] || grep -qi "asahi" /proc/cpuinfo 2>/dev/null || [ -d /sys/firmware/devicetree/base/asahi ]; then
+    print_result OK "Apple Silicon / Asahi platform detected."
+  else
+    print_result WARN "Not running on Apple Silicon / Asahi hardware platform."
+  fi
+
+  if [ "$SUMMARY_MODE" = false ]; then
+    echo ""
+    echo "Next step guidance:"
+    if [ "$FAIL_COUNT" -gt 0 ]; then
+      echo "  Fix FAIL items first, then re-run './preinstall --check' or 'cidre-doctor --base-readiness --summary'."
+    elif [ "$WARN_COUNT" -gt 0 ]; then
+      echo "  System is close to ready. Run './preinstall' to complete user/sudo/tool preparation."
+    else
+      echo "  Base readiness looks good. Switch to the target user and run './install'."
+    fi
+  fi
+
+elif [ "$RC_READINESS_MODE" = true ]; then
+  # 1. Try to find the Cidre repository root relative to this script
+  SCRIPT_PATH=$(realpath "$0")
+  REPO_ROOT=$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd)
+  if [ ! -f "${REPO_ROOT}/install" ]; then
+    if [ -f "./install" ]; then
+      REPO_ROOT=$(pwd)
+    else
+      REPO_ROOT=""
+    fi
+  fi
+
+  if [ -n "$REPO_ROOT" ]; then
+    print_result OK "Cidre repository tree found at $REPO_ROOT."
+
+    # Verify all commands exist and are executable in tree
+    for cmd in install scripts/cidre-installer scripts/cidre-user-setup scripts/cidre-doctor scripts/cidre-recovery scripts/cidre-snapshot scripts/cidre-update scripts/cidre-maintenance scripts/cidre-firstboot scripts/cidre-welcome scripts/cidre-audio scripts/check-packages; do
+      if [ -f "${REPO_ROOT}/${cmd}" ]; then
+        print_result OK "Command tree file '${cmd}' exists."
+        if [ -x "${REPO_ROOT}/${cmd}" ] || [[ "$cmd" == *.py ]]; then
+          print_result OK "Command tree file '${cmd}' has correct permissions/execution."
+        else
+          print_result FAIL "Command tree file '${cmd}' is not executable. Run chmod +x."
+        fi
+      else
+        print_result FAIL "Command tree file '${cmd}' is missing."
+      fi
+    done
+
+    # Verify documentation files are present
+    for doc in README.md CHANGELOG.md docs/commands.md docs/profiles.md docs/packages.md docs/managed-files.md docs/validation-matrix.md docs/known-limitations.md docs/v1.0.0-clean-install-test-plan.md docs/v0.9.0-rc-readiness.md; do
+      if [ -f "${REPO_ROOT}/${doc}" ]; then
+        print_result OK "Documentation file '${doc}' is present."
+        # Extra verification for limitations presence
+        if [ "$doc" = "docs/known-limitations.md" ]; then
+          if grep -qi "real-hardware clean install not yet fully verified" "${REPO_ROOT}/${doc}"; then
+            print_result OK "Limitations acknowledge clean install caveat."
+          else
+            print_result WARN "docs/known-limitations.md does not contain clean-install warning."
+          fi
+        fi
+      else
+        print_result FAIL "Documentation file '${doc}' is missing."
+      fi
+    done
+  else
+    print_result WARN "Cidre repository tree root not found. Skipping local tree validations."
+  fi
+
+  # 2. Check globally installed commands
+  for cmd in install cidre-installer cidre-user-setup cidre-doctor cidre-recovery cidre-snapshot cidre-update cidre-maintenance cidre-firstboot cidre-welcome cidre-audio; do
+    if command -v "$cmd" >/dev/null 2>&1; then
+      print_result OK "Globally installed command '$cmd' is available in PATH."
+    else
+      print_result WARN "Globally installed command '$cmd' is missing from PATH."
+    fi
+  done
+
+  # 3. State directory layout checks
+  if [ -d "$STATE_DIR" ]; then
+    print_result OK "Cidre state directory exists."
+    for subdir in snapshots setup doctor update; do
+      if [ -d "${STATE_DIR}/${subdir}" ]; then
+        print_result OK "State subdirectory '${subdir}' exists."
+      else
+        print_result WARN "State subdirectory '${subdir}' is missing."
+      fi
+    done
+  else
+    print_result FAIL "Cidre state directory is missing."
+  fi
+
+  # 4. manifest existence
+  if [ -f "${STATE_DIR}/manifest.json" ]; then
+    print_result OK "Cidre installation manifest exists."
+  else
+    print_result WARN "Cidre installation manifest is missing (requires setup apply)."
+  fi
+
+elif [ "$MAINTENANCE_MODE" = true ]; then
+  # 1. State directory layout checks
+  if [ -d "$STATE_DIR" ]; then
+    print_result OK "Cidre state directory exists at $STATE_DIR."
+    for subdir in snapshots setup doctor update; do
+      if [ -d "${STATE_DIR}/${subdir}" ]; then
+        print_result OK "State subdirectory '${subdir}' exists."
+      else
+        print_result WARN "State subdirectory '${subdir}' is missing."
+      fi
+    done
+  else
+    print_result FAIL "Cidre state directory is missing at $STATE_DIR."
+  fi
+
+  # 2. manifest existence
+  if [ -f "${STATE_DIR}/manifest.json" ]; then
+    print_result OK "Cidre installation manifest exists."
+  else
+    print_result FAIL "Cidre installation manifest is missing."
+  fi
+
+  # 3. command availability checks
+  for cmd in cidre-snapshot cidre-recovery cidre-maintenance cidre-update; do
+    if command -v "$cmd" >/dev/null 2>&1 || [ -f "$(dirname "$0")/$cmd" ] || [ -f "./$cmd" ]; then
+      print_result OK "Command '$cmd' is available."
+    else
+      print_result FAIL "Command '$cmd' is missing."
+    fi
+  done
+
+  # 4. latest doctor result
+  if [ -f "$LAST_SUMMARY" ]; then
+    print_result OK "Latest doctor summary is available."
+  else
+    print_result WARN "No previous doctor summary found."
+  fi
+
+  # 5. setup history
+  if [ -f "$STATE_DIR/setup/history.log" ]; then
+    print_result OK "Setup history log is available."
+  else
+    print_result WARN "Setup history log is missing."
+  fi
+
+  # 6. snapshot count and warnings
+  if [ -d "$STATE_DIR/snapshots" ]; then
+    snap_count=$(find "$STATE_DIR/snapshots" -mindepth 1 -maxdepth 1 -type d | wc -l)
+    if [ "$snap_count" -gt 15 ]; then
+      print_result WARN "${snap_count} snapshots found; consider running 'cidre-maintenance prune' to clean up."
+    else
+      print_result OK "${snap_count} snapshots saved."
+    fi
+  else
+    print_result OK "0 snapshots saved."
+  fi
+
+  # 7. firstboot status
+  if [ -f "$STATE_DIR/firstboot-done" ]; then
+    print_result OK "Firstboot configuration has completed."
+  else
+    print_result WARN "Firstboot configuration is not marked complete."
+  fi
+
+  # 8. package metadata sync status
+  if [ -d "/var/lib/pacman/sync" ]; then
+    db_file=$(find /var/lib/pacman/sync -name "*.db" -print -quit)
+    if [ -n "$db_file" ]; then
+      db_age=$(( ($(date +%s) - $(stat -c %Y "$db_file")) / 86400 ))
+      if [ "$db_age" -gt 7 ]; then
+        print_result WARN "Pacman sync database is ${db_age} days old. Run 'cidre-update --check' or 'sudo pacman -Sy'."
+      else
+        print_result OK "Pacman sync database is up to date (${db_age} days old)."
+      fi
+    else
+      print_result WARN "No pacman sync database found. Package checks may be offline."
+    fi
+  else
+    print_result OK "Not running under pacman package manager or sync database path is different."
+  fi
+
+  # 9. Cidre-managed config drift
+  DRIFT_FOUND=false
+  if command -v cidre-user-setup >/dev/null 2>&1; then
+    if ! cidre-user-setup verify >/dev/null 2>&1; then
+      DRIFT_FOUND=true
+    fi
+  elif [ -f "$(dirname "$0")/cidre-user-setup" ]; then
+    if ! python3 "$(dirname "$0")/cidre-user-setup" verify >/dev/null 2>&1; then
+      DRIFT_FOUND=true
+    fi
+  elif [ -f "./cidre-user-setup" ]; then
+    if ! python3 "./cidre-user-setup" verify >/dev/null 2>&1; then
+      DRIFT_FOUND=true
+    fi
+  fi
+  if [ "$DRIFT_FOUND" = true ]; then
+    print_result WARN "Cidre-managed config drift detected. Run 'cidre-maintenance drift' to see differences."
+  else
+    print_result OK "No configuration drift detected."
+  fi
+
+  # 10. stale logs warning
+  for log in install.log doctor/history.log setup/history.log update/history.log; do
+    lpath="${STATE_DIR}/${log}"
+    if [ -f "$lpath" ]; then
+      lsize=$(stat -c %s "$lpath" 2>/dev/null || echo 0)
+      if [ "$lsize" -gt 5242880 ]; then
+        print_result WARN "Log file '${log}' is large ($((lsize / 1024 / 1024))MB). Run 'cidre-maintenance prune'."
+      fi
+    fi
+  done
 else
-  print_result WARN "Graphical session is not Wayland (XDG_SESSION_TYPE='${XDG_SESSION_TYPE:-}')."
-fi
-
-# 2. Config presence checks
-check_file_exists() {
-  local filepath="$1"
-  local name="$2"
-  if [ -f "$filepath" ]; then
-    print_result OK "$name is present."
-  elif [ -d "$filepath" ]; then
-    print_result OK "$name directory is present."
+  # 1. Session check
+  if [ "${XDG_SESSION_TYPE:-}" = "wayland" ]; then
+    print_result OK "Graphical session is Wayland."
   else
-    print_result FAIL "$name is missing at $filepath."
-  fi
-}
-
-check_file_exists "$HOME/.config/niri/config.kdl" "Niri configuration"
-check_file_exists "$HOME/.config/waybar/config" "Waybar configuration"
-check_file_exists "$HOME/.config/ghostty/config" "Ghostty configuration"
-check_file_exists "$HOME/.config/fish/config.fish" "Fish configuration"
-check_file_exists "$HOME/.local/state/cidre/manifest.json" "Cidre setup manifest"
-
-# 3. Fcitx5 systemd user service check
-if systemctl --user is-active --quiet fcitx5 2>/dev/null; then
-  print_result OK "Fcitx5 user service is active."
-elif systemctl --user is-enabled --quiet fcitx5 2>/dev/null; then
-  print_result WARN "Fcitx5 user service is enabled but not currently running."
-else
-  print_result FAIL "Fcitx5 user service is inactive or not configured."
-fi
-
-# 4. speakersafetyd system daemon check
-if systemctl is-active --quiet speakersafetyd 2>/dev/null; then
-  print_result OK "speakersafetyd service is active."
-else
-  print_result WARN "speakersafetyd service is inactive (needed for safe audio output)."
-fi
-
-# 5. rtkit-daemon check
-if systemctl is-active --quiet rtkit-daemon 2>/dev/null; then
-  print_result OK "rtkit-daemon service is active."
-else
-  print_result WARN "rtkit-daemon service is inactive (needed for real-time scheduling priority)."
-fi
-
-# 6. Audio package check
-if command -v pipewire >/dev/null 2>&1; then
-  print_result OK "PipeWire command is available."
-else
-  print_result FAIL "PipeWire command is missing."
-fi
-
-# 7. Check expected binaries
-for cmd in ghostty fuzzel waybar starship fcitx5; do
-  if command -v "$cmd" >/dev/null 2>&1; then
-    print_result OK "Executable '$cmd' is available."
-  else
-    print_result FAIL "Core executable '$cmd' is missing on the system."
-  fi
-done
-
-# 8. Daily driver specific checks
-if [ "$DAILY_MODE" = true ] || [ "$VERBOSE_MODE" = true ]; then
-  # Brightness tool
-  if command -v brightnessctl >/dev/null 2>&1; then
-    print_result OK "brightnessctl tool is installed."
-  else
-    print_result WARN "brightnessctl tool is missing. Brightness hotkeys will not function."
+    print_result WARN "Graphical session is not Wayland (XDG_SESSION_TYPE='${XDG_SESSION_TYPE:-}')."
   fi
 
-  # Screenshot tools
-  if command -v grim >/dev/null 2>&1 && command -v slurp >/dev/null 2>&1; then
-    print_result OK "Screenshot utilities (grim, slurp) are available."
+  # 2. Config presence checks
+  check_file_exists() {
+    local filepath="$1"
+    local name="$2"
+    if [ -f "$filepath" ]; then
+      print_result OK "$name is present."
+    elif [ -d "$filepath" ]; then
+      print_result OK "$name directory is present."
+    else
+      print_result FAIL "$name is missing at $filepath."
+    fi
+  }
+
+  check_file_exists "$HOME/.config/niri/config.kdl" "Niri configuration"
+  check_file_exists "$HOME/.config/waybar/config" "Waybar configuration"
+  check_file_exists "$HOME/.config/ghostty/config" "Ghostty configuration"
+  check_file_exists "$HOME/.config/fish/config.fish" "Fish configuration"
+  check_file_exists "$HOME/.local/state/cidre/manifest.json" "Cidre setup manifest"
+
+  # 3. Fcitx5 systemd user service check
+  if systemctl --user is-active --quiet fcitx5 2>/dev/null; then
+    print_result OK "Fcitx5 user service is active."
+  elif systemctl --user is-enabled --quiet fcitx5 2>/dev/null; then
+    print_result WARN "Fcitx5 user service is enabled but not currently running."
   else
-    print_result WARN "Screenshot utilities (grim, slurp) are missing. Screenshot flow will be limited."
+    print_result FAIL "Fcitx5 user service is inactive or not configured."
   fi
 
-  # Battery status availability check (Apple Silicon Macs / laptops)
-  if [ -d /sys/class/power_supply ] && ls /sys/class/power_supply/BAT* >/dev/null 2>&1; then
-    print_result OK "Battery info is visible in /sys/class/power_supply."
+  # 4. speakersafetyd system daemon check
+  if systemctl is-active --quiet speakersafetyd 2>/dev/null; then
+    print_result OK "speakersafetyd service is active."
   else
-    print_result WARN "No battery interface (BAT*) found in /sys/class/power_supply. Ignore if running on desktop Mac."
+    print_result WARN "speakersafetyd service is inactive (needed for safe audio output)."
   fi
 
-  # Mozc IME check
-  if command -v fcitx5-remote >/dev/null 2>&1; then
-    print_result OK "fcitx5-remote client is available."
+  # 5. rtkit-daemon check
+  if systemctl is-active --quiet rtkit-daemon 2>/dev/null; then
+    print_result OK "rtkit-daemon service is active."
   else
-    print_result WARN "fcitx5-remote tool is missing; IME diagnostics cannot be queried."
-  fi
-  
-  # Network status tool
-  if command -v nmcli >/dev/null 2>&1; then
-    print_result OK "nmcli network management tool is available."
-  else
-    print_result WARN "nmcli is missing; network status indicator might be incomplete."
+    print_result WARN "rtkit-daemon service is inactive (needed for real-time scheduling priority)."
   fi
 
-  # Firstboot completion state check
-  if [ -f "$HOME/.local/state/cidre/firstboot-done" ]; then
-    print_result OK "Firstboot diagnostic check has run successfully."
+  # 6. Audio package check
+  if command -v pipewire >/dev/null 2>&1; then
+    print_result OK "PipeWire command is available."
   else
-    print_result WARN "Firstboot diagnostic is pending or has not completed."
+    print_result FAIL "PipeWire command is missing."
   fi
 
-  # Install logs
-  if [ -f "/var/log/cidre/bootstrap.log" ]; then
-    print_result OK "Cidre installation log is present."
-  else
-    print_result WARN "Cidre installation log not found at /var/log/cidre/bootstrap.log."
+  # 7. Check expected binaries
+  for cmd in ghostty fuzzel waybar starship fcitx5; do
+    if command -v "$cmd" >/dev/null 2>&1; then
+      print_result OK "Executable '$cmd' is available."
+    else
+      print_result FAIL "Core executable '$cmd' is missing on the system."
+    fi
+  done
+
+  # 8. Daily driver specific checks
+  if [ "$DAILY_MODE" = true ] || [ "$VERBOSE_MODE" = true ]; then
+    # Brightness tool
+    if command -v brightnessctl >/dev/null 2>&1; then
+      print_result OK "brightnessctl tool is installed."
+    else
+      print_result WARN "brightnessctl tool is missing. Brightness hotkeys will not function."
+    fi
+
+    # Screenshot tools
+    if command -v grim >/dev/null 2>&1 && command -v slurp >/dev/null 2>&1; then
+      print_result OK "Screenshot utilities (grim, slurp) are available."
+    else
+      print_result WARN "Screenshot utilities (grim, slurp) are missing. Screenshot flow will be limited."
+    fi
+
+    # Battery status availability check (Apple Silicon Macs / laptops)
+    if [ -d /sys/class/power_supply ] && ls /sys/class/power_supply/BAT* >/dev/null 2>&1; then
+      print_result OK "Battery info is visible in /sys/class/power_supply."
+    else
+      print_result WARN "No battery interface (BAT*) found in /sys/class/power_supply. Ignore if running on desktop Mac."
+    fi
+
+    # Mozc IME check
+    if command -v fcitx5-remote >/dev/null 2>&1; then
+      print_result OK "fcitx5-remote client is available."
+    else
+      print_result WARN "fcitx5-remote tool is missing; IME diagnostics cannot be queried."
+    fi
+
+    # Network status tool
+    if command -v nmcli >/dev/null 2>&1; then
+      print_result OK "nmcli network management tool is available."
+    else
+      print_result WARN "nmcli is missing; network status indicator might be incomplete."
+    fi
+
+    # Firstboot completion state check
+    if [ -f "$HOME/.local/state/cidre/firstboot-done" ]; then
+      print_result OK "Firstboot diagnostic check has run successfully."
+    else
+      print_result WARN "Firstboot diagnostic is pending or has not completed."
+    fi
+
+    # Install logs
+    if [ -f "/var/log/cidre/bootstrap.log" ]; then
+      print_result OK "Cidre installation log is present."
+    else
+      print_result WARN "Cidre installation log not found at /var/log/cidre/bootstrap.log."
+    fi
   fi
 fi
 
