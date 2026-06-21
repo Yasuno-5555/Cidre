@@ -2,9 +2,11 @@
 
 Cidre is an Apple Silicon Mac-oriented Linux experience layer built on ALARM (Arch Linux ARM) / Asahi Linux.
 
+This repository contains the Cidre environment, including installer, recovery, rescue tooling, documentation, package metadata, and the `niri-cidre` desktop layer.
+
 > [!IMPORTANT]
 > **Cidre is not a niri fork.**
-> Cidre is a full integration layer that manages installer scripts, configuration deployment, system recovery, sound optimization, and desktop session profiles. The compositor itself is managed under a separate component called `niri-cidre`.
+> `niri-cidre` is the desktop/compositor component shipped as part of Cidre. It is not the whole project. Cidre itself is a full integration layer that manages installer scripts, configuration deployment, system recovery, sound optimization, and desktop session profiles.
 
 ## Project Direction
 

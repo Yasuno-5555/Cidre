@@ -2,7 +2,7 @@
 
 Thanks for your interest in contributing.
 
-This repository currently contains the `niri-cidre` desktop component of the broader Cidre project.
+This repository contains the Cidre environment, including installer, recovery, rescue tooling, documentation, package metadata, and the `niri-cidre` desktop layer.
 
 Before contributing, read these first:
 
@@ -17,12 +17,9 @@ Before contributing, read these first:
 
 ## What This Repository Is
 
-This repository is not the whole Cidre project.
+This repository contains the Cidre environment, including installer, recovery, rescue tooling, documentation, package metadata, and the `niri-cidre` desktop layer.
 
-It is the compositor/desktop component:
-
-- product: `Cidre`
-- component in this repo: `niri-cidre`
+`niri-cidre` is the desktop/compositor component shipped as part of Cidre. It is not the whole project.
 
 That distinction matters when discussing scope, bugs, documentation, and release expectations.
 

@@ -2,7 +2,7 @@
 
 `niri-cidre` is the compositor component inside Cidre.
 
-This repository currently contains that component plus the Cidre session/config packaging work around it.
+This repository contains the Cidre environment, including installer, recovery, rescue tooling, documentation, package metadata, and the `niri-cidre` desktop layer.
 
 ## Role In Cidre
 
@@ -17,7 +17,7 @@ The intent is that users understand Cidre as the full environment, while `niri-c
 
 ## What Lives Here
 
-This repository is where the compositor-facing part of Cidre currently lives:
+This repository is where the Cidre environment lives:
 
 - `niri-cidre` binary changes
 - Cidre session wiring
