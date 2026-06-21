@@ -1,4 +1,4 @@
-# Cidre v0.25.0 Validation Matrix
+# Cidre v0.28.0 Validation Matrix
 
 The following matrix documents the verification scopes completed on Cidre before the v1.0.0 release.
 
@@ -193,3 +193,22 @@ The following matrix documents the verification scopes completed on Cidre before
 | macOS rescue create dry-run | `./install-macos --rescue-create-dry-run` |
 | Doctor rescue boot checks | `scripts/cidre-doctor --rescue-boot` |
 | Doctor macOS rescue checks | `scripts/cidre-doctor --macos-rescue` |
+
+## Guided Rescue Slot Creation (v0.28.0)
+
+| Check | Command |
+|---|---|
+| Rescue create dry-run | `scripts/cidre-rescue-create --dry-run` |
+| Rescue create preflight | `scripts/cidre-rescue-create-preflight --target test/fixtures/rescue-target --artifact .local/state/cidre/rescue/artifacts/cidre-rescue-rootfs.tar.gz --metadata .local/state/cidre/rescue-boot/current/rescue-slot-metadata.json` |
+| Rescue target check | `scripts/cidre-rescue-target-check --target test/fixtures/rescue-target --json` |
+| Protected target block | `scripts/cidre-rescue-target-check --target / --strict` |
+| Rescue target format dry-run | `scripts/cidre-rescue-target-format --target test/fixtures/rescue-block --fs ext4 --dry-run` |
+| Rescue deploy dry-run | `scripts/cidre-rescue-deploy-rootfs --artifact .local/state/cidre/rescue/artifacts/cidre-rescue-rootfs.tar.gz --target test/fixtures/rescue-target --dry-run` |
+| Rescue deploy fixture | `scripts/cidre-rescue-deploy-rootfs --artifact .local/state/cidre/rescue/artifacts/cidre-rescue-rootfs.tar.gz --target test/fixtures/rescue-target --deploy` |
+| Rescue metadata install | `scripts/cidre-rescue-install-metadata --target test/fixtures/rescue-target --metadata .local/state/cidre/rescue-boot/current/rescue-slot-metadata.json` |
+| Rescue create verify | `scripts/cidre-rescue-create-verify --target test/fixtures/rescue-target` |
+| Rescue create report | `scripts/cidre-rescue-create-report` |
+| Rescue create risk | `scripts/cidre-rescue-create-risk --json` |
+| Rescue create clean dry-run | `scripts/cidre-rescue-create-clean --dry-run` |
+| Doctor rescue create checks | `scripts/cidre-doctor --rescue-create` |
+| Recovery rescue create status | `scripts/cidre-recovery rescue-create-status` |

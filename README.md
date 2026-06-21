@@ -1,4 +1,4 @@
-# Cidre (v0.25.0 Recovery Screen & Safe Mode Pack)
+# Cidre (v0.28.0 Guided Rescue Slot Creation Pack)
 
 Cidre is an Apple Silicon Mac-oriented Linux experience layer built on ALARM (Arch Linux ARM) / Asahi Linux.
 
@@ -97,6 +97,17 @@ macOS-side rescue disk audits, and validation checklists.
 
 This release does not create partitions, modify boot entries, or install a fully bootable Rescue Slot.
 
+## Guided Rescue Slot creation
+
+Cidre v0.28.0 can create a Rescue Slot on an explicitly selected prepared target.
+
+Creation is guided and defaults to dry-run.
+Real creation requires an exact target, a rescue artifact, Cidre state export,
+and an explicit confirmation phrase.
+
+This release does not automatically create partitions, resize APFS containers,
+or modify boot entries.
+
 ## Installation Flow
 
 Cidre has three phases.
@@ -184,6 +195,12 @@ After switching to the normal user, resume the Cidre setup:
 - [Rescue Boot Validation](./docs/rescue-boot-validation.md)
 - [macOS Rescue Slot Planning](./docs/macos-rescue-slot.md)
 - [Rescue Boot Threat Model](./docs/rescue-boot-threat-model.md)
+- [Guided Rescue Slot Creation](./docs/rescue-create.md)
+- [Rescue Target Selection](./docs/rescue-target-selection.md)
+- [Rescue Creation Safety](./docs/rescue-create-safety.md)
+- [Rescue Rootfs Deployment](./docs/rescue-rootfs-deployment.md)
+- [macOS Rescue Create](./docs/macos-rescue-create.md)
+- [Rescue Create Threat Model](./docs/rescue-create-threat-model.md)
 - [Firstboot Security](./docs/firstboot-security.md)
 - [Firstboot Root Login Problem](./docs/firstboot-root-login-problem.md)
 - [Fresh ALARM Base Setup](./docs/base-install.md)
@@ -212,6 +229,7 @@ After switching to the normal user, resume the Cidre setup:
 - [v0.25.0 Release Notes](./docs/v0.25.0-recovery-screen-safe-mode.md)
 - [v0.26.0 Release Notes](./docs/v0.26.0-rescue-slot-foundation.md)
 - [v0.27.0 Release Notes](./docs/v0.27.0-rescue-boot-integration.md)
+- [v0.28.0 Release Notes](./docs/v0.28.0-guided-rescue-slot-creation.md)
 - [v0.22.0 Release Notes](./docs/v0.22.0-user-phase-handoff.md)
 - [v0.21.0 Release Notes](./docs/v0.21.0-firstboot-fixup.md)
 - [v0.20.0 Release Notes](./docs/v0.20.0-controlled-boot-test.md)

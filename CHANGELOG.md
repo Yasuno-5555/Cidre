@@ -2,6 +2,25 @@
 
 All notable changes to the Cidre project will be documented in this file.
 
+## [0.28.0] - 2026-06-21
+### Added
+- Added guided Rescue Slot creation flow.
+- Added rescue create preflight.
+- Added exact target checking.
+- Added rescue rootfs deployment.
+- Added rescue metadata installation.
+- Added post-create verification and reports.
+- Added macOS-side rescue creation guidance.
+
+### Changed
+- Extended `cidre-doctor` with rescue creation checks.
+- Extended `cidre-recovery` with rescue creation subcommands.
+- Connected rescue creation status to rescue boot reports and readiness checks.
+
+### Notes
+- v0.28.0 can deploy a rescue rootfs to an explicitly selected prepared target.
+- It does not automatically create partitions, resize APFS containers, or modify boot entries.
+
 ## [0.27.0] - 2026-06-21
 ### Added
 - Added rescue boot integration planning.

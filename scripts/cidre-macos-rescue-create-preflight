@@ -1,0 +1,56 @@
+#!/bin/sh
+set -eu
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+. "$SCRIPT_DIR/cidre-macos-restore-common"
+
+output_dir="${CIDRE_MACOS_RESCUE_CREATE_STATE_ROOT:-$PWD/.local/state/cidre/macos-rescue-create}/current"
+json_output=false
+
+usage() {
+  cat <<EOF
+Usage: cidre-macos-rescue-create-preflight [options]
+
+Options:
+  --json
+  --output <dir>
+  --help
+EOF
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --json) json_output=true; shift ;;
+    --output) output_dir="$2"; shift 2 ;;
+    --help) usage; exit 0 ;;
+    *) printf 'ERROR: unknown option: %s\n' "$1" >&2; exit 1 ;;
+  esac
+done
+
+cidre_macos_restore_require_macos
+mkdir -p "$output_dir"
+state_export_exists=false
+artifact_exists=false
+disk_audit_exists=false
+[ -f "$PWD/.local/state/cidre/exit/current/cidre-state-export.tar.gz" ] && state_export_exists=true
+[ -f "$PWD/.local/state/cidre/rescue/artifacts/cidre-rescue-rootfs.tar.gz" ] && artifact_exists=true
+[ -f "$PWD/.local/state/cidre/macos-rescue/current/macos-rescue-disk-audit.json" ] && disk_audit_exists=true
+
+output_file="$output_dir/create-preflight.json"
+cat > "$output_file" <<EOF
+{
+  "schema_version": 1,
+  "running_on_macos": true,
+  "diskutil_available": $(cidre_macos_restore_bool "$(command -v diskutil >/dev/null 2>&1 && printf true || printf false)"),
+  "state_export_exists": $state_export_exists,
+  "artifact_exists": $artifact_exists,
+  "disk_audit_exists": $disk_audit_exists,
+  "destructive_default": false
+}
+EOF
+
+if [ "$json_output" = "true" ]; then
+  cat "$output_file"
+else
+  printf '%s\n' "$output_file"
+fi

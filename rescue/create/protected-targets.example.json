@@ -1,0 +1,13 @@
+{
+  "protected_names": [
+    "Macintosh HD",
+    "Macintosh HD - Data",
+    "Recovery",
+    "Preboot",
+    "VM"
+  ],
+  "protected_types": [
+    "Apple_APFS",
+    "Apple_APFS_Recovery"
+  ]
+}

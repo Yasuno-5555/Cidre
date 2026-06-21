@@ -70,6 +70,8 @@ if "$dry_run"; then
   echo "                             -> $output_dir/rescue-boot/"
   echo "  ~/.local/state/cidre/macos-rescue/"
   echo "                             -> $output_dir/macos-rescue/"
+  echo "  ~/.local/state/cidre/rescue-create/"
+  echo "                             -> $output_dir/rescue-create/"
   echo ""
   echo "No files written (dry-run)."
   exit 0
@@ -215,6 +217,13 @@ if [ -d "$MACOS_RESCUE_STATE_DIR" ]; then
   mkdir -p "$output_dir/macos-rescue"
   cp -r "$MACOS_RESCUE_STATE_DIR"/* "$output_dir/macos-rescue/" 2>/dev/null || true
   echo "  -> Collected macOS rescue state files"
+fi
+
+RESCUE_CREATE_STATE_DIR="${HOME}/.local/state/cidre/rescue-create"
+if [ -d "$RESCUE_CREATE_STATE_DIR" ]; then
+  mkdir -p "$output_dir/rescue-create"
+  cp -r "$RESCUE_CREATE_STATE_DIR"/* "$output_dir/rescue-create/" 2>/dev/null || true
+  echo "  -> Collected rescue create state files"
 fi
 
 echo ""

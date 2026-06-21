@@ -111,6 +111,11 @@ Use: scripts/cidre-controlled-boot-test --collect-logs
 - [ ] Rescue boot metadata generated
 - [ ] macOS rescue disk audit generated
 - [ ] Rescue create dry-run generated
+- [ ] Cidre state export completed
+- [ ] Rescue artifact exists
+- [ ] Exact rescue target selected
+- [ ] Rescue create preflight passed
+- [ ] Rescue create report generated
 - [ ] Real rescue boot validation pending acknowledged
 
 ---

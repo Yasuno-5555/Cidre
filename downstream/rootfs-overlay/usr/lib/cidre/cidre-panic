@@ -60,6 +60,7 @@ if [ "$dry_run" = "true" ]; then
   echo "  Boot Cidre Rescue Slot."
   echo "  Run: cidre-rescue --check"
   echo "  For boot planning: cidre-rescue --boot-plan"
+  echo "  For creation guidance: cidre-rescue --create-preflight --target <exact-target>"
   echo "  On macOS: ./install-macos --rescue-check"
   exit 0
 fi

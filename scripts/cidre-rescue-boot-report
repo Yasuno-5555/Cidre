@@ -37,6 +37,11 @@ macos_status="$( [ -f "$REPO_ROOT/.local/state/cidre/macos-rescue/current/macos-
 guide_status="$( [ -f "$CURRENT_DIR/rescue-boot-guide.md" ] && printf present || printf missing )"
 validation_status="not-tested"
 [ -f "$CURRENT_DIR/validation-status.txt" ] && validation_status="$(cat "$CURRENT_DIR/validation-status.txt")"
+creation_status="not-created"
+[ -f "$REPO_ROOT/.local/state/cidre/rescue-create/current/create-verify.json" ] && creation_status="verified"
+[ -f "$REPO_ROOT/.local/state/cidre/rescue-create/current/deployment.log" ] && [ "$creation_status" != "verified" ] && creation_status="created"
+[ -f "$REPO_ROOT/.local/state/cidre/rescue-create/current/create-risk.json" ] && \
+  grep -q '"risk": "blocked"' "$REPO_ROOT/.local/state/cidre/rescue-create/current/create-risk.json" 2>/dev/null && creation_status="failed"
 
 cat > "$output_file" <<EOF
 # Cidre Rescue Boot Report
@@ -48,6 +53,7 @@ cat > "$output_file" <<EOF
 - macOS rescue check status: \`$macos_status\`
 - boot guide status: \`$guide_status\`
 - boot integration state: planned
+- creation status: \`$creation_status\`
 - rescue boot validation: \`$validation_status\`
 - pending validation: real Apple Silicon rescue boot
 
@@ -68,7 +74,8 @@ if [ "$json_output" = "true" ]; then
   "metadata": "$metadata_status",
   "disk_audit": "$disk_audit_status",
   "macos_rescue": "$macos_status",
-  "validation": "$validation_status"
+  "validation": "$validation_status",
+  "creation_status": "$creation_status"
 }
 EOF
 else

@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "default_action": "block",
+  "allow_prepared_linux_target": true,
+  "allow_auto_partition": false,
+  "allow_boot_mutation": false,
+  "block_protected_apfs": true,
+  "block_macos_recovery": true,
+  "block_current_root": true,
+  "require_exact_target": true
+}

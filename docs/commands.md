@@ -24,6 +24,11 @@ The macOS-side bootstrap entrypoint for Apple Silicon onboarding.
 * `--rescue-guide`: Generates a macOS rescue guide.
 * `--rescue-report`: Generates a macOS rescue report.
 * `--rescue-create-dry-run`: Prints rescue creation dry-run guidance.
+* `--rescue-create`: Opens the macOS-side guided rescue creation entrypoint in dry-run mode.
+* `--rescue-create-preflight`: Checks macOS-side rescue creation prerequisites.
+* `--rescue-target-check`: Records an advisory exact-target check.
+* `--rescue-create-guide`: Generates a macOS rescue creation guide.
+* `--rescue-create-report`: Generates a macOS rescue creation report.
 
 ### `scripts/cidre-seed`
 The Linux-side seed command wrapper.
@@ -124,6 +129,7 @@ Diagnoses system compatibility and environment state.
 * `--rescue`: Audits Rescue Slot foundation assets, profile metadata, and read-only safety defaults.
 * `--rescue-boot`: Audits Rescue Boot Integration assets and dry-run planning flow.
 * `--macos-rescue`: Audits macOS-side rescue planning scripts.
+* `--rescue-create`: Audits guided Rescue Slot creation assets, target rules, and dry-run defaults.
 
 ### `cidre-recovery`
 Dispatches rescue triggers from console TTY in emergency loops.
@@ -143,6 +149,11 @@ Dispatches rescue triggers from console TTY in emergency loops.
 * `rescue-boot-report`: Generates the rescue boot report.
 * `rescue-boot-checklist`: Generates the rescue boot checklist.
 * `rescue-create-dry-run`: Generates rescue creation dry-run output.
+* `rescue-create-status`: Shows rescue creation risk or status.
+* `rescue-create-preflight`: Runs rescue creation preflight.
+* `rescue-create-report`: Generates the rescue creation report.
+* `rescue-target-check`: Runs rescue target classification.
+* `rescue-create-clean`: Cleans rescue creation state safely.
 * `restore latest`: Restores configurations to the last snapshot.
 * `reset-niri`: Resets composer files to stable factory defaults.
 * `seed-status`: Shows imported seed profile and source commit summary.
@@ -237,6 +248,21 @@ The separate rescue environment foundation commands.
 * `scripts/cidre-rescue-boot-checklist`: Generates a real-hardware validation checklist.
 * `scripts/cidre-rescue-boot-risk`: Classifies rescue boot planning risk.
 * `scripts/cidre-rescue-boot-validate`: Records rescue boot validation status.
+* `scripts/cidre-rescue-create`: High-level guided Rescue Slot creation entrypoint.
+* `scripts/cidre-rescue-create-preflight`: Confirms state export, artifact, metadata, and target prerequisites.
+* `scripts/cidre-rescue-target-check`: Classifies exact creation targets and blocks protected targets.
+* `scripts/cidre-rescue-target-format`: Provides explicit-target format flow with dry-run default.
+* `scripts/cidre-rescue-deploy-rootfs`: Deploys rescue rootfs artifacts to prepared targets.
+* `scripts/cidre-rescue-install-metadata`: Installs rescue metadata into the created target.
+* `scripts/cidre-rescue-create-verify`: Verifies the created target has required rescue markers and tools.
+* `scripts/cidre-rescue-create-report`: Summarizes rescue creation results.
+* `scripts/cidre-rescue-create-risk`: Classifies rescue creation risk.
+* `scripts/cidre-rescue-create-clean`: Cleans rescue creation state safely.
+* `scripts/cidre-macos-rescue-create`: macOS-side rescue creation guidance entrypoint.
+* `scripts/cidre-macos-rescue-create-preflight`: Checks macOS-side rescue creation prerequisites.
+* `scripts/cidre-macos-rescue-target-check`: Records advisory exact-target checks on macOS.
+* `scripts/cidre-macos-rescue-create-guide`: Generates macOS rescue creation guidance.
+* `scripts/cidre-macos-rescue-create-report`: Summarizes macOS rescue creation readiness.
 
 ### `scripts/cidre-macos-seed`
 Generates `.local/state/cidre/macos-bootstrap/manifest.json`, checksum metadata, and handoff notes for later manual continuation.

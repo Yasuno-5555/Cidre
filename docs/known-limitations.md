@@ -131,3 +131,11 @@ This document lists all known limits, caveats, and risk factors regarding the Ci
 - v0.27.0 does not modify m1n1 or U-Boot files.
 - v0.27.0 does not validate a real Apple Silicon rescue boot.
 - Rescue boot integration remains planned or pending.
+
+## v0.28.0 limitations
+
+- v0.28.0 handles Rescue Slot creation only for explicitly selected prepared targets.
+- v0.28.0 does not automatically create partitions.
+- v0.28.0 does not resize APFS containers.
+- v0.28.0 does not modify boot entries.
+- v0.28.0 does not guarantee real Apple Silicon rescue boot.

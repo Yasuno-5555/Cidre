@@ -39,3 +39,4 @@ These artifacts are designed to feed a future dry-run guided uninstaller.
 Recovery Screen can point users to macOS Restore Assistant when local recovery is not enough.
 If Rescue Slot cannot recover main Cidre or the user wants to leave Cidre, use macOS Restore Assistant and exit path tools.
 macOS Restore Assistant can report Rescue Slot planning status.
+macOS Restore Assistant can also coexist with guided Rescue Slot creation planning.

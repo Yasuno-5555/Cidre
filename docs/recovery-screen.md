@@ -25,3 +25,5 @@ Cidre Recovery Screen is the TTY/TUI-facing recovery entrypoint for desktop or s
 
 If the main Cidre system no longer boots far enough to show Recovery Screen,
 use Cidre Rescue Slot.
+
+When the system still boots to a TTY, Recovery Screen can point users to Rescue Slot planning and creation guidance.

@@ -47,13 +47,18 @@ mkdir -p "$CURRENT_DIR" "$ARTIFACTS_DIR"
 cat > "$output_file" <<EOF
 {
   "schema_version": 1,
-  "cidre_version": "0.26.0",
+  "cidre_version": "0.28.0",
   "artifact_type": "rescue-rootfs",
   "profile": "minimal-rescue",
   "desktop": false,
   "primary_shell": "bash",
   "contains_destructive_tools": false,
   "boot_integration": "pending",
+  "boot_validation": "not-tested",
+  "guided_creation": true,
+  "creation_default": "dry-run",
+  "partition_created": false,
+  "boot_entry_created": false,
   "created_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
   "files": []
 }

@@ -54,6 +54,11 @@ show_help() {
   echo "  rescue-boot-report   Generate rescue boot report"
   echo "  rescue-boot-checklist Generate rescue boot checklist"
   echo "  rescue-create-dry-run Generate rescue creation dry-run"
+  echo "  rescue-create-status Show rescue creation status"
+  echo "  rescue-create-preflight Run rescue creation preflight"
+  echo "  rescue-create-report Generate rescue creation report"
+  echo "  rescue-target-check  Run rescue target check"
+  echo "  rescue-create-clean  Clean rescue creation state"
   echo "  boot-status          Show image boot validation status"
   echo "  disable-greetd       Disable greetd system service and restore fallback console"
   echo "  enable-greetd        Enable greetd system service to launch the graphical desktop"
@@ -451,6 +456,21 @@ case "$CMD" in
     ;;
   rescue-create-dry-run)
     exec "$(dirname "$0")/cidre-rescue-create-dry-run" "$@"
+    ;;
+  rescue-create-status)
+    exec "$(dirname "$0")/cidre-rescue-create-risk" "$@"
+    ;;
+  rescue-create-preflight)
+    exec "$(dirname "$0")/cidre-rescue-create-preflight" "$@"
+    ;;
+  rescue-create-report)
+    exec "$(dirname "$0")/cidre-rescue-create-report" "$@"
+    ;;
+  rescue-target-check)
+    exec "$(dirname "$0")/cidre-rescue-target-check" "$@"
+    ;;
+  rescue-create-clean)
+    exec "$(dirname "$0")/cidre-rescue-create-clean" "$@"
     ;;
   clear-safe-mode)
     exec "$(dirname "$0")/cidre-recovery-actions" --run clear-safe-mode "$@"

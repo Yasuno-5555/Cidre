@@ -4,3 +4,6 @@
 - generate rescue plan, guide, and report from macOS
 - use these outputs for future creation planning only
 - no destructive operations run in v0.27.0
+
+macOS-side rescue creation remains guided and conservative.
+Partition creation is not automatic in v0.28.0.

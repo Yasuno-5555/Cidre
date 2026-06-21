@@ -21,6 +21,14 @@ RESCUE_PLAN=0
 RESCUE_GUIDE=0
 RESCUE_REPORT=0
 RESCUE_CREATE_DRY_RUN=0
+RESCUE_CREATE=0
+RESCUE_CREATE_PREFLIGHT=0
+RESCUE_TARGET_CHECK=0
+RESCUE_CREATE_GUIDE=0
+RESCUE_CREATE_REPORT=0
+RESCUE_TARGET_VALUE=""
+RESCUE_SIZE_VALUE=""
+RESCUE_ARTIFACT_VALUE=""
 
 usage() {
   cat <<'EOF'
@@ -46,6 +54,11 @@ Options:
   --rescue-guide       Generate a macOS rescue guide
   --rescue-report      Generate a macOS rescue report
   --rescue-create-dry-run Print rescue creation dry-run guidance
+  --rescue-create      Run macOS rescue creation guidance entrypoint
+  --rescue-create-preflight Run macOS rescue creation preflight
+  --rescue-target-check Check an exact macOS rescue target
+  --rescue-create-guide Generate a macOS rescue creation guide
+  --rescue-create-report Generate a macOS rescue creation report
   -h, --help           Show this help
 EOF
 }
@@ -59,7 +72,7 @@ validate_profile() {
 
 require_macos() {
   if [ "$(uname -s)" != "Darwin" ]; then
-    printf 'ERROR: rescue macOS commands require macOS.\nNo disk operation was performed.\n' >&2
+    printf 'ERROR: this command requires macOS.\nNo disk operation was performed.\n' >&2
     exit 1
   fi
 }
@@ -105,6 +118,30 @@ while [ "$#" -gt 0 ]; do
       }
       PROFILE="$2"
       validate_profile "$PROFILE"
+      shift 2
+      ;;
+    --target)
+      [ "$#" -ge 2 ] || {
+        printf 'ERROR: --target requires an argument\n' >&2
+        exit 1
+      }
+      RESCUE_TARGET_VALUE="$2"
+      shift 2
+      ;;
+    --size)
+      [ "$#" -ge 2 ] || {
+        printf 'ERROR: --size requires an argument\n' >&2
+        exit 1
+      }
+      RESCUE_SIZE_VALUE="$2"
+      shift 2
+      ;;
+    --artifact)
+      [ "$#" -ge 2 ] || {
+        printf 'ERROR: --artifact requires an argument\n' >&2
+        exit 1
+      }
+      RESCUE_ARTIFACT_VALUE="$2"
       shift 2
       ;;
     --no-seed)
@@ -165,6 +202,26 @@ while [ "$#" -gt 0 ]; do
       ;;
     --rescue-create-dry-run)
       RESCUE_CREATE_DRY_RUN=1
+      shift
+      ;;
+    --rescue-create)
+      RESCUE_CREATE=1
+      shift
+      ;;
+    --rescue-create-preflight)
+      RESCUE_CREATE_PREFLIGHT=1
+      shift
+      ;;
+    --rescue-target-check)
+      RESCUE_TARGET_CHECK=1
+      shift
+      ;;
+    --rescue-create-guide)
+      RESCUE_CREATE_GUIDE=1
+      shift
+      ;;
+    --rescue-create-report)
+      RESCUE_CREATE_REPORT=1
       shift
       ;;
     -h|--help)
@@ -234,6 +291,37 @@ if [ "$RESCUE_REPORT" -eq 1 ]; then
   exec "$SCRIPT_DIR/cidre-macos-rescue-report"
 fi
 
+if [ "$RESCUE_CREATE" -eq 1 ]; then
+  require_macos
+  set -- --dry-run
+  [ -n "$RESCUE_SIZE_VALUE" ] && set -- "$@" --size "$RESCUE_SIZE_VALUE"
+  [ -n "$RESCUE_TARGET_VALUE" ] && set -- "$@" --target "$RESCUE_TARGET_VALUE"
+  [ -n "$RESCUE_ARTIFACT_VALUE" ] && set -- "$@" --artifact "$RESCUE_ARTIFACT_VALUE"
+  exec "$SCRIPT_DIR/cidre-macos-rescue-create" "$@"
+fi
+
+if [ "$RESCUE_CREATE_PREFLIGHT" -eq 1 ]; then
+  require_macos
+  exec "$SCRIPT_DIR/cidre-macos-rescue-create-preflight"
+fi
+
+if [ "$RESCUE_TARGET_CHECK" -eq 1 ]; then
+  require_macos
+  set --
+  [ -n "$RESCUE_TARGET_VALUE" ] && set -- "$@" --target "$RESCUE_TARGET_VALUE"
+  exec "$SCRIPT_DIR/cidre-macos-rescue-target-check" "$@"
+fi
+
+if [ "$RESCUE_CREATE_GUIDE" -eq 1 ]; then
+  require_macos
+  exec "$SCRIPT_DIR/cidre-macos-rescue-create-guide"
+fi
+
+if [ "$RESCUE_CREATE_REPORT" -eq 1 ]; then
+  require_macos
+  exec "$SCRIPT_DIR/cidre-macos-rescue-create-report"
+fi
+
 if [ "$RESCUE_CREATE_DRY_RUN" -eq 1 ]; then
   require_macos
   cat <<'EOF'
@@ -243,6 +331,10 @@ Cidre macOS rescue create dry-run
 - No partition will be created.
 - No boot entry will be modified.
 - Generate rescue plan, guide, and report first.
+- For creation guidance, run:
+  - ./install-macos --rescue-create-preflight
+  - ./install-macos --rescue-target-check --target <identifier>
+  - ./install-macos --rescue-create-guide
 EOF
   exit 0
 fi
@@ -274,10 +366,11 @@ if [ "$RESCUE_HELP" -eq 1 ]; then
   cat <<'EOF'
 Cidre Rescue Slot guidance
 
-- v0.27.0 introduces Rescue Boot Integration planning for cases where main Cidre no longer boots.
+- v0.28.0 adds guided Rescue Slot creation for explicitly selected prepared targets.
 - Recommended size: 6-12 GiB, with 8 GiB as a reasonable starting point.
 - Rescue is a minimal ALARM-based environment, not a daily desktop.
-- v0.27.0 does not create partitions or modify boot entries automatically.
+- Creation defaults to dry-run and requires an exact target plus explicit confirmation.
+- v0.28.0 does not create partitions or modify boot entries automatically.
 - Use Rescue for mount/export/kernel inspection.
 - macOS-side planning commands:
   - ./install-macos --rescue-check
@@ -285,6 +378,10 @@ Cidre Rescue Slot guidance
   - ./install-macos --rescue-plan
   - ./install-macos --rescue-guide
   - ./install-macos --rescue-report
+  - ./install-macos --rescue-create-preflight
+  - ./install-macos --rescue-target-check --target <identifier>
+  - ./install-macos --rescue-create-guide
+  - ./install-macos --rescue-create-report
 - Use macOS Restore Assistant if Rescue cannot recover main Cidre.
 EOF
   exit 0

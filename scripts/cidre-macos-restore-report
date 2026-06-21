@@ -42,6 +42,7 @@ risk_level="unknown"
 rescue_plan_status="pending"
 rescue_disk_audit_status="pending"
 rescue_boot_validation="not-tested"
+rescue_create_status="pending"
 
 if [ -f "$risk_path" ]; then
   risk_level="$(awk -F'"' '/"risk"/ {print $4; exit}' "$risk_path")"
@@ -50,6 +51,7 @@ fi
 [ -f "$PWD/.local/state/cidre/macos-rescue/current/macos-rescue-plan.md" ] && rescue_plan_status="generated"
 [ -f "$PWD/.local/state/cidre/macos-rescue/current/macos-rescue-disk-audit.json" ] && rescue_disk_audit_status="generated"
 [ -f "$PWD/.local/state/cidre/rescue-boot/current/validation-status.txt" ] && rescue_boot_validation="$(cat "$PWD/.local/state/cidre/rescue-boot/current/validation-status.txt")"
+[ -f "$PWD/.local/state/cidre/macos-rescue-create/current/macos-rescue-create-report.md" ] && rescue_create_status="generated"
 
 cat > "$output_file" <<EOF
 # Cidre macOS Restore Report
@@ -69,6 +71,7 @@ Generated: $(cidre_macos_restore_timestamp)
 
 - plan: \`$rescue_plan_status\`
 - disk audit: \`$rescue_disk_audit_status\`
+- create guidance: \`$rescue_create_status\`
 - boot validation: \`$rescue_boot_validation\`
 
 ## Next Safe Steps

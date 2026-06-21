@@ -1,0 +1,59 @@
+#!/bin/sh
+set -eu
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+. "$SCRIPT_DIR/cidre-macos-restore-common"
+
+state_root="${CIDRE_MACOS_RESCUE_CREATE_STATE_ROOT:-$PWD/.local/state/cidre/macos-rescue-create}"
+output_file="$state_root/current/macos-rescue-create-report.md"
+json_output=false
+
+usage() {
+  cat <<EOF
+Usage: cidre-macos-rescue-create-report [options]
+
+Options:
+  --output <file>
+  --json
+  --help
+EOF
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --output) output_file="$2"; shift 2 ;;
+    --json) json_output=true; shift ;;
+    --help) usage; exit 0 ;;
+    *) printf 'ERROR: unknown option: %s\n' "$1" >&2; exit 1 ;;
+  esac
+done
+
+cidre_macos_restore_require_macos
+mkdir -p "$(dirname "$output_file")"
+preflight_status="$( [ -f "$state_root/current/create-preflight.json" ] && printf present || printf pending )"
+target_check_status="$( [ -f "$state_root/current/target-check.json" ] && printf present || printf pending )"
+guide_status="$( [ -f "$state_root/current/macos-rescue-create-guide.md" ] && printf present || printf pending )"
+
+cat > "$output_file" <<EOF
+# Cidre macOS Rescue Create Report
+
+- macOS environment: ready
+- preflight status: \`$preflight_status\`
+- target check status: \`$target_check_status\`
+- guide status: \`$guide_status\`
+- destructive default: disabled
+- pending validation: real boot integration
+EOF
+
+if [ "$json_output" = "true" ]; then
+  cat <<EOF
+{
+  "schema_version": 1,
+  "preflight": "$preflight_status",
+  "target_check": "$target_check_status",
+  "guide": "$guide_status"
+}
+EOF
+else
+  printf '%s\n' "$output_file"
+fi

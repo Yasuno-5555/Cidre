@@ -1,0 +1,86 @@
+#!/bin/sh
+set -eu
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+REPO_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+STATE_ROOT="${CIDRE_RESCUE_CREATE_STATE_ROOT:-$REPO_ROOT/.local/state/cidre/rescue-create}"
+CURRENT_DIR="$STATE_ROOT/current"
+target_check="$CURRENT_DIR/target-check.json"
+output_file="$CURRENT_DIR/create-risk.json"
+json_output=false
+
+usage() {
+  cat <<EOF
+Usage: cidre-rescue-create-risk [options]
+
+Options:
+  --target-check <path>
+  --json
+  --help
+EOF
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --target-check) target_check="$2"; shift 2 ;;
+    --json) json_output=true; shift ;;
+    --help) usage; exit 0 ;;
+    *) printf 'ERROR: unknown option: %s\n' "$1" >&2; usage >&2; exit 1 ;;
+  esac
+done
+
+if [ -f "$CURRENT_DIR/deployment.log" ]; then
+  deployed_target="$(sed -n 's/^target=//p' "$CURRENT_DIR/deployment.log" | head -n 1 || true)"
+  if [ -n "$deployed_target" ] && [ -x "$SCRIPT_DIR/cidre-rescue-target-check" ]; then
+    "$SCRIPT_DIR/cidre-rescue-target-check" --target "$deployed_target" >/dev/null 2>&1 || true
+  fi
+fi
+
+classification="$(sed -n 's/.*"classification": "\([^"]*\)".*/\1/p' "$target_check" 2>/dev/null | head -n 1 || true)"
+state_export_exists=false
+artifact_exists=false
+metadata_exists=false
+[ -f "$REPO_ROOT/.local/state/cidre/exit/current/cidre-state-export.tar.gz" ] && state_export_exists=true
+[ -f "$REPO_ROOT/.local/state/cidre/rescue/artifacts/cidre-rescue-rootfs.tar.gz" ] && artifact_exists=true
+[ -f "$REPO_ROOT/.local/state/cidre/rescue-boot/current/rescue-slot-metadata.json" ] && metadata_exists=true
+
+risk="medium"
+reason="target needs format or boot integration pending"
+case "$classification" in
+  safe-prepared)
+    if [ "$state_export_exists" = "true" ] && [ "$artifact_exists" = "true" ] && [ "$metadata_exists" = "true" ]; then
+      risk="low"
+      reason="prepared target, artifact exists, metadata exists, state export exists"
+    else
+      risk="high"
+      reason="prepared target but required artifacts or state export missing"
+    fi
+    ;;
+  needs-format)
+    risk="medium"
+    reason="target needs format and boot integration remains pending"
+    ;;
+  blocked-protected|blocked-main|blocked-ambiguous|"")
+    risk="blocked"
+    reason="protected, ambiguous, or missing exact target"
+    ;;
+esac
+
+mkdir -p "$(dirname "$output_file")"
+cat > "$output_file" <<EOF
+{
+  "schema_version": 1,
+  "risk": "$risk",
+  "classification": "${classification:-unknown}",
+  "reason": "$reason",
+  "state_export_exists": $state_export_exists,
+  "artifact_exists": $artifact_exists,
+  "metadata_exists": $metadata_exists
+}
+EOF
+
+if [ "$json_output" = "true" ]; then
+  cat "$output_file"
+else
+  printf '%s\n' "$output_file"
+fi

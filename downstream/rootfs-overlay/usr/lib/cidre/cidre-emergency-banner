@@ -42,6 +42,8 @@ If this system no longer boots:
     cidre-rescue --plan
     cidre-rescue --boot-plan
     cidre-rescue --boot-checklist
+    cidre-rescue --create-preflight --target <exact-target>
+    cidre-rescue --create --dry-run --target <exact-target>
     cidre-rescue-mount --scan --dry-run
     cidre-rescue-report
   On macOS:

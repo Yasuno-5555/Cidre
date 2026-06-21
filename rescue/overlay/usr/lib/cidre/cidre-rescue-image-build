@@ -44,7 +44,17 @@ sync_rescue_overlay() {
     cidre-rescue-export \
     cidre-rescue-kernel-check \
     cidre-rescue-report \
-    cidre-rescue-clean; do
+    cidre-rescue-clean \
+    cidre-rescue-create \
+    cidre-rescue-create-preflight \
+    cidre-rescue-target-check \
+    cidre-rescue-target-format \
+    cidre-rescue-deploy-rootfs \
+    cidre-rescue-install-metadata \
+    cidre-rescue-create-verify \
+    cidre-rescue-create-report \
+    cidre-rescue-create-risk \
+    cidre-rescue-create-clean; do
     cp "$SCRIPT_DIR/$script" "$overlay_cidre_dir/$script"
     chmod +x "$overlay_cidre_dir/$script"
   done

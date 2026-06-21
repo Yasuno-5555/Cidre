@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "target": "/mnt/cidre-rescue",
+  "artifact": ".local/state/cidre/rescue/artifacts/cidre-rescue-rootfs.tar.gz",
+  "metadata": ".local/state/cidre/rescue-boot/current/rescue-slot-metadata.json",
+  "creation_status": "dry-run",
+  "verify_status": "pending",
+  "boot_integration": "pending"
+}

@@ -149,6 +149,16 @@ check_path usr/lib/cidre/cidre-rescue-create-dry-run
 check_path usr/lib/cidre/cidre-rescue-boot-checklist
 check_path usr/lib/cidre/cidre-rescue-boot-risk
 check_path usr/lib/cidre/cidre-rescue-boot-validate
+check_path usr/lib/cidre/cidre-rescue-create
+check_path usr/lib/cidre/cidre-rescue-create-preflight
+check_path usr/lib/cidre/cidre-rescue-target-check
+check_path usr/lib/cidre/cidre-rescue-target-format
+check_path usr/lib/cidre/cidre-rescue-deploy-rootfs
+check_path usr/lib/cidre/cidre-rescue-install-metadata
+check_path usr/lib/cidre/cidre-rescue-create-verify
+check_path usr/lib/cidre/cidre-rescue-create-report
+check_path usr/lib/cidre/cidre-rescue-create-risk
+check_path usr/lib/cidre/cidre-rescue-create-clean
 check_path usr/lib/cidre/cidre-preinstall
 check_path usr/lib/cidre/cidre-installer
 check_path etc/systemd/system/cidre-firstboot-root.service

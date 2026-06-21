@@ -61,6 +61,8 @@ From Rescue Slot, run:
   cidre-rescue --check
   cidre-rescue --boot-plan
   cidre-rescue --boot-checklist
+  cidre-rescue --create-preflight --target <exact-target>
+  cidre-rescue --create --dry-run --target <exact-target>
 On macOS:
   ./install-macos --rescue-check
   ./install-macos --rescue-disk-audit

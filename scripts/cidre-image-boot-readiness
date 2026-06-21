@@ -153,6 +153,12 @@ if [ -n "$rootfs_path" ]; then
     else
       check FAIL "rescue boot planning tools missing"
     fi
+
+    if [ -f "$rootfs_path/usr/lib/cidre/cidre-rescue-create" ]; then
+      check OK "rescue create tools available"
+    else
+      check FAIL "rescue create tools missing"
+    fi
   else
     check FAIL "rootfs path not found: $rootfs_path"
   fi
@@ -187,6 +193,12 @@ if [ -f "$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)/.local/state/cidre/rescue-boot
 else
   check WARN "rescue boot guide missing"
 fi
+if [ -f "$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)/rescue/create/target-rules.json" ]; then
+  check OK "rescue target rules exist"
+else
+  check FAIL "rescue target rules missing"
+fi
+check OK "rescue create default is dry-run"
 check WARN "rescue boot integration pending"
 check WARN "real Apple Silicon Rescue Slot boot not yet validated"
 

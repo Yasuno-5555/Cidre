@@ -8,3 +8,5 @@
 - If Rescue cannot recover the system, use macOS Restore Assistant and exit path tools.
 
 v0.27.0 adds boot integration planning, but does not yet create a real bootable Rescue Slot.
+
+A Rescue Slot can now be created on an explicitly selected prepared target.

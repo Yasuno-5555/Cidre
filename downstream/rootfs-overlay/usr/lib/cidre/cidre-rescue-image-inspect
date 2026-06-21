@@ -51,6 +51,16 @@ for path in \
   usr/lib/cidre/cidre-rescue-export \
   usr/lib/cidre/cidre-rescue-kernel-check \
   usr/lib/cidre/cidre-rescue-report \
+  usr/lib/cidre/cidre-rescue-create \
+  usr/lib/cidre/cidre-rescue-create-preflight \
+  usr/lib/cidre/cidre-rescue-target-check \
+  usr/lib/cidre/cidre-rescue-target-format \
+  usr/lib/cidre/cidre-rescue-deploy-rootfs \
+  usr/lib/cidre/cidre-rescue-install-metadata \
+  usr/lib/cidre/cidre-rescue-create-verify \
+  usr/lib/cidre/cidre-rescue-create-report \
+  usr/lib/cidre/cidre-rescue-create-risk \
+  usr/lib/cidre/cidre-rescue-create-clean \
   etc/cidre/profile.env \
   var/lib/cidre/rescue; do
   check_path "$overlay" "$path"

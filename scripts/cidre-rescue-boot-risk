@@ -32,10 +32,12 @@ artifact_exists=false
 metadata_exists=false
 disk_exists=false
 guide_exists=false
+create_risk_exists=false
 [ -f "$REPO_ROOT/.local/state/cidre/rescue/artifacts/cidre-rescue-rootfs.tar.gz" ] && artifact_exists=true
 [ -f "$CURRENT_DIR/rescue-slot-metadata.json" ] && metadata_exists=true
 [ -f "$CURRENT_DIR/rescue-disk-check.json" ] && disk_exists=true
 [ -f "$CURRENT_DIR/rescue-boot-guide.md" ] && guide_exists=true
+[ -f "$REPO_ROOT/.local/state/cidre/rescue-create/current/create-risk.json" ] && create_risk_exists=true
 
 risk="medium"
 reasons=""
@@ -56,6 +58,7 @@ cat > "$output_file" <<EOF
   "risk": "$risk",
   "reasons": "$reasons",
   "boot_integration": "planned",
+  "create_risk_present": $create_risk_exists,
   "destructive_operations": false
 }
 EOF

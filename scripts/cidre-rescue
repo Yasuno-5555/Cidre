@@ -12,6 +12,12 @@ boot_plan_mode=false
 boot_report_mode=false
 boot_checklist_mode=false
 create_dry_run_mode=false
+create_mode=false
+create_preflight_mode=false
+target_check_mode=false
+deploy_rootfs_mode=false
+create_verify_mode=false
+create_report_mode=false
 menu_mode=false
 dry_run=false
 
@@ -30,6 +36,12 @@ Options:
   --boot-report
   --boot-checklist
   --create-dry-run
+  --create
+  --create-preflight
+  --target-check
+  --deploy-rootfs
+  --create-verify
+  --create-report
   --menu
   --dry-run
   --help
@@ -48,6 +60,12 @@ while [ $# -gt 0 ]; do
     --boot-report) boot_report_mode=true; shift ;;
     --boot-checklist) boot_checklist_mode=true; shift ;;
     --create-dry-run) create_dry_run_mode=true; shift ;;
+    --create) create_mode=true; shift ;;
+    --create-preflight) create_preflight_mode=true; shift ;;
+    --target-check) target_check_mode=true; shift ;;
+    --deploy-rootfs) deploy_rootfs_mode=true; shift ;;
+    --create-verify) create_verify_mode=true; shift ;;
+    --create-report) create_report_mode=true; shift ;;
     --menu) menu_mode=true; shift ;;
     --dry-run) dry_run=true; shift ;;
     --help) usage; exit 0 ;;
@@ -85,6 +103,24 @@ fi
 if [ "$create_dry_run_mode" = "true" ]; then
   exec "$SCRIPT_DIR/cidre-rescue-create-dry-run" "$@"
 fi
+if [ "$create_mode" = "true" ]; then
+  exec "$SCRIPT_DIR/cidre-rescue-create" --create "$@"
+fi
+if [ "$create_preflight_mode" = "true" ]; then
+  exec "$SCRIPT_DIR/cidre-rescue-create-preflight" "$@"
+fi
+if [ "$target_check_mode" = "true" ]; then
+  exec "$SCRIPT_DIR/cidre-rescue-target-check" "$@"
+fi
+if [ "$deploy_rootfs_mode" = "true" ]; then
+  exec "$SCRIPT_DIR/cidre-rescue-deploy-rootfs" "$@"
+fi
+if [ "$create_verify_mode" = "true" ]; then
+  exec "$SCRIPT_DIR/cidre-rescue-create-verify" "$@"
+fi
+if [ "$create_report_mode" = "true" ]; then
+  exec "$SCRIPT_DIR/cidre-rescue-create-report" "$@"
+fi
 
 if [ "$menu_mode" = "true" ] || [ "$dry_run" = "true" ] || [ $# -eq 0 ]; then
   cat <<EOF
@@ -99,7 +135,8 @@ Available actions:
   cidre-rescue-report
   cidre-rescue --boot-plan
   cidre-rescue --boot-checklist
-  cidre-rescue --create-dry-run
+  cidre-rescue --create-preflight --target <exact-target>
+  cidre-rescue --create --dry-run --target <exact-target>
 EOF
   exit 0
 fi

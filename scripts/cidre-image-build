@@ -130,6 +130,16 @@ sync_overlay_tree() {
     "scripts/cidre-rescue-boot-checklist:cidre-rescue-boot-checklist" \
     "scripts/cidre-rescue-boot-risk:cidre-rescue-boot-risk" \
     "scripts/cidre-rescue-boot-validate:cidre-rescue-boot-validate" \
+    "scripts/cidre-rescue-create:cidre-rescue-create" \
+    "scripts/cidre-rescue-create-preflight:cidre-rescue-create-preflight" \
+    "scripts/cidre-rescue-target-check:cidre-rescue-target-check" \
+    "scripts/cidre-rescue-target-format:cidre-rescue-target-format" \
+    "scripts/cidre-rescue-deploy-rootfs:cidre-rescue-deploy-rootfs" \
+    "scripts/cidre-rescue-install-metadata:cidre-rescue-install-metadata" \
+    "scripts/cidre-rescue-create-verify:cidre-rescue-create-verify" \
+    "scripts/cidre-rescue-create-report:cidre-rescue-create-report" \
+    "scripts/cidre-rescue-create-risk:cidre-rescue-create-risk" \
+    "scripts/cidre-rescue-create-clean:cidre-rescue-create-clean" \
     "scripts/cidre-preinstall:cidre-preinstall" \
     "scripts/cidre-installer:cidre-installer"; do
     src="${mapping%%:*}"
@@ -174,7 +184,17 @@ sync_rescue_overlay_tree() {
     cidre-rescue-create-dry-run \
     cidre-rescue-boot-checklist \
     cidre-rescue-boot-risk \
-    cidre-rescue-boot-validate; do
+    cidre-rescue-boot-validate \
+    cidre-rescue-create \
+    cidre-rescue-create-preflight \
+    cidre-rescue-target-check \
+    cidre-rescue-target-format \
+    cidre-rescue-deploy-rootfs \
+    cidre-rescue-install-metadata \
+    cidre-rescue-create-verify \
+    cidre-rescue-create-report \
+    cidre-rescue-create-risk \
+    cidre-rescue-create-clean; do
     cp "$REPO_ROOT/scripts/$script" "$overlay_cidre_dir/$script"
     chmod +x "$overlay_cidre_dir/$script"
   done

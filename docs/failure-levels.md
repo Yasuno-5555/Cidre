@@ -8,3 +8,5 @@
 - Level 5: macOS restore assistant
 
 Level 4 means the main Cidre kernel, initramfs, boot files, or rootfs path are broken enough that Recovery Screen cannot appear.
+
+Prepared-target Rescue Slot creation is guided in v0.28.0.

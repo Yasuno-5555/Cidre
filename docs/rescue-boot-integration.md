@@ -6,3 +6,5 @@
 - Relationship to v0.26.0: adds planning and macOS-side audit on top of Rescue foundation
 - Boot integration constraints: Apple Silicon pairing, ESP handling, and boot metadata remain explicit
 - Future creation flow: guided dry-run first, real creation later
+
+v0.28.0 adds guided Rescue Slot creation for prepared targets, but does not yet modify boot entries.

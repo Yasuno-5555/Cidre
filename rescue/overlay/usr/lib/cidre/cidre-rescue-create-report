@@ -1,0 +1,90 @@
+#!/bin/sh
+set -eu
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+REPO_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+STATE_ROOT="${CIDRE_RESCUE_CREATE_STATE_ROOT:-$REPO_ROOT/.local/state/cidre/rescue-create}"
+CURRENT_DIR="$STATE_ROOT/current"
+output_file="$CURRENT_DIR/create-report.md"
+json_output=false
+
+usage() {
+  cat <<EOF
+Usage: cidre-rescue-create-report [options]
+
+Options:
+  --output <file>
+  --json
+  --help
+EOF
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --output) output_file="$2"; shift 2 ;;
+    --json) json_output=true; shift ;;
+    --help) usage; exit 0 ;;
+    *) printf 'ERROR: unknown option: %s\n' "$1" >&2; usage >&2; exit 1 ;;
+  esac
+done
+
+mkdir -p "$(dirname "$output_file")"
+
+if [ -f "$CURRENT_DIR/deployment.log" ]; then
+  deployed_target="$(sed -n 's/^target=//p' "$CURRENT_DIR/deployment.log" | head -n 1 || true)"
+  if [ -n "$deployed_target" ] && [ -x "$SCRIPT_DIR/cidre-rescue-target-check" ]; then
+    "$SCRIPT_DIR/cidre-rescue-target-check" --target "$deployed_target" >/dev/null 2>&1 || true
+  fi
+fi
+
+preflight_status="$(sed -n 's/.*"status": "\([^"]*\)".*/\1/p' "$CURRENT_DIR/create-preflight.json" 2>/dev/null | head -n 1 || true)"
+target_classification="$(sed -n 's/.*"classification": "\([^"]*\)".*/\1/p' "$CURRENT_DIR/target-check.json" 2>/dev/null | head -n 1 || true)"
+verify_status="$(sed -n 's/.*"status": "\([^"]*\)".*/\1/p' "$CURRENT_DIR/create-verify.json" 2>/dev/null | head -n 1 || true)"
+deploy_status="pending"
+[ -f "$CURRENT_DIR/deployment.log" ] && deploy_status="deployed"
+[ -f "$CURRENT_DIR/installed-metadata.json" ] && metadata_status="installed" || metadata_status="pending"
+[ -n "$preflight_status" ] || preflight_status="pending"
+[ -n "$target_classification" ] || target_classification="pending"
+[ -n "$verify_status" ] || verify_status="pending"
+
+target_value="$(sed -n 's/.*"target": "\([^"]*\)".*/\1/p' "$CURRENT_DIR/target-check.json" 2>/dev/null | head -n 1 || true)"
+[ -n "$target_value" ] || target_value="unknown"
+
+artifact_path="$REPO_ROOT/.local/state/cidre/rescue/artifacts/cidre-rescue-rootfs.tar.gz"
+metadata_path="$REPO_ROOT/.local/state/cidre/rescue-boot/current/rescue-slot-metadata.json"
+
+cat > "$output_file" <<EOF
+# Cidre Rescue Create Report
+
+- target: \`$target_value\`
+- artifact: \`$artifact_path\`
+- metadata: \`$metadata_path\`
+- preflight result: \`$preflight_status\`
+- target-check result: \`$target_classification\`
+- deploy result: \`$deploy_status\`
+- metadata install result: \`$metadata_status\`
+- verify result: \`$verify_status\`
+- pending boot integration: \`yes\`
+
+## Next Steps
+
+1. Keep Rescue Slot boot integration in planned/pending state.
+2. Record rescue boot validation separately.
+3. Use exact targets only for future creation runs.
+EOF
+
+if [ "$json_output" = "true" ]; then
+  cat <<EOF
+{
+  "schema_version": 1,
+  "target": "$target_value",
+  "preflight": "$preflight_status",
+  "target_check": "$target_classification",
+  "deploy": "$deploy_status",
+  "metadata": "$metadata_status",
+  "verify": "$verify_status"
+}
+EOF
+else
+  printf '%s\n' "$output_file"
+fi
