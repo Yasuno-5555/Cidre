@@ -137,5 +137,20 @@ if [ "$result_fail" -gt 0 ]; then
 else
   echo ""
   echo "Result: ready for controlled boot validation"
-  exit 0
+    if [ -f "$manifest_path" ] && command -v python3 >/dev/null 2>&1; then
+      # Update boot readiness checked flag in manifest
+      python3 -c "
+import json
+try:
+  d = json.load(open('$manifest_path'))
+  d.setdefault('validation', {})['boot_readiness_checked'] = True
+  d.setdefault('validation', {})['controlled_boot_test_prepared'] = True
+  json.dump(d, open('$manifest_path', 'w'), indent=2)
+except Exception as e:
+  pass
+" 2>/dev/null || true
+    fi
+
+    exit 0
+  fi
 fi

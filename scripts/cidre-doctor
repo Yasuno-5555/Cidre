@@ -19,6 +19,7 @@ FIRSTBOOT_MODE=false
 BOOT_MODE=false
 BUILDER_MODE=false
 REAL_BUILD_MODE=false
+CONTROLLED_BOOT_MODE=false
 
 STATE_DIR="${HOME}/.local/state/cidre"
 DOCTOR_DIR="${STATE_DIR}/doctor"
@@ -47,6 +48,7 @@ show_help() {
   echo "  --boot              Inspect image boot validation tooling and artifacts"
   echo "  --builder           Inspect ALARM builder integration state and wrapper tools"
   echo "  --real-build        Inspect real image build orchestration state and utilities"
+  echo "  --controlled-boot   Inspect controlled boot validation scripts and logs state"
   echo "  --base-readiness    Verify root-phase base setup readiness for ./preinstall"
   echo "  --seed              Inspect imported Cidre seed state under /var/lib/cidre/seed"
   echo "  --resume            Inspect imported/system and user resume state"
@@ -72,6 +74,7 @@ while [ $# -gt 0 ]; do
     --boot) BOOT_MODE=true; shift ;;
     --builder) BUILDER_MODE=true; shift ;;
     --real-build) REAL_BUILD_MODE=true; shift ;;
+    --controlled-boot) CONTROLLED_BOOT_MODE=true; shift ;;
     --base-readiness) BASE_READINESS_MODE=true; shift ;;
     --seed) SEED_MODE=true; shift ;;
     --resume) RESUME_MODE=true; shift ;;
@@ -623,6 +626,50 @@ elif [ "${BUILDER_MODE:-false}" = true ]; then
     else
       print_result WARN "cidre-builder-status reported issues."
     fi
+  fi
+
+elif [ "${CONTROLLED_BOOT_MODE:-false}" = true ]; then
+  SCRIPT_PATH=$(realpath "$0")
+  REPO_ROOT=$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd)
+  BOOT_TEST_DIR="${REPO_ROOT}/.local/state/cidre/boot-test"
+
+  echo "Cidre controlled boot diagnostics"
+  echo ""
+
+  for script in \
+    scripts/cidre-boot-preflight \
+    scripts/cidre-controlled-boot-test \
+    scripts/cidre-boot-observe \
+    scripts/cidre-firstboot-verify \
+    scripts/cidre-boot-result \
+    scripts/cidre-boot-failure-classify \
+    scripts/cidre-boot-test-report \
+    scripts/cidre-boot-test-clean; do
+    if [ -f "${REPO_ROOT}/${script}" ] && [ -x "${REPO_ROOT}/${script}" ]; then
+      print_result OK "Controlled boot script present: $script"
+    else
+      print_result FAIL "Controlled boot script missing: $script"
+    fi
+  done
+
+  # Verify docs
+  for doc in \
+    docs/controlled-boot-test.md \
+    docs/boot-test-runbook.md \
+    docs/firstboot-verification.md \
+    docs/boot-failure-classification.md \
+    docs/v0.20.0-controlled-boot-test.md; do
+    if [ -f "${REPO_ROOT}/${doc}" ]; then
+      print_result OK "Controlled boot documentation present: $doc"
+    else
+      print_result WARN "Controlled boot documentation missing: $doc"
+    fi
+  done
+
+  if [ -d "$BOOT_TEST_DIR/current" ]; then
+    print_result OK "Current boot test state directory exists."
+  else
+    print_result WARN "No active current boot test state directory."
   fi
 
 elif [ "$REAL_BUILD_MODE" = true ]; then

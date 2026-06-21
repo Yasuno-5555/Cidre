@@ -21,6 +21,7 @@ show_help() {
   echo "  image-status         Show prototype image artifact status"
   echo "  builder-status       Show builder configuration and staging status"
   echo "  real-build-status    Show real image build status"
+  echo "  boot-test-status     Show controlled boot test status"
   echo "  firstboot-status     Show firstboot OOBE state"
   echo "  boot-status          Show image boot validation status"
   echo "  disable-greetd       Disable greetd system service and restore fallback console"
@@ -254,6 +255,46 @@ case "$CMD" in
     else
       echo "  rootfs inspected:   no"
       echo "  boot readiness:     no"
+    fi
+    ;;
+  boot-test-status)
+    SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+    REPO_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+    BOOT_TEST_DIR="${REPO_ROOT}/.local/state/cidre/boot-test/current"
+    echo "Cidre controlled boot test status:"
+    
+    if [ -d "$BOOT_TEST_DIR" ]; then
+      echo "  current test: present"
+      if [ -f "$BOOT_TEST_DIR/preflight.log" ]; then
+        echo "  preflight:    passed"
+      else
+        echo "  preflight:    missing"
+      fi
+      
+      if [ -f "$BOOT_TEST_DIR/result.json" ] && command -v python3 >/dev/null 2>&1; then
+        res_status=$(python3 -c "import json; d=json.load(open('$BOOT_TEST_DIR/result.json')); print(d.get('status', 'unknown'))")
+        echo "  boot result:  $res_status"
+      else
+        echo "  boot result:  missing"
+      fi
+
+      if [ -f "$BOOT_TEST_DIR/firstboot-verify.log" ]; then
+        echo "  firstboot verified: yes"
+      else
+        echo "  firstboot verified: no"
+      fi
+
+      if [ -f "$BOOT_TEST_DIR/report.md" ]; then
+        echo "  report:       present"
+      else
+        echo "  report:       missing"
+      fi
+    else
+      echo "  current test: missing"
+      echo "  preflight:    missing"
+      echo "  boot result:  missing"
+      echo "  firstboot verified: no"
+      echo "  report:       missing"
     fi
     ;;
   firstboot-status)

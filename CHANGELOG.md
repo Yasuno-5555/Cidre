@@ -2,6 +2,33 @@
 
 All notable changes to the Cidre project will be documented in this file.
 
+## [0.20.0] - 2026-06-21
+### Added
+- Added `scripts/cidre-boot-preflight` to verify files and manifest configurations before boot validation.
+- Added `scripts/cidre-controlled-boot-test` high-level orchestrator for preparation, observations, log collections, and reporting.
+- Added `scripts/cidre-boot-observe` to log interactive OOBE status.
+- Added `scripts/cidre-firstboot-verify` to check firstboot marker files.
+- Added `scripts/cidre-boot-result` to write machine-readable JSON status details.
+- Added `scripts/cidre-boot-failure-classify` to classify failures into 10 categories.
+- Added `scripts/cidre-boot-test-report` to generate execution summaries.
+- Added `scripts/cidre-boot-test-clean` to archive active logs directories.
+- Added documentation for controlled boot validation, runbooks, firstboot verification, and failure classifications.
+- Added `docs/v0.20.0-controlled-boot-test.md` release plan documentation.
+
+### Changed
+- Updated `scripts/cidre-boot-checklist` to check preflight parameters and results.
+- Updated `scripts/cidre-boot-log-collect` to support state directories parameters.
+- Updated `scripts/cidre-image-boot-readiness` to update manifest validation status.
+- Updated `scripts/cidre-real-image-build` to route `--prepare-boot-test` logic.
+- Updated `scripts/cidre-image-build-report` to include next boot validation parameters.
+- Updated `scripts/cidre-doctor` to add `--controlled-boot` and append new files to RC checklists.
+- Updated `scripts/cidre-recovery` to add `boot-test-status` subcommand case.
+- Updated validation matrices, clean-install test plans, known limitations, and README guides.
+
+### Notes
+- v0.20.0 introduces controlled hardware boot validation tooling.
+- It does not distribute public bootable images or automate boot policy changes.
+
 ## [0.19.0] - 2026-06-21
 ### Added
 - Added `scripts/cidre-real-image-build` high-level orchestrator for full local prototype image builds.

@@ -66,9 +66,12 @@ Generated on: $(date -u +%Y-%m-%dT%H:%M:%SZ)
 
 ## Next Steps & Known Limitations
 - The registered prototype is a **local developer layout**, not a public release asset.
-- Real Apple Silicon hardware boot testing is deferred.
+- To execute controlled boot validation:
+  ```bash
+  scripts/cidre-controlled-boot-test --prepare --artifact "$registered_img"
+  ```
 - Run \`scripts/cidre-image-mount\` to check system layouts.
 EOF
 
 echo "Image build report written to: $output_file"
-EOF
+

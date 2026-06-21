@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+# cidre-firstboot-verify: Verification of post-boot state directories and markers
+set -euo pipefail
+
+root_dir="/"
+expect_started=true
+expect_completed=false
+expect_handoff=false
+strict_mode=false
+
+usage() {
+  cat <<EOF
+Usage: cidre-firstboot-verify [options]
+
+Verify firstboot state markers and handoff details.
+
+Options:
+  --root <path>         State directory root path (default: /)
+  --expect-started      Expect setup to have started
+  --expect-completed    Expect setup to be completed
+  --expect-handoff      Expect handoff file present
+  --strict              Enforce strict checks
+  --help                Show this help
+EOF
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --root) root_dir="$2"; shift 2 ;;
+    --expect-started) expect_started=true; shift ;;
+    --expect-completed) expect_completed=true; shift ;;
+    --expect-handoff) expect_handoff=true; shift ;;
+    --strict) strict_mode=true; shift ;;
+    --help) usage; exit 0 ;;
+    *) echo "ERROR: unknown option: $1" >&2; usage >&2; exit 1 ;;
+  esac
+done
+
+firstboot_state_dir="${root_dir%/}/var/lib/cidre/firstboot-root"
+
+result_fail=0
+
+check_marker() {
+  local marker="$1" expected="$2"
+  local file_path="$firstboot_state_dir/$marker"
+  if [ -f "$file_path" ]; then
+    if $expected; then
+      echo "[OK]   Marker present: $marker"
+    else
+      echo "[FAIL] Marker present but not expected: $marker"
+      result_fail=$((result_fail+1))
+    fi
+  else
+    if $expected; then
+      echo "[FAIL] Marker missing: $marker"
+      result_fail=$((result_fail+1))
+    else
+      echo "[OK]   Marker missing (expected): $marker"
+    fi
+  fi
+}
+
+echo "Cidre Firstboot State Verification"
+echo "Target: $firstboot_state_dir"
+echo ""
+
+if [ ! -d "$firstboot_state_dir" ]; then
+  echo "ERROR: firstboot-root state directory missing."
+  exit 1
+fi
+
+check_marker "started" "$expect_started"
+check_marker "completed" "$expect_completed"
+
+# Handoff check
+handoff_file="$firstboot_state_dir/handoff.txt"
+if [ -f "$handoff_file" ]; then
+  echo "[OK]   Handoff file exists"
+  if grep -q "install --resume" "$handoff_file" 2>/dev/null; then
+    echo "[OK]   Handoff command is correct"
+  else
+    echo "[WARN] Handoff command may be incorrect"
+    if $strict_mode; then
+      result_fail=$((result_fail+1))
+    fi
+  fi
+else
+  if $expect_handoff; then
+    echo "[FAIL] Handoff file missing"
+    result_fail=$((result_fail+1))
+  else
+    echo "[OK]   Handoff file absent (expected)"
+  fi
+fi
+
+if [ "$result_fail" -gt 0 ]; then
+  echo ""
+  echo "Firstboot verification: FAILED with $result_fail issues"
+  exit 1
+fi
+
+echo ""
+echo "Firstboot verification: PASSED"
+exit 0

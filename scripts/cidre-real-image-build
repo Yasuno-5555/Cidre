@@ -45,6 +45,10 @@ while [ $# -gt 0 ]; do
     --mount) do_mount=true; shift ;;
     --inspect) do_inspect=true; shift ;;
     --boot-readiness) do_boot_readiness=true; shift ;;
+    --prepare-boot-test)
+      # Delegate to cidre-controlled-boot-test --prepare
+      exec "$SCRIPT_DIR/cidre-controlled-boot-test" --prepare --artifact "$output_dir/registered/cidre-prototype-rootfs.img" --profile "$profile"
+      ;;
     --clean) do_clean=true; shift ;;
     --help) usage; exit 0 ;;
     *) echo "ERROR: unknown option: $1" >&2; usage >&2; exit 1 ;;
