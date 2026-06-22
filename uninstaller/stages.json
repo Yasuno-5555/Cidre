@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "stages": [
+    {
+      "name": "uninstall-preflight",
+      "next": "state-export"
+    },
+    {
+      "name": "state-export",
+      "next": "partition-audit"
+    },
+    {
+      "name": "partition-audit",
+      "next": "target-scan"
+    },
+    {
+      "name": "target-scan",
+      "next": "target-review"
+    },
+    {
+      "name": "target-review",
+      "next": "risk-check"
+    },
+    {
+      "name": "risk-check",
+      "next": "dry-run"
+    },
+    {
+      "name": "dry-run",
+      "next": "macos-restore-handoff"
+    },
+    {
+      "name": "macos-restore-handoff",
+      "next": "execute-optional"
+    },
+    {
+      "name": "execute-optional",
+      "next": "post-uninstall-verify"
+    },
+    {
+      "name": "post-uninstall-verify",
+      "next": "uninstall-complete"
+    },
+    {
+      "name": "uninstall-complete",
+      "next": ""
+    }
+  ]
+}

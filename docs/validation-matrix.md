@@ -212,3 +212,92 @@ The following matrix documents the verification scopes completed on Cidre before
 | Rescue create clean dry-run | `scripts/cidre-rescue-create-clean --dry-run` |
 | Doctor rescue create checks | `scripts/cidre-doctor --rescue-create` |
 | Recovery rescue create status | `scripts/cidre-recovery rescue-create-status` |
+
+## Fully Guided Installer (v0.29.0)
+
+| Check | Command |
+|---|---|
+| Stage validation | `scripts/cidre-install-stage --validate` |
+| Install dashboard | `scripts/cidre-install-dashboard` |
+| Install preflight (macos) | `scripts/cidre-install-preflight --phase macos` |
+| Install preflight (root) | `scripts/cidre-install-preflight --phase root` |
+| Install preflight (user) | `scripts/cidre-install-preflight --phase user` |
+| Install preflight (desktop) | `scripts/cidre-install-preflight --phase desktop` |
+| Install guide | `scripts/cidre-install-guide` |
+| Install report | `scripts/cidre-install-report` |
+| Install resume | `scripts/cidre-install-resume` |
+| Install failure report | `scripts/cidre-install-failure-report` |
+| Install verify | `scripts/cidre-install-verify --desktop` |
+| macOS installer dashboard | `./install-macos --dashboard` |
+| macOS installer preflight | `./install-macos --install-preflight` |
+| macOS installer guide | `./install-macos --install-guide` |
+| macOS installer report | `./install-macos --install-report` |
+| preinstall dashboard | `./preinstall --dashboard` |
+| preinstall resume | `./preinstall --resume` |
+| install dashboard | `./install --dashboard` |
+| install resume | `./install --resume` |
+| Doctor guided install checks | `scripts/cidre-doctor --guided-install` |
+| Recovery install status | `scripts/cidre-recovery install-status` |
+
+## Fully Guided Uninstaller (v0.30.0)
+
+| Check | Command |
+|---|---|
+| Uninstall dashboard | `scripts/cidre-uninstall-dashboard` |
+| Uninstall state show | `scripts/cidre-uninstall-state --show` |
+| Uninstall preflight (linux) | `scripts/cidre-uninstall-preflight --phase linux` |
+| Uninstall export dry-run | `scripts/cidre-uninstall-export --dry-run` |
+| Uninstall target scan | `scripts/cidre-uninstall-target-scan` |
+| Uninstall target review | `scripts/cidre-uninstall-target-review --target test/fixtures/cidre-uninstall-target` |
+| Uninstall plan | `scripts/cidre-uninstall-plan --target test/fixtures/cidre-uninstall-target` |
+| Uninstall dry-run | `scripts/cidre-uninstall-dry-run --target test/fixtures/cidre-uninstall-target` |
+| Uninstall execute safety | `scripts/cidre-uninstall-execute --target test/fixtures/cidre-uninstall-target` |
+| Uninstall report | `scripts/cidre-uninstall-report` |
+| Uninstall resume | `scripts/cidre-uninstall-resume` |
+| Uninstall failure report | `scripts/cidre-uninstall-failure-report --stage target-review --reason mock-failure` |
+| install-macos dashboard | `./install-macos --uninstall-dashboard` |
+| install-macos preflight | `./install-macos --uninstall-preflight` |
+| install-macos target-scan | `./install-macos --uninstall-target-scan` |
+| install-macos report | `./install-macos --uninstall-report` |
+| Doctor guided uninstall checks | `scripts/cidre-doctor --guided-uninstall` |
+| Recovery uninstall status | `scripts/cidre-recovery uninstall-status` |
+
+## App-Ready Command Interface (v0.31.0)
+
+| Check | Command |
+|---|---|
+| App readiness | `scripts/cidre-app-readiness --json` |
+| Interface doctor | `scripts/cidre-interface-doctor --json` |
+| App action plan | `scripts/cidre-app-action-plan --install --json` |
+| Command manifest verify | `scripts/cidre-command-manifest --verify` |
+| Doctor app readiness | `scripts/cidre-doctor --app-readiness` |
+
+## Cidre.app Prototype (v0.32.0)
+
+| Check | Command |
+|---|---|
+| App prototype check | `scripts/cidre-app-prototype-check` |
+| JSON output check | `scripts/cidre-app-prototype-check --json` |
+| Fixture generation | `scripts/cidre-app-fixture-generate --json` |
+| Mock action run | `scripts/cidre-app-mock-run --action install-preflight --json` |
+| Report preview | `scripts/cidre-app-report-preview --install --json` |
+| Doctor app prototype | `scripts/cidre-doctor --app-prototype` |
+| Doctor rc-readiness | `scripts/cidre-doctor --rc-readiness` |
+| Recovery app status | `scripts/cidre-recovery app-prototype-status` |
+| Recovery app fixtures | `scripts/cidre-recovery app-fixtures` |
+| Recovery app report preview | `scripts/cidre-recovery app-report-preview` |
+
+## Cidre.app Guided Action UI (v0.33.0)
+
+| Check | Command |
+|---|---|
+| App live check | `scripts/cidre-app-live-check --json` |
+| Safe action list JSON | `scripts/cidre-app-safe-actions --json` |
+| Execution policy JSON | `scripts/cidre-app-execution-policy --json` |
+| UI components validation | `scripts/cidre-app-ui-validation --json` |
+| Log fixture generation | `scripts/cidre-app-log-fixture --json` |
+| Doctor app guided UI | `scripts/cidre-doctor --app-guided-ui` |
+| Recovery app guided UI status | `scripts/cidre-recovery app-guided-ui-status` |
+| Recovery app safe actions | `scripts/cidre-recovery app-safe-actions --json` |
+| Recovery app live check | `scripts/cidre-recovery app-live-check --json` |
+| Recovery app execution policy | `scripts/cidre-recovery app-execution-policy --json` |

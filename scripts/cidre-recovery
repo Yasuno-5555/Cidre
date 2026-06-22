@@ -44,9 +44,32 @@ show_help() {
   echo "  actions              List or run recovery actions"
   echo "  recovery-report      Generate a recovery report"
   echo "  clear-safe-mode      Clear safe-mode markers"
+  echo "  install-status       Show guided installer status"
+  echo "  install-dashboard    Show guided installer dashboard"
+  echo "  install-report       Show guided installer report"
+  echo "  install-resume       Show guided installer resume command"
+  echo "  install-failure-report Show guided installer failure report"
   echo "  rescue-status        Run Rescue Slot readiness checks"
   echo "  rescue-plan          Generate a Rescue Slot plan"
   echo "  rescue-report        Generate a Rescue Slot report"
+  echo "  uninstall-status     Show guided uninstaller status"
+  echo "  uninstall-dashboard  Show guided uninstaller dashboard"
+  echo "  uninstall-export     Export Cidre state before uninstall"
+  echo "  uninstall-plan       Generate guided uninstall plan"
+  echo "  uninstall-dry-run    Preview uninstall changes"
+  echo "  uninstall-report     Generate guided uninstall report"
+  echo "  uninstall-resume     Show or run pending uninstall command"
+  echo "  interface-status     Show interface integration diagnostics"
+  echo "  app-readiness        Show App backend readiness diagnostics"
+  echo "  report-index         Inspect index of generated reports"
+  echo "  app-prototype-status Show SwiftUI App prototype check status"
+  echo "  app-guided-ui-status Show SwiftUI App guided UI check status"
+  echo "  app-safe-actions     List safe App-Ready actions"
+  echo "  app-live-check       Verify App backend live compatibility"
+  echo "  app-execution-policy Show App execution policy boundaries"
+  echo "  app-fixtures         Generate SwiftUI App mock fixtures"
+  echo "  app-report-preview   Generate SwiftUI App report preview"
+
   echo "  rescue-build         Build Rescue Slot overlay artifact"
   echo "  rescue-inspect       Inspect Rescue Slot overlay"
   echo "  rescue-boot-status   Show rescue boot integration status"
@@ -433,6 +456,58 @@ case "$CMD" in
   rescue-report)
     exec "$(dirname "$0")/cidre-rescue-report" "$@"
     ;;
+  uninstall-status)
+    exec "$(dirname "$0")/cidre-uninstall-preflight" --phase linux "$@"
+    ;;
+  uninstall-dashboard)
+    exec "$(dirname "$0")/cidre-uninstall-dashboard" "$@"
+    ;;
+  uninstall-export)
+    exec "$(dirname "$0")/cidre-uninstall-export" "$@"
+    ;;
+  uninstall-plan)
+    exec "$(dirname "$0")/cidre-uninstall-plan" "$@"
+    ;;
+  uninstall-dry-run)
+    exec "$(dirname "$0")/cidre-uninstall-dry-run" "$@"
+    ;;
+  uninstall-report)
+    exec "$(dirname "$0")/cidre-uninstall-report" "$@"
+    ;;
+  uninstall-resume)
+    exec "$(dirname "$0")/cidre-uninstall-resume" "$@"
+    ;;
+  interface-status)
+    exec "$(dirname "$0")/cidre-interface-doctor" "$@"
+    ;;
+  app-readiness)
+    exec "$(dirname "$0")/cidre-app-readiness" "$@"
+    ;;
+  report-index)
+    exec "$(dirname "$0")/cidre-report-index" "$@"
+    ;;
+  app-prototype-status)
+    exec "$(dirname "$0")/cidre-app-prototype-check" "$@"
+    ;;
+  app-guided-ui-status)
+    exec "$(dirname "$0")/cidre-app-ui-validation" "$@"
+    ;;
+  app-safe-actions)
+    exec "$(dirname "$0")/cidre-app-safe-actions" "$@"
+    ;;
+  app-live-check)
+    exec "$(dirname "$0")/cidre-app-live-check" "$@"
+    ;;
+  app-execution-policy)
+    exec "$(dirname "$0")/cidre-app-execution-policy" "$@"
+    ;;
+  app-fixtures)
+    exec "$(dirname "$0")/cidre-app-fixture-generate" "$@"
+    ;;
+  app-report-preview)
+    exec "$(dirname "$0")/cidre-app-report-preview" "$@"
+    ;;
+
   rescue-build)
     exec "$(dirname "$0")/cidre-rescue-image-build" "$@"
     ;;
@@ -662,6 +737,21 @@ except:
     ;;
   safe-mode)
     exec "$(dirname "$0")/cidre-safe-mode" "$@"
+    ;;
+  install-status)
+    exec "$(dirname "$0")/cidre-install-state" --show "$@"
+    ;;
+  install-dashboard)
+    exec "$(dirname "$0")/cidre-install-dashboard" "$@"
+    ;;
+  install-report)
+    exec "$(dirname "$0")/cidre-install-report" "$@"
+    ;;
+  install-resume)
+    exec "$(dirname "$0")/cidre-install-resume" "$@"
+    ;;
+  install-failure-report)
+    exec "$(dirname "$0")/cidre-install-failure-report" "$@"
     ;;
   *)
     show_help

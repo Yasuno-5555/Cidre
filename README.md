@@ -1,4 +1,4 @@
-# Cidre (v0.28.0 Guided Rescue Slot Creation Pack)
+# Cidre (v0.33.0 Cidre.app Guided Action UI Pack)
 
 Cidre is an Apple Silicon Mac-oriented Linux experience layer built on ALARM (Arch Linux ARM) / Asahi Linux.
 
@@ -109,6 +109,49 @@ and an explicit confirmation phrase.
 
 This release does not automatically create partitions, resize APFS containers,
 or modify boot entries.
+
+## Fully Guided Installer
+
+Cidre v0.29.0 introduces a guided installer flow.
+
+The installer tracks install stages from macOS preparation through ALARM root phase, user phase, firstboot, and desktop verification.
+
+It provides dashboards, handoff instructions, resume commands, and install reports.
+
+This release does not automatically resize macOS/APFS containers or create partitions.
+
+## Fully Guided Uninstaller
+
+Cidre v0.30.0 introduces a guided uninstall flow.
+
+The uninstaller requires state export before deletion planning, scans and reviews delete targets, blocks protected targets, generates dry-run plans, and connects to the macOS Restore Assistant.
+
+This release does not perform automatic destructive disk operations by default.
+
+## App-ready command interface
+
+Cidre v0.31.0 introduces an app-ready command interface.
+
+Guided installer, uninstaller, recovery, and report commands now expose machine-readable output, predictable exit codes, noninteractive modes, and versioned interface metadata for future integration with Cidre.app.
+
+## Cidre.app prototype
+
+Cidre v0.32.0 introduces the first macOS app prototype.
+
+The prototype reads the app-ready command interface added in v0.31.0 and displays dashboards, actions, reports, and command results in a SwiftUI-based interface.
+
+This release does not perform destructive disk operations and does not include a privileged helper.
+
+## Cidre.app guided action UI
+
+Cidre v0.33.0 extends the macOS app prototype with a guided action UI.
+
+The app can select a Cidre repository, read interface metadata, display install
+and uninstall actions, run safe read-only commands, display JSON results, preview
+reports, and keep an execution log.
+
+Destructive install/uninstall operations remain blocked.
+
 
 ## Installation Flow
 
@@ -228,6 +271,20 @@ After switching to the normal user, resume the Cidre setup:
 - [Configuration Management Guide](./docs/config-management.md)
 - [v0.23.0 Release Notes](./docs/v0.23.0-uninstall-exit-path.md)
 - [v0.24.0 Release Notes](./docs/v0.24.0-macos-restore-assistant.md)
+- [v0.30.0 Release Notes](./docs/v0.30.0-fully-guided-uninstaller.md)
+- [v0.31.0 Release Notes](./docs/v0.31.0-app-ready-command-interface.md)
+- [v0.32.0 Release Notes](./docs/v0.32.0-cidre-app-prototype.md)
+- [v0.33.0 Release Notes](./docs/v0.33.0-cidre-app-guided-action-ui.md)
+- [Cidre.app Prototype](./docs/cidre-app-prototype.md)
+- [Cidre.app Architecture](./docs/cidre-app-architecture.md)
+- [Cidre.app UI Flow](./docs/cidre-app-ui-flow.md)
+- [Cidre.app Backend Bridge](./docs/cidre-app-backend-bridge.md)
+- [Cidre.app Safety Model](./docs/cidre-app-safety-model.md)
+- [Cidre.app Guided Action UI](./docs/cidre-app-guided-action-ui.md)
+- [Cidre.app Command Execution](./docs/cidre-app-command-execution.md)
+- [Cidre.app Repository Selection](./docs/cidre-app-repository-selection.md)
+- [Cidre.app Execution Log](./docs/cidre-app-execution-log.md)
+- [Cidre.app Read-Only Safety Policy](./docs/cidre-app-read-only-policy.md)
 - [v0.25.0 Release Notes](./docs/v0.25.0-recovery-screen-safe-mode.md)
 - [v0.26.0 Release Notes](./docs/v0.26.0-rescue-slot-foundation.md)
 - [v0.27.0 Release Notes](./docs/v0.27.0-rescue-boot-integration.md)

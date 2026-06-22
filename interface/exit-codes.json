@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "exit_codes": [
+    { "code": 0, "name": "success", "description": "Command completed successfully" },
+    { "code": 1, "name": "generic-failure", "description": "Generic execution failure" },
+    { "code": 2, "name": "invalid-usage", "description": "Invalid usage / arguments" },
+    { "code": 3, "name": "missing-dependency", "description": "Required command or package dependency is missing" },
+    { "code": 4, "name": "unsupported-platform", "description": "Command requires a different platform (e.g. macOS vs Linux)" },
+    { "code": 5, "name": "permission-denied", "description": "Permission denied / wrong user context" },
+    { "code": 6, "name": "preflight-failed", "description": "Preflight check failed" },
+    { "code": 7, "name": "warning-state", "description": "Success with warning state outcome" },
+    { "code": 8, "name": "blocked-for-safety", "description": "Execution blocked for safety requirements" },
+    { "code": 9, "name": "destructive-refused", "description": "Destructive operation was explicitly refused / failed confirmation" },
+    { "code": 10, "name": "state-not-found", "description": "State directory or state file was not found" },
+    { "code": 11, "name": "schema-validation-failed", "description": "JSON schema verification or parse failed" },
+    { "code": 12, "name": "target-validation-failed", "description": "Exact target validation checked failed" },
+    { "code": 13, "name": "network-unavailable", "description": "Remote package or state metadata unreachable" },
+    { "code": 14, "name": "resume-unavailable", "description": "No resume state found to continue command execution" },
+    { "code": 15, "name": "internal-error", "description": "Command internal error/crash" }
+  ]
+}

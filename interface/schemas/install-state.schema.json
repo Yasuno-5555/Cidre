@@ -1,0 +1,13 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "InstallState",
+  "type": "OBJECT",
+  "properties": {
+    "schema_version": { "type": "integer" },
+    "stage": { "type": "string" },
+    "status": { "type": "string" },
+    "next_command": { "type": "string" },
+    "timestamp": { "type": "string" }
+  },
+  "required": ["schema_version", "stage", "status"]
+}

@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "actions": [
+    {
+      "id": "install",
+      "title": "Install Cidre",
+      "category": "install",
+      "entry_command": "./install-macos --dashboard --json"
+    },
+    {
+      "id": "uninstall",
+      "title": "Uninstall Cidre",
+      "category": "uninstall",
+      "entry_command": "./install-macos --uninstall-dashboard --json"
+    }
+  ]
+}

@@ -1,0 +1,79 @@
+#!/bin/sh
+set -eu
+
+usage() {
+  cat <<'EOF'
+Usage:
+  cidre-app-live-check [options]
+
+Options:
+  --json
+  --help
+EOF
+}
+
+json_mode=false
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --json) json_mode=true; shift ;;
+    --help|-h|help) usage; exit 0 ;;
+    *) printf 'ERROR: Unknown option: %s\n' "$1" >&2; usage; exit 2 ;;
+  esac
+done
+
+python3 -c '
+import sys, os, json, subprocess
+
+json_mode = sys.argv[1] == "true"
+repo_root = os.environ.get("CIDRE_REPO_ROOT", "/home/yasuno/Projects/Cidre")
+
+checks = []
+passed = True
+
+def add_check(name, ok, info):
+    global passed
+    if not ok:
+        passed = False
+    checks.append({"name": name, "passed": ok, "info": info})
+
+# 1. Prototype folder
+prototype_ok = os.path.isdir(os.path.join(repo_root, "apps/macos/CidreApp"))
+add_check("Prototype Folder", prototype_ok, "apps/macos/CidreApp")
+
+# 2. Interface directory
+interface_ok = os.path.isdir(os.path.join(repo_root, "interface"))
+add_check("Interface Directory", interface_ok, "interface")
+
+# 3. Metadata files
+manifest_ok = os.path.isfile(os.path.join(repo_root, "interface/command-manifest.json"))
+add_check("Command Manifest Config", manifest_ok, "interface/command-manifest.json")
+
+actions_ok = os.path.isfile(os.path.join(repo_root, "interface/app-actions.json"))
+add_check("App Actions Config", actions_ok, "interface/app-actions.json")
+
+# 4. App readiness script
+readiness_script = os.path.join(repo_root, "scripts/cidre-app-readiness")
+readiness_ok = os.path.isfile(readiness_script) and os.access(readiness_script, os.X_OK)
+add_check("App Readiness Script", readiness_ok, "scripts/cidre-app-readiness")
+
+# 5. Report index script
+report_script = os.path.join(repo_root, "scripts/cidre-report-index")
+report_ok = os.path.isfile(report_script) and os.access(report_script, os.X_OK)
+add_check("Report Index Script", report_ok, "scripts/cidre-report-index")
+
+res = {
+    "passed": passed,
+    "checks": checks
+}
+
+if json_mode:
+    print(json.dumps(res, indent=2))
+else:
+    print("Cidre.app Live Check:")
+    for c in checks:
+        status = "[OK]  " if c["passed"] else "[FAIL]"
+        print("  %s %s: %s" % (status, c["name"], c["info"]))
+    print("Overall live validation: %s" % ("PASSED" if passed else "FAILED"))
+    if not passed:
+        sys.exit(1)
+' "$([ "$json_mode" = "true" ] && echo "true" || echo "false")"

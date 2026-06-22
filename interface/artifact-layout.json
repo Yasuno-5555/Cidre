@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "artifact_directories": {
+    "linux_user_state": "~/.local/state/cidre",
+    "linux_system_state": "/var/lib/cidre",
+    "macos_user_state": ".local/state/cidre"
+  },
+  "artifacts": [
+    {
+      "role": "install-report",
+      "path": ".local/state/cidre/install/current/install-report.md",
+      "type": "markdown"
+    },
+    {
+      "role": "install-state",
+      "path": ".local/state/cidre/install/current/install-state.json",
+      "type": "json"
+    },
+    {
+      "role": "uninstall-report",
+      "path": ".local/state/cidre/uninstall/current/uninstall-report.md",
+      "type": "markdown"
+    },
+    {
+      "role": "uninstall-state",
+      "path": ".local/state/cidre/uninstall/current/uninstall-state.json",
+      "type": "json"
+    }
+  ]
+}

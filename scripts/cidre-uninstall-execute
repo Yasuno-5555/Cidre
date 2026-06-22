@@ -1,0 +1,113 @@
+#!/bin/sh
+set -eu
+
+if [ -n "${CIDRE_UNINSTALL_STATE_FILE:-}" ]; then
+  STATE_FILE="$CIDRE_UNINSTALL_STATE_FILE"
+elif [ "$(id -u)" -eq 0 ] && [ "$(uname)" = "Linux" ]; then
+  STATE_FILE="/var/lib/cidre/uninstall/uninstall-state.json"
+else
+  STATE_FILE="${HOME}/.local/state/cidre/uninstall/current/uninstall-state.json"
+fi
+
+usage() {
+  cat <<'EOF'
+Usage:
+  cidre-uninstall-execute [options]
+
+Options:
+  --target <target>
+  --dry-run
+  --uninstall
+  --i-understand-this-deletes-cidre
+  --json
+  --plain
+  --no-color
+  --non-interactive
+  --help
+EOF
+}
+
+target=""
+dry_run=false
+uninstall=false
+confirm=false
+json_mode=false
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --target) target="$2"; shift 2 ;;
+    --dry-run) dry_run=true; shift ;;
+    --uninstall) uninstall=true; shift ;;
+    --i-understand-this-deletes-cidre) confirm=true; shift ;;
+    --json) json_mode=true; shift ;;
+    --plain|--no-color|--non-interactive) shift ;;
+    --help|-h|help) usage; exit 0 ;;
+    *) printf 'ERROR: Unknown option: %s\n' "$1" >&2; usage; exit 2 ;;
+  esac
+done
+
+if [ -z "$target" ]; then
+  if [ "$json_mode" = "true" ]; then
+    printf '{\n  "schema_version": 1,\n  "command": "cidre-uninstall-execute",\n  "status": "fail",\n  "exit_code": 2,\n  "errors": [{"code": "missing-target", "message": "--target is required"}]\n}\n'
+  else
+    printf 'ERROR: --target is required\n' >&2
+  fi
+  exit 2
+fi
+
+if [ "$uninstall" = "false" ] || [ "$confirm" = "false" ]; then
+  if [ "$json_mode" = "true" ]; then
+    python3 -c '
+import json, sys
+res = {
+  "schema_version": 1,
+  "command": "cidre-uninstall-execute",
+  "status": "blocked",
+  "reason": "confirmation-required",
+  "summary": "Destructive uninstall refused.",
+  "exit_code": 8,
+  "warnings": [],
+  "errors": [
+    {
+      "code": "confirmation-required",
+      "message": "Explicit confirmation phrase is required."
+    }
+  ],
+  "required_confirmation": "I UNDERSTAND THIS DELETES CIDRE",
+  "next_actions": [
+    {
+      "label": "Review uninstall dry-run",
+      "command": "scripts/cidre-uninstall-dry-run --target " + sys.argv[1] + " --json"
+    }
+  ]
+}
+print(json.dumps(res, indent=2))
+' "$target"
+  else
+    printf "BLOCKED:\n  missing explicit confirmation\n" >&2
+  fi
+  exit 8
+fi
+
+# Dry-run or execute (experimental / disabled by default)
+if [ "$json_mode" = "true" ]; then
+  python3 -c '
+import json, sys
+res = {
+  "schema_version": 1,
+  "command": "cidre-uninstall-execute",
+  "status": "pass",
+  "summary": "Dry-run only. No destructive disk operations were performed.",
+  "exit_code": 0,
+  "warnings": ["Dry-run execution only"],
+  "errors": []
+}
+print(json.dumps(res, indent=2))
+'
+else
+  echo "Cidre Guided Uninstaller Execution"
+  echo "==================================="
+  echo "Selected Target: $target"
+  echo "This operation is experimental in v0.30.0."
+  echo "No destructive disk operations were performed."
+fi

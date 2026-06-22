@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "timestamp": "2026-06-22T00:00:00Z",
+  "status": "passed",
+  "stages": [
+    {
+      "name": "macos-preflight",
+      "status": "passed"
+    },
+    {
+      "name": "macos-seed",
+      "status": "passed"
+    },
+    {
+      "name": "macos-handoff",
+      "status": "passed"
+    },
+    {
+      "name": "alarm-install",
+      "status": "passed"
+    },
+    {
+      "name": "root-preinstall",
+      "status": "passed"
+    },
+    {
+      "name": "normal-user-handoff",
+      "status": "passed"
+    },
+    {
+      "name": "user-install",
+      "status": "passed"
+    },
+    {
+      "name": "firstboot",
+      "status": "passed"
+    },
+    {
+      "name": "user-phase",
+      "status": "passed"
+    },
+    {
+      "name": "desktop-verification",
+      "status": "passed"
+    },
+    {
+      "name": "install-complete",
+      "status": "passed"
+    }
+  ],
+  "verification": {
+    "desktop": "passed",
+    "audio": "passed",
+    "session": "passed"
+  }
+}

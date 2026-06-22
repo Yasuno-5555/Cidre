@@ -44,6 +44,12 @@ cidre_recovery_write_state last-stage "$stage"
 [ -n "$message" ] && cidre_recovery_write_state last-error "$message"
 cidre_recovery_append_log panic.log "reason=$reason stage=$stage message=$message safe_mode=$safe_mode"
 
+# Update guided installer state if running
+if [ -x "$SCRIPT_DIR/cidre-install-state" ]; then
+  "$SCRIPT_DIR/cidre-install-state" --mark-failed "$reason" 2>/dev/null || true
+  "$SCRIPT_DIR/cidre-install-failure-report" --stage "$stage" --reason "$reason" --output "$(dirname "$SCRIPT_DIR")/.local/state/cidre/install/current/install-failure-report.md" 2>/dev/null || true
+fi
+
 if [ "$report" = "true" ] || [ "$dry_run" = "false" ]; then
   "$SCRIPT_DIR/cidre-recovery-report" >/dev/null
 fi

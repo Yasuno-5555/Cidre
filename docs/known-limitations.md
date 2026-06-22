@@ -139,3 +139,43 @@ This document lists all known limits, caveats, and risk factors regarding the Ci
 - v0.28.0 does not resize APFS containers.
 - v0.28.0 does not modify boot entries.
 - v0.28.0 does not guarantee real Apple Silicon rescue boot.
+
+## v0.29.0 limitations
+
+- v0.29.0 does not provide a one-click installer.
+- v0.29.0 does not automatically install ALARM.
+- v0.29.0 does not resize APFS containers.
+- v0.29.0 does not create partitions.
+- v0.29.0 still requires the user to follow Asahi/ALARM installation steps.
+- Real fresh install validation remains pending.
+
+## v0.30.0 limitations
+
+- v0.30.0 does not provide one-click uninstall.
+- v0.30.0 does not automatically delete partitions by default.
+- v0.30.0 does not resize APFS containers.
+- v0.30.0 does not guarantee full macOS disk layout restoration.
+- Real full install/uninstall validation remains pending.
+- Real destructive deletion remains disabled by default.
+
+## v0.31.0 limitations
+
+- CLI outputs in JSON/Plain format do not implement any GUI display layer.
+- Predicted exit codes and schema contracts are verified via tests but not yet active in an app.
+- Interactive mode triggers are disabled only when requested.
+
+## v0.32.0 limitations
+
+- Cidre.app is a prototype and not a finished application.
+- The app does not perform real install/uninstall operations.
+- The app does not include a privileged helper.
+- The app may rely on mock fixtures for validation.
+- Real macOS app runtime validation remains pending.
+
+## v0.33.0 limitations
+
+- Cidre.app can only run safe read-only actions in v0.33.0.
+- Real install/uninstall execution remains blocked.
+- No privileged helper is included.
+- SwiftUI runtime validation on real macOS remains required.
+- Execution log is for diagnostics and may not be persisted permanently.

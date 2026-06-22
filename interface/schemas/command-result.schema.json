@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CommandResult",
+  "type": "OBJECT",
+  "properties": {
+    "schema_version": { "type": "integer" },
+    "command": { "type": "string" },
+    "status": { "type": "string" },
+    "summary": { "type": "string" },
+    "phase": { "type": "string" },
+    "stage": { "type": "string" },
+    "exit_code": { "type": "integer" },
+    "warnings": { "type": "array" },
+    "errors": { "type": "array" },
+    "artifacts": { "type": "array" },
+    "next_actions": { "type": "array" }
+  },
+  "required": ["schema_version", "command", "status", "exit_code"]
+}

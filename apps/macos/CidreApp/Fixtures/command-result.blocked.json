@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "command": "cidre-uninstall-execute",
+  "status": "blocked",
+  "reason": "confirmation-required",
+  "exit_code": 8,
+  "warnings": [],
+  "errors": [
+    {
+      "code": "confirmation-required",
+      "message": "Explicit confirmation phrase is required."
+    }
+  ],
+  "required_confirmation": "I UNDERSTAND THIS DELETES CIDRE",
+  "next_actions": [
+    {
+      "label": "Review uninstall dry-run",
+      "command": "scripts/cidre-uninstall-dry-run --target <target>"
+    }
+  ]
+}

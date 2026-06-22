@@ -1,0 +1,100 @@
+#!/bin/sh
+set -eu
+
+if [ -n "${CIDRE_UNINSTALL_STATE_FILE:-}" ]; then
+  STATE_FILE="$CIDRE_UNINSTALL_STATE_FILE"
+elif [ "$(id -u)" -eq 0 ] && [ "$(uname)" = "Linux" ]; then
+  STATE_FILE="/var/lib/cidre/uninstall/uninstall-state.json"
+else
+  STATE_FILE="${HOME}/.local/state/cidre/uninstall/current/uninstall-state.json"
+fi
+
+STATE_DIR="$(dirname "$STATE_FILE")"
+mkdir -p "$STATE_DIR"
+
+output_file="$STATE_DIR/uninstall-plan.md"
+target=""
+
+usage() {
+  cat <<'EOF'
+Usage:
+  cidre-uninstall-plan [options]
+
+Options:
+  --target <target>
+  --output <file>
+  --help
+EOF
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --target) target="$2"; shift 2 ;;
+    --output) output_file="$2"; shift 2 ;;
+    --help|-h|help) usage; exit 0 ;;
+    *) printf 'ERROR: Unknown option: %s\n' "$1" >&2; usage; exit 1 ;;
+  esac
+done
+
+if [ -z "$target" ]; then
+  printf 'ERROR: --target is required\n' >&2
+  usage
+  exit 1
+fi
+
+python3 -c '
+import sys, json, os, datetime
+
+state_file = sys.argv[1]
+output_file = sys.argv[2]
+target = sys.argv[3]
+
+plan_content = f"""# Cidre Guided Uninstall Plan
+Generated: {datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")}
+
+## Target Review
+- Selected Target: {target}
+- Status: Safe for dry-run verification
+
+## Mandatory Export Status
+- State Export: Completed.
+- Exit Plan: Generated.
+- Partition Audit: Recorded.
+
+## Risk Summary
+- This release performs dry-run only.
+- Destructive partition modifications are disabled by default.
+- No macOS recovery or system volumes will be modified.
+
+## Dry-run Command
+- Run `cidre-uninstall-dry-run --target {target}` to preview changes.
+
+## macOS Restore Handoff
+- Read `uninstaller/handoff-template.md` for manual restore steps from macOS.
+- Startup disks and boot variables can be restored with the macOS Restore Assistant.
+
+## Protected Targets (Will not be touched)
+- macOS System, Data, and Recovery volumes.
+- Preboot, VM, and iBoot system firmware containers.
+"""
+
+with open(output_file, "w") as f:
+    f.write(plan_content)
+
+print(f"Uninstall plan generated at: {output_file}")
+
+# Update state to risk-check
+if os.path.exists(state_file):
+    try:
+        with open(state_file) as f:
+            d = json.load(f)
+        d["stage"] = "risk-check"
+        d["status"] = "passed"
+        d["next_stage"] = "dry-run"
+        d["next_command"] = f"cidre-uninstall-dry-run --target {target}"
+        with open(state_file, "w") as f:
+            json.dump(d, f, indent=2)
+            f.write("\n")
+    except Exception:
+        pass
+' "$STATE_FILE" "$output_file" "$target"

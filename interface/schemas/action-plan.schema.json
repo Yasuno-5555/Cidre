@@ -1,0 +1,11 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ActionPlan",
+  "type": "OBJECT",
+  "properties": {
+    "schema_version": { "type": "integer" },
+    "category": { "type": "string" },
+    "actions": { "type": "array" }
+  },
+  "required": ["schema_version", "category", "actions"]
+}

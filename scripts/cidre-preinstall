@@ -11,6 +11,11 @@ USER_NAME=""
 YES=false
 IMPORT_SEED_PATH=""
 NO_SEED=false
+INSTALL_DASHBOARD=false
+INSTALL_RESUME=false
+INSTALL_STATE=false
+INSTALL_REPORT=false
+
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -956,6 +961,10 @@ while [ $# -gt 0 ]; do
       USER_NAME="$2"
       shift 2
       ;;
+    --dashboard) INSTALL_DASHBOARD=true; shift ;;
+    --resume) INSTALL_RESUME=true; shift ;;
+    --install-state) INSTALL_STATE=true; shift ;;
+    --install-report) INSTALL_REPORT=true; shift ;;
     --yes) YES=true; shift ;;
     --help) show_help; exit 0 ;;
     *) echo "Unknown option: $1" >&2; show_help; exit 1 ;;
@@ -988,6 +997,53 @@ fi
 if [ "${TUI_MODE}" = true ] && [ "${INTERACTIVE_SESSION}" = false ] && [ "${DRY_RUN}" = false ] && [ "${CHECK_ONLY}" = false ] && [ "${YES}" = false ]; then
   echo "Error: --tui requires a TTY unless used with --dry-run/--check/--yes." >&2
   exit 1
+fi
+
+if [ "${INSTALL_DASHBOARD}" = true ]; then
+  exec "${SCRIPT_DIR}/cidre-install-dashboard"
+fi
+
+if [ "${INSTALL_STATE}" = true ]; then
+  exec "${SCRIPT_DIR}/cidre-install-state" "$@"
+fi
+
+if [ "${INSTALL_REPORT}" = true ]; then
+  exec "${SCRIPT_DIR}/cidre-install-report"
+fi
+
+if [ "${INSTALL_RESUME}" = true ]; then
+  "${SCRIPT_DIR}/cidre-install-state" --set-stage root-preinstall --set-status running --set-next-command "./preinstall --resume"
+
+  if [ "$EUID" -ne 0 ]; then
+    echo "Error: resume preinstall changes require root." >&2
+    "${SCRIPT_DIR}/cidre-install-state" --mark-failed "preflight-failed"
+    exit 1
+  fi
+
+  # Run preparation flow
+  # We might need to ensure USER_NAME is determined
+  ensure_target_user_selected || true
+
+  # For non-interactive/auto runs, we want to run prepare flow non-interactively
+  YES=true
+  NON_INTERACTIVE=true
+  INTERACTIVE_SESSION=false
+  UI_BACKEND="plain"
+
+  if ! run_prepare_flow; then
+    "${SCRIPT_DIR}/cidre-install-state" --mark-failed "generic-failure"
+    exit 1
+  fi
+
+  "${SCRIPT_DIR}/cidre-install-state" --set-stage root-preinstall --set-status passed
+  "${SCRIPT_DIR}/cidre-install-state" --set-stage normal-user-handoff --set-status running
+
+  "${SCRIPT_DIR}/cidre-install-handoff" --from root-preinstall --to user-install --output "${REPO_ROOT}/.local/state/cidre/install/current/install-handoff.md"
+
+  "${SCRIPT_DIR}/cidre-install-state" --set-stage normal-user-handoff --set-status passed --set-next-command "su - ${USER_NAME:-cidre}; cd Cidre; ./install --resume" --set-next-stage "user-install"
+
+  cat "${REPO_ROOT}/.local/state/cidre/install/current/install-handoff.md"
+  exit 0
 fi
 
 select_ui_backend

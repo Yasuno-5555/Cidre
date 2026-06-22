@@ -1,0 +1,13 @@
+{
+  "macos-preflight": "Verifying macOS installation readiness and prerequisites",
+  "macos-seed": "Generating environment seed configuration on macOS",
+  "macos-handoff": "Generating instructions to hand off installation to ALARM/Asahi installer",
+  "alarm-install": "Installing base Arch Linux ARM (ALARM) environment",
+  "root-preinstall": "Running Cidre preinstall script as root user",
+  "normal-user-handoff": "Handoff to normal user setup",
+  "user-install": "Running Cidre main installer as normal user",
+  "firstboot": "Running system firstboot services and OOBE configurations",
+  "user-phase": "Executing user environment configurations",
+  "desktop-verification": "Verifying Cidre desktop readiness, sessions, and audio configuration",
+  "install-complete": "Cidre Guided Installation successfully completed"
+}

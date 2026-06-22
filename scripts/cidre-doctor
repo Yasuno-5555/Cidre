@@ -23,6 +23,12 @@ BUILDER_MODE=false
 REAL_BUILD_MODE=false
 CONTROLLED_BOOT_MODE=false
 UNINSTALL_MODE=false
+GUIDED_INSTALL_MODE=false
+GUIDED_UNINSTALL_MODE=false
+APP_READINESS_MODE=false
+INTERFACE_MODE=false
+APP_PROTOTYPE_MODE=false
+APP_GUIDED_UI_MODE=false
 MACOS_RESTORE_MODE=false
 RECOVERY_SCREEN_MODE=false
 SAFE_MODE_MODE=false
@@ -69,10 +75,13 @@ show_help() {
   echo "  --rescue-boot       Inspect Rescue Boot Integration readiness"
   echo "  --macos-rescue      Inspect macOS-side Rescue Slot planning readiness"
   echo "  --rescue-create     Inspect guided Rescue Slot creation readiness"
+  echo "  --guided-install    Inspect guided installer readiness"
   echo "  --base-readiness    Verify root-phase base setup readiness for ./preinstall"
   echo "  --seed              Inspect imported Cidre seed state under /var/lib/cidre/seed"
   echo "  --resume            Inspect imported/system and user resume state"
-  echo "  --summary           Can be combined with --base-readiness for condensed output"
+  echo "  --summary           Can be combined with --base-readiness"
+  echo "  --app-prototype     Inspect app prototype readiness"
+  echo "  --app-guided-ui     Inspect app guided action UI readiness"
   echo "  --help              Show this help message"
 }
 
@@ -105,6 +114,12 @@ while [ $# -gt 0 ]; do
     --rescue-boot) RESCUE_BOOT_MODE=true; shift ;;
     --macos-rescue) MACOS_RESCUE_MODE=true; shift ;;
     --rescue-create) RESCUE_CREATE_MODE=true; shift ;;
+    --guided-install) GUIDED_INSTALL_MODE=true; shift ;;
+    --guided-uninstall) GUIDED_UNINSTALL_MODE=true; shift ;;
+    --app-readiness) APP_READINESS_MODE=true; shift ;;
+    --interface) INTERFACE_MODE=true; shift ;;
+    --app-prototype) APP_PROTOTYPE_MODE=true; shift ;;
+    --app-guided-ui) APP_GUIDED_UI_MODE=true; shift ;;
     --base-readiness) BASE_READINESS_MODE=true; shift ;;
     --seed) SEED_MODE=true; shift ;;
     --resume) RESUME_MODE=true; shift ;;
@@ -909,6 +924,145 @@ elif [ "$MACOS_RESTORE_MODE" = true ]; then
     print_result WARN "macOS restore checks require macOS runtime."
   fi
 
+elif [ "$GUIDED_INSTALL_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  INSTALL_STATE_DIR="${HOME}/.local/state/cidre/install/current"
+
+  for file in \
+    scripts/cidre-install-dashboard \
+    scripts/cidre-install-state \
+    scripts/cidre-install-stage \
+    scripts/cidre-install-guide \
+    scripts/cidre-install-report \
+    scripts/cidre-install-preflight \
+    scripts/cidre-install-handoff \
+    scripts/cidre-install-resume \
+    scripts/cidre-install-failure-report \
+    scripts/cidre-install-verify; do
+    if [ -f "$file" ] && [ -x "$file" ]; then
+      print_result OK "Guided installer script present: $file"
+    else
+      print_result FAIL "Guided installer script missing or not executable: $file"
+    fi
+  done
+
+  if mkdir -p "$INSTALL_STATE_DIR" 2>/dev/null; then
+    print_result OK "Guided installer state dir exists or is writable: $INSTALL_STATE_DIR"
+  else
+    print_result FAIL "Guided installer state dir is not writable: $INSTALL_STATE_DIR"
+  fi
+
+elif [ "$GUIDED_UNINSTALL_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  UNINSTALL_STATE_DIR="${HOME}/.local/state/cidre/uninstall/current"
+
+  for file in \
+    scripts/cidre-uninstall-dashboard \
+    scripts/cidre-uninstall-state \
+    scripts/cidre-uninstall-preflight \
+    scripts/cidre-uninstall-export \
+    scripts/cidre-uninstall-target-scan \
+    scripts/cidre-uninstall-target-review \
+    scripts/cidre-uninstall-plan \
+    scripts/cidre-uninstall-dry-run \
+    scripts/cidre-uninstall-execute \
+    scripts/cidre-uninstall-verify \
+    scripts/cidre-uninstall-report \
+    scripts/cidre-uninstall-resume \
+    scripts/cidre-uninstall-failure-report \
+    scripts/cidre-uninstall-clean \
+    scripts/cidre-macos-uninstall-dashboard \
+    scripts/cidre-macos-uninstall-preflight \
+    scripts/cidre-macos-uninstall-target-scan \
+    scripts/cidre-macos-uninstall-target-review \
+    scripts/cidre-macos-uninstall-plan \
+    scripts/cidre-macos-uninstall-dry-run \
+    scripts/cidre-macos-uninstall-report \
+    scripts/cidre-macos-uninstall-resume; do
+    if [ -f "$file" ] && [ -x "$file" ]; then
+      print_result OK "Guided uninstaller script present: $file"
+    else
+      print_result FAIL "Guided uninstaller script missing or not executable: $file"
+    fi
+  done
+
+  # uninstaller metadata check
+  if [ -d "$REPO_ROOT/uninstaller" ]; then
+    print_result OK "Uninstaller metadata directory present"
+  else
+    print_result FAIL "Uninstaller metadata directory missing"
+  fi
+
+  # stages.json check
+  if [ -f "$REPO_ROOT/uninstaller/stages.json" ]; then
+    print_result OK "Uninstall stages.json present"
+  else
+    print_result FAIL "Uninstall stages.json missing"
+  fi
+
+  # target-rules.json check
+  if [ -f "$REPO_ROOT/uninstaller/target-rules.json" ]; then
+    print_result OK "Uninstall target-rules.json present"
+    # check default policy and export requirement
+    if grep -q '"require_state_export": true' "$REPO_ROOT/uninstaller/target-rules.json"; then
+      print_result OK "Uninstall policy: state export required"
+    else
+      print_result FAIL "Uninstall policy: missing require_state_export check"
+    fi
+    if grep -q '"allow_real_delete_by_default": false' "$REPO_ROOT/uninstaller/target-rules.json"; then
+      print_result OK "Uninstall policy: dry-run default policy verified"
+    else
+      print_result FAIL "Uninstall policy: allow_real_delete_by_default is not false by default"
+    fi
+  else
+    print_result FAIL "Uninstall target-rules.json missing"
+  fi
+
+  # protected target definitions check
+  if [ -f "$REPO_ROOT/uninstaller/protected-targets.example.json" ]; then
+    print_result OK "Uninstall protected targets definitions example present"
+  else
+    print_result FAIL "Uninstall protected targets definitions example missing"
+  fi
+
+  if mkdir -p "$UNINSTALL_STATE_DIR" 2>/dev/null; then
+    print_result OK "Guided uninstaller state dir exists or is writable: $UNINSTALL_STATE_DIR"
+  else
+    print_result FAIL "Guided uninstaller state dir is not writable: $UNINSTALL_STATE_DIR"
+  fi
+
+elif [ "$APP_READINESS_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  if "$REPO_ROOT/scripts/cidre-app-readiness"; then
+    print_result OK "App readiness check passed"
+  else
+    print_result FAIL "App readiness check failed"
+  fi
+
+elif [ "$INTERFACE_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  if "$REPO_ROOT/scripts/cidre-interface-doctor"; then
+    print_result OK "Interface doctor diagnostics passed"
+  else
+    print_result FAIL "Interface doctor diagnostics failed"
+  fi
+
+elif [ "$APP_PROTOTYPE_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  if "$REPO_ROOT/scripts/cidre-app-prototype-check"; then
+    print_result OK "App prototype verification passed"
+  else
+    print_result FAIL "App prototype verification failed"
+  fi
+
+elif [ "$APP_GUIDED_UI_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  if "$REPO_ROOT/scripts/cidre-app-ui-validation" && "$REPO_ROOT/scripts/cidre-app-live-check"; then
+    print_result OK "App guided UI verification passed"
+  else
+    print_result FAIL "App guided UI verification failed"
+  fi
+
 elif [ "$RECOVERY_SCREEN_MODE" = true ] || [ "$SAFE_MODE_MODE" = true ]; then
   RECOVERY_STATE_DIR="${HOME}/.local/state/cidre/recovery-screen/current"
 
@@ -1220,6 +1374,37 @@ elif [ "$RC_READINESS_MODE" = true ]; then
       fi
     done
 
+    # Guided Uninstaller (v0.30.0) scripts
+    for cmd in \
+      scripts/cidre-uninstall-dashboard \
+      scripts/cidre-uninstall-state \
+      scripts/cidre-uninstall-preflight \
+      scripts/cidre-uninstall-export \
+      scripts/cidre-uninstall-target-scan \
+      scripts/cidre-uninstall-target-review \
+      scripts/cidre-uninstall-plan \
+      scripts/cidre-uninstall-dry-run \
+      scripts/cidre-uninstall-execute \
+      scripts/cidre-uninstall-verify \
+      scripts/cidre-uninstall-report \
+      scripts/cidre-uninstall-resume \
+      scripts/cidre-uninstall-failure-report \
+      scripts/cidre-uninstall-clean \
+      scripts/cidre-macos-uninstall-dashboard \
+      scripts/cidre-macos-uninstall-preflight \
+      scripts/cidre-macos-uninstall-target-scan \
+      scripts/cidre-macos-uninstall-target-review \
+      scripts/cidre-macos-uninstall-plan \
+      scripts/cidre-macos-uninstall-dry-run \
+      scripts/cidre-macos-uninstall-report \
+      scripts/cidre-macos-uninstall-resume; do
+      if [ -f "${REPO_ROOT}/${cmd}" ] && [ -x "${REPO_ROOT}/${cmd}" ]; then
+        print_result OK "Guided uninstaller script present: ${cmd}"
+      else
+        print_result FAIL "Guided uninstaller script missing or not executable: ${cmd}"
+      fi
+    done
+
     for cmd in scripts/cidre-macos-restore-check scripts/cidre-macos-partition-audit scripts/cidre-macos-startup-disk-check scripts/cidre-macos-uninstall-guide scripts/cidre-macos-restore-report scripts/cidre-macos-risk; do
       if [ -f "${REPO_ROOT}/${cmd}" ] && [ -x "${REPO_ROOT}/${cmd}" ]; then
         print_result OK "macOS restore script present: ${cmd}"
@@ -1252,8 +1437,59 @@ elif [ "$RC_READINESS_MODE" = true ]; then
       fi
     done
 
+    # Guided Installer scripts (v0.29.0)
+    for cmd in scripts/cidre-install-dashboard scripts/cidre-install-state scripts/cidre-install-stage scripts/cidre-install-guide scripts/cidre-install-report scripts/cidre-install-preflight scripts/cidre-install-handoff scripts/cidre-install-resume scripts/cidre-install-failure-report scripts/cidre-install-verify scripts/cidre-macos-install-dashboard scripts/cidre-macos-install-preflight scripts/cidre-macos-install-guide scripts/cidre-macos-install-report scripts/cidre-macos-install-resume scripts/cidre-macos-install-handoff; do
+      if [ -f "${REPO_ROOT}/${cmd}" ] && [ -x "${REPO_ROOT}/${cmd}" ]; then
+        print_result OK "Guided installer script present: ${cmd}"
+      else
+        print_result FAIL "Guided installer script missing or not executable: ${cmd}"
+      fi
+    done
+
+    # App-Ready Interface scripts (v0.31.0)
+    for cmd in \
+      scripts/cidre-command-exit-codes \
+      scripts/cidre-command-status \
+      scripts/cidre-command-manifest \
+      scripts/cidre-command-schema \
+      scripts/cidre-json-validate \
+      scripts/cidre-json-normalize \
+      scripts/cidre-artifact-paths \
+      scripts/cidre-report-index \
+      scripts/cidre-app-action-plan \
+      scripts/cidre-app-readiness \
+      scripts/cidre-noninteractive-check \
+      scripts/cidre-command-contract-test \
+      scripts/cidre-interface-doctor; do
+      if [ -f "${REPO_ROOT}/${cmd}" ] && [ -x "${REPO_ROOT}/${cmd}" ]; then
+        print_result OK "Interface script present: ${cmd}"
+      else
+        print_result FAIL "Interface script missing or not executable: ${cmd}"
+      fi
+    done
+
+    # App Prototype scripts (v0.32.0 / v0.33.0)
+    for cmd in \
+      scripts/cidre-app-prototype-check \
+      scripts/cidre-app-fixture-generate \
+      scripts/cidre-app-mock-run \
+      scripts/cidre-app-report-preview \
+      scripts/cidre-app-live-check \
+      scripts/cidre-app-safe-actions \
+      scripts/cidre-app-execution-policy \
+      scripts/cidre-app-ui-validation \
+      scripts/cidre-app-log-fixture; do
+      if [ -f "${REPO_ROOT}/${cmd}" ] && [ -x "${REPO_ROOT}/${cmd}" ]; then
+        print_result OK "App prototype/UI script present: ${cmd}"
+      else
+        print_result FAIL "App prototype/UI script missing or not executable: ${cmd}"
+      fi
+    done
+
+
     # Verify documentation files are present
-    for doc in README.md CHANGELOG.md docs/commands.md docs/profiles.md docs/packages.md docs/managed-files.md docs/validation-matrix.md docs/known-limitations.md docs/macos-install.md docs/macos-to-cidre-flow.md docs/installer-threat-model.md docs/seed-resume.md docs/downstream-strategy.md docs/alarm-fork-strategy.md docs/cidre-image-plan.md docs/cidre-image-prototype.md docs/installer-integration.md docs/image-build-notes.md docs/image-build-validation.md docs/firstboot-oobe.md docs/firstboot-security.md docs/firstboot-root-login-problem.md docs/image-boot-validation.md docs/rootfs-inspection.md docs/boot-log-collection.md docs/v0.12.0-macos-bootstrap.md docs/v0.13.0-seed-resume.md docs/v0.14.0-downstream-foundation.md docs/v0.15.0-cidre-image-prototype.md docs/v0.16.0-firstboot-oobe.md docs/v0.17.0-image-boot-validation.md docs/v0.18.0-builder-integration.md docs/v1.0.0-clean-install-test-plan.md docs/v0.9.0-rc-readiness.md docs/builder-integration.md docs/alarm-builder-notes.md docs/builder-artifacts.md docs/real-image-build.md docs/builder-runbook.md docs/image-register-verify.md docs/build-failure-report.md docs/v0.19.0-real-image-build.md docs/firstboot-fixup.md docs/firstboot-service-ordering.md docs/firstboot-retry-repair.md docs/v0.21.0-firstboot-fixup.md docs/user-phase-handoff.md docs/user-phase-state.md docs/first-login.md docs/install-resume-validation.md docs/uninstall.md docs/exit-path.md docs/state-export.md docs/partition-audit.md docs/macos-restore-guide.md docs/uninstall-threat-model.md docs/macos-restore-assistant.md docs/macos-partition-audit.md docs/macos-startup-disk.md docs/macos-uninstall-guide.md docs/recovery-screen.md docs/safe-mode.md docs/failure-levels.md docs/tty-recovery.md docs/recovery-shortcuts.md docs/rescue-slot.md docs/rescue-profile.md docs/rescue-image.md docs/rescue-mount.md docs/rescue-kernel-repair.md docs/rescue-threat-model.md docs/rescue-boot-integration.md docs/rescue-slot-layout.md docs/rescue-boot-metadata.md docs/rescue-boot-validation.md docs/macos-rescue-slot.md docs/rescue-boot-threat-model.md docs/rescue-create.md docs/rescue-target-selection.md docs/rescue-create-safety.md docs/rescue-rootfs-deployment.md docs/macos-rescue-create.md docs/rescue-create-threat-model.md docs/v0.28.0-guided-rescue-slot-creation.md docs/v0.27.0-rescue-boot-integration.md docs/v0.26.0-rescue-slot-foundation.md docs/v0.25.0-recovery-screen-safe-mode.md docs/v0.24.0-macos-restore-assistant.md docs/v0.23.0-uninstall-exit-path.md docs/v0.22.0-user-phase-handoff.md downstream/image-build/README.md downstream/image-build/build-config.example downstream/image-build/artifact-layout.md; do
+    for doc in README.md CHANGELOG.md docs/commands.md docs/profiles.md docs/packages.md docs/managed-files.md docs/validation-matrix.md docs/known-limitations.md docs/macos-install.md docs/macos-to-cidre-flow.md docs/installer-threat-model.md docs/seed-resume.md docs/downstream-strategy.md docs/alarm-fork-strategy.md docs/cidre-image-plan.md docs/cidre-image-prototype.md docs/installer-integration.md docs/image-build-notes.md docs/image-build-validation.md docs/firstboot-oobe.md docs/firstboot-security.md docs/firstboot-root-login-problem.md docs/image-boot-validation.md docs/rootfs-inspection.md docs/boot-log-collection.md docs/v0.12.0-macos-bootstrap.md docs/v0.13.0-seed-resume.md docs/v0.14.0-downstream-foundation.md docs/v0.15.0-cidre-image-prototype.md docs/v0.16.0-firstboot-oobe.md docs/v0.17.0-image-boot-validation.md docs/v0.18.0-builder-integration.md docs/v1.0.0-clean-install-test-plan.md docs/v0.9.0-rc-readiness.md docs/builder-integration.md docs/alarm-builder-notes.md docs/builder-artifacts.md docs/real-image-build.md docs/builder-runbook.md docs/image-register-verify.md docs/build-failure-report.md docs/v0.19.0-real-image-build.md docs/firstboot-fixup.md docs/firstboot-service-ordering.md docs/firstboot-retry-repair.md docs/v0.21.0-firstboot-fixup.md docs/user-phase-handoff.md docs/user-phase-state.md docs/first-login.md docs/install-resume-validation.md docs/uninstall.md docs/exit-path.md docs/state-export.md docs/partition-audit.md docs/macos-restore-guide.md docs/uninstall-threat-model.md docs/macos-restore-assistant.md docs/macos-partition-audit.md docs/macos-startup-disk.md docs/macos-uninstall-guide.md docs/recovery-screen.md docs/safe-mode.md docs/failure-levels.md docs/tty-recovery.md docs/recovery-shortcuts.md docs/rescue-slot.md docs/rescue-profile.md docs/rescue-image.md docs/rescue-mount.md docs/rescue-kernel-repair.md docs/rescue-threat-model.md docs/rescue-boot-integration.md docs/rescue-slot-layout.md docs/rescue-boot-metadata.md docs/rescue-boot-validation.md docs/macos-rescue-slot.md docs/rescue-boot-threat-model.md docs/rescue-create.md docs/rescue-target-selection.md docs/rescue-create-safety.md docs/rescue-rootfs-deployment.md docs/macos-rescue-create.md docs/rescue-create-threat-model.md docs/v0.28.0-guided-rescue-slot-creation.md docs/v0.27.0-rescue-boot-integration.md docs/v0.26.0-rescue-slot-foundation.md docs/v0.25.0-recovery-screen-safe-mode.md docs/v0.24.0-macos-restore-assistant.md docs/v0.23.0-uninstall-exit-path.md docs/v0.22.0-user-phase-handoff.md docs/cidre-app-guided-action-ui.md docs/cidre-app-command-execution.md docs/cidre-app-repository-selection.md docs/cidre-app-execution-log.md docs/cidre-app-read-only-policy.md docs/v0.33.0-cidre-app-guided-action-ui.md downstream/image-build/README.md downstream/image-build/build-config.example downstream/image-build/artifact-layout.md; do
+
       if [ -f "${REPO_ROOT}/${doc}" ]; then
         print_result OK "Documentation file '${doc}' is present."
         # Extra verification for limitations presence

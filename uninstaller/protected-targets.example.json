@@ -1,0 +1,15 @@
+{
+  "protected_names": [
+    "Macintosh HD",
+    "Macintosh HD - Data",
+    "Recovery",
+    "Preboot",
+    "VM"
+  ],
+  "protected_classes": [
+    "macos-system",
+    "macos-data",
+    "macos-recovery",
+    "external-backup"
+  ]
+}

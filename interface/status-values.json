@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "status_values": [
+    { "value": "pass", "description": "Successful completion or positive check" },
+    { "value": "warn", "description": "Check passed with non-critical warnings" },
+    { "value": "fail", "description": "Failure or error state" },
+    { "value": "blocked", "description": "Execution blocked due to safety or confirmation requirements" },
+    { "value": "skipped", "description": "Check or action was skipped" },
+    { "value": "pending", "description": "Action is waiting to be processed" },
+    { "value": "running", "description": "Action is currently running" },
+    { "value": "unknown", "description": "Status could not be determined" }
+  ]
+}

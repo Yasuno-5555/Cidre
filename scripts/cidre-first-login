@@ -38,6 +38,10 @@ if [ -n "$failure_reason" ]; then
   exec "$(dirname "$0")/cidre-session-failure" --component first-login --exit-code 1 --reason "$failure_reason"
 fi
 
+# Update guided installer state
+"$(dirname "$0")/cidre-install-state" --set-stage user-phase --set-status running --set-next-command "./install --verify"
+
+
 # Try loading handoff
 profile="minimal"
 repo_path="~/Projects/Cidre"

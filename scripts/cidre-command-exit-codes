@@ -1,0 +1,47 @@
+#!/bin/sh
+set -eu
+
+usage() {
+  cat <<'EOF'
+Usage:
+  cidre-command-exit-codes [options]
+
+Options:
+  --json
+  --markdown
+  --help
+EOF
+}
+
+mode="default"
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --json) mode="json"; shift ;;
+    --markdown) mode="markdown"; shift ;;
+    --help|-h|help) usage; exit 0 ;;
+    *) printf 'ERROR: Unknown option: %s\n' "$1" >&2; usage; exit 2 ;;
+  esac
+done
+
+python3 -c '
+import sys, json, os
+
+mode = sys.argv[1]
+repo_root = os.environ.get("CIDRE_REPO_ROOT", "/home/yasuno/Projects/Cidre")
+codes_path = os.path.join(repo_root, "interface/exit-codes.json")
+
+with open(codes_path) as f:
+    data = json.load(f)
+
+if mode == "json":
+    print(json.dumps(data, indent=2))
+elif mode == "markdown":
+    print("# Cidre Common Exit Codes\n")
+    print("| Exit Code | Name | Description |")
+    print("|---|---|---|")
+    for item in data.get("exit_codes", []):
+        print("| %s | %s | %s |" % (item["code"], item["name"], item["description"]))
+else:
+    for item in data.get("exit_codes", []):
+        print("%2s: %-25s %s" % (item["code"], item["name"], item["description"]))
+' "$mode"

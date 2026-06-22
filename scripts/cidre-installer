@@ -20,6 +20,11 @@ RESUME_MODE=false
 NO_RESUME=false
 CIDRE_SYSTEM_ROOT="${CIDRE_SYSTEM_ROOT:-/var/lib/cidre}"
 SYSTEM_RESUME_FILE="${CIDRE_SYSTEM_ROOT}/resume/resume.env"
+INSTALL_DASHBOARD=false
+INSTALL_STATE=false
+INSTALL_REPORT=false
+INSTALL_VERIFY=false
+
 
 show_help() {
   echo "Usage: install [options]"
@@ -64,6 +69,10 @@ while [ $# -gt 0 ]; do
     --no-resume) NO_RESUME=true; shift ;;
     --yes) YES=true; shift ;;
     --no-color) NO_COLOR=true; shift ;;
+    --dashboard) INSTALL_DASHBOARD=true; shift ;;
+    --install-state) INSTALL_STATE=true; shift ;;
+    --install-report) INSTALL_REPORT=true; shift ;;
+    --verify) INSTALL_VERIFY=true; shift ;;
     --help) show_help; exit 0 ;;
     *)
       echo "Unknown option: $1" >&2
@@ -74,6 +83,22 @@ while [ $# -gt 0 ]; do
 done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if [ "$INSTALL_DASHBOARD" = true ]; then
+  exec "${SCRIPT_DIR}/cidre-install-dashboard"
+fi
+
+if [ "$INSTALL_STATE" = true ]; then
+  exec "${SCRIPT_DIR}/cidre-install-state" "$@"
+fi
+
+if [ "$INSTALL_REPORT" = true ]; then
+  exec "${SCRIPT_DIR}/cidre-install-report"
+fi
+
+if [ "$INSTALL_VERIFY" = true ]; then
+  exec "${SCRIPT_DIR}/cidre-install-verify" --desktop
+fi
 
 if [ "$RC_DRY_RUN" = true ]; then
   echo "=== Running Release Candidate Dry-Run Verification ==="
@@ -321,6 +346,9 @@ if [ "$YES" = false ]; then
   fi
 fi
 
+# Update guided installer state
+"${SCRIPT_DIR}/cidre-install-state" --set-stage user-install --set-status running --set-next-command "./install --resume"
+
 # Step 5: Install
 echo ""
 echo "=== Step 5: Executing System Bootstrap ==="
@@ -353,6 +381,8 @@ if XDG_SESSION_TYPE=wayland "${SCRIPT_DIR}/cidre-doctor"; then
     cp "$LOG_FILE" "${USER_STATE_DIR}/install.log" || true
     "${SCRIPT_DIR}/cidre-user-phase-report" >/dev/null || true
   fi
+  "${SCRIPT_DIR}/cidre-install-state" --set-stage user-install --set-status passed
+  "${SCRIPT_DIR}/cidre-install-state" --set-stage firstboot --set-status pending --set-next-command "sudo reboot" --set-next-stage "user-phase"
   echo ""
   echo -e "\e[1;32m=== Step 8: Cidre Guided Installation Complete! ===\e[0m"
   echo "Next steps:"
@@ -374,6 +404,8 @@ else
     cp "$LOG_FILE" "${USER_STATE_DIR}/install.log" || true
     "${SCRIPT_DIR}/cidre-user-phase-report" >/dev/null || true
   fi
+  "${SCRIPT_DIR}/cidre-install-state" --mark-failed "verify-failed"
+  "${SCRIPT_DIR}/cidre-install-failure-report" --stage user-install --reason "verify-failed" --output "${CIDRE_ROOT:-/home/yasuno/Projects/Cidre}/.local/state/cidre/install/current/install-failure-report.md"
   echo ""
   echo -e "\e[1;33m=== Diagnostics detected post-install warnings/errors ===\e[0m"
   echo "Recovery suggests:"

@@ -179,8 +179,10 @@ fi
 
 echo "----------------------------------------"
 if [ $failures -gt 0 ]; then
+  "$(dirname "$0")/cidre-install-state" --mark-failed "verify-failed"
   echo "Verification finished with $failures failures and $warnings warnings." >&2
   exit 1
 fi
+"$(dirname "$0")/cidre-install-state" --set-stage user-phase --set-status passed
 echo "Verification complete: all checks passed with $warnings warnings."
 exit 0

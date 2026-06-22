@@ -76,6 +76,9 @@ add_path "$USER_STATE_ROOT/manifest.json"
 add_path "$SYSTEM_STATE_ROOT/seed"
 add_path "$SYSTEM_STATE_ROOT/resume"
 add_path "$SYSTEM_STATE_ROOT/firstboot-root"
+add_path "$REPO_ROOT/.local/state/cidre/install"
+add_path "$USER_STATE_ROOT/install"
+add_path "$SYSTEM_STATE_ROOT/install"
 
 if [ "$include_logs" = "true" ]; then
   add_path "$USER_STATE_ROOT/user-phase/install.log"
@@ -87,6 +90,8 @@ if [ "$include_reports" = "true" ]; then
   add_path "$REPO_ROOT/.local/state/cidre/boot-test/current/report.md"
   add_path "$SYSTEM_STATE_ROOT/firstboot-root/report.md"
   add_path "$USER_STATE_ROOT/user-phase/report.md"
+  add_path "$REPO_ROOT/.local/state/cidre/install/current/install-report.md"
+  add_path "$REPO_ROOT/.local/state/cidre/install/current/install-failure-report.md"
 fi
 
 excluded_patterns='*.img *.img.zst *.raw *.qcow2 *secret* *token* *cache*'

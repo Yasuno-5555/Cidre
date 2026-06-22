@@ -1,0 +1,32 @@
+{
+  "network-failed": {
+    "doctor": "cidre-doctor --base-readiness",
+    "recovery": "cidre-recovery status",
+    "next": "Check network and rerun the current phase command with --resume"
+  },
+  "package-failed": {
+    "doctor": "cidre-doctor --base-readiness",
+    "recovery": "cidre-recovery status",
+    "next": "Check package repository availability and pacman sync, then retry with --resume"
+  },
+  "seed-failed": {
+    "doctor": "cidre-doctor --guided-install",
+    "recovery": "cidre-recovery install-status",
+    "next": "Regenerate seed on macOS and re-import"
+  },
+  "verify-failed": {
+    "doctor": "cidre-doctor --guided-install",
+    "recovery": "cidre-recovery status",
+    "next": "Run installer verification manually or consult docs/known-limitations.md"
+  },
+  "preflight-failed": {
+    "doctor": "cidre-doctor --guided-install",
+    "recovery": "cidre-recovery install-status",
+    "next": "Resolve preflight errors displayed above and try again"
+  },
+  "generic-failure": {
+    "doctor": "cidre-doctor --guided-install",
+    "recovery": "cidre-recovery status",
+    "next": "Check install logs and rerun the phase command with --resume"
+  }
+}

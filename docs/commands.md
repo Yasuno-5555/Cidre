@@ -29,6 +29,14 @@ The macOS-side bootstrap entrypoint for Apple Silicon onboarding.
 * `--rescue-target-check`: Records an advisory exact-target check.
 * `--rescue-create-guide`: Generates a macOS rescue creation guide.
 * `--rescue-create-report`: Generates a macOS rescue creation report.
+* `--dashboard`: Show guided installer dashboard.
+* `--install-preflight`: Run installation preflight checks.
+* `--install-guide`: Generate guided install instructions.
+* `--install-report`: Generate guided install report.
+* `--install-resume`: Show or run guided install resume status.
+* `--install-handoff`: Generate installation handoff files.
+* `--continue`: Continue guided installation flow.
+
 
 ### `scripts/cidre-seed`
 The Linux-side seed command wrapper.
@@ -277,3 +285,66 @@ Visual dashboard greeting users with keybindings and navigation tips upon initia
 Manages audio volume and buffer profiles (e.g. Asahi popping noise workarounds).
 * `status`: Displays audio profiles.
 * `profile stable`: Sets buffer rates for pop noise prevention.
+
+## Guided Installer Commands
+
+### `scripts/cidre-install-dashboard`
+Show the current stages, status, and the next command to run.
+
+### `scripts/cidre-install-state`
+Manage `install-state.json` values directly.
+
+### `scripts/cidre-install-stage`
+Validate stage definitions and transitions.
+
+### `scripts/cidre-install-guide`
+Print guide documents per stage.
+
+### `scripts/cidre-install-report`
+Create full installation status reports.
+
+### `scripts/cidre-install-preflight`
+Verify phase-specific preflight checklists.
+
+### `scripts/cidre-install-handoff`
+Produce markdown handoff notes between phases.
+
+### `scripts/cidre-install-resume`
+Deduce and suggest the correct rerun command.
+
+### `scripts/cidre-install-failure-report`
+Produce a comprehensive markdown report upon installation failure.
+
+### `scripts/cidre-install-verify`
+Perform final verification of the graphical daily desktop.
+
+## Cidre.app Prototype Commands
+
+### `scripts/cidre-app-prototype-check`
+Validates that all files, metadata, fixtures, and docs required for the Cidre.app prototype are present.
+
+### `scripts/cidre-app-fixture-generate`
+Generates sample/mock JSON and Markdown fixtures based on the v0.31.0 App-Ready Command Interface.
+
+### `scripts/cidre-app-mock-run`
+Mock-runs a specific application action by ID and returns a machine-readable JSON result, blocking destructive operations.
+
+### `scripts/cidre-app-report-preview`
+Generates mock preview paths and content summaries for install, uninstall, recovery, and rescue reports.
+
+## Cidre.app Guided Action UI Commands
+
+### `scripts/cidre-app-live-check`
+Verifies backend integration readiness for safe read-only operations.
+
+### `scripts/cidre-app-safe-actions`
+Lists all permitted actions and explicitly logs blocked reasons for restricted ones.
+
+### `scripts/cidre-app-execution-policy`
+Queries the application security policies for permitted actions.
+
+### `scripts/cidre-app-ui-validation`
+Inspects directories and code files to verify the presence of required Views, Models, ViewModels, and Services.
+
+### `scripts/cidre-app-log-fixture`
+Prepares log history data fixtures for the application UI.

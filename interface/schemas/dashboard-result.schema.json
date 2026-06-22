@@ -1,0 +1,12 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "DashboardResult",
+  "type": "OBJECT",
+  "properties": {
+    "current_stage": { "type": "string" },
+    "current_status": { "type": "string" },
+    "next_command": { "type": "string" },
+    "stages": { "type": "array" }
+  },
+  "required": ["current_stage", "current_status", "next_command", "stages"]
+}

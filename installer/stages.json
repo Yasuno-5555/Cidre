@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "stages": [
+    {
+      "name": "macos-preflight",
+      "next": "macos-seed",
+      "phase": "macos"
+    },
+    {
+      "name": "macos-seed",
+      "next": "macos-handoff",
+      "phase": "macos"
+    },
+    {
+      "name": "macos-handoff",
+      "next": "alarm-install",
+      "phase": "macos"
+    },
+    {
+      "name": "alarm-install",
+      "next": "root-preinstall",
+      "phase": "alarm"
+    },
+    {
+      "name": "root-preinstall",
+      "next": "normal-user-handoff",
+      "phase": "root"
+    },
+    {
+      "name": "normal-user-handoff",
+      "next": "user-install",
+      "phase": "user"
+    },
+    {
+      "name": "user-install",
+      "next": "firstboot",
+      "phase": "user"
+    },
+    {
+      "name": "firstboot",
+      "next": "user-phase",
+      "phase": "firstboot"
+    },
+    {
+      "name": "user-phase",
+      "next": "desktop-verification",
+      "phase": "user"
+    },
+    {
+      "name": "desktop-verification",
+      "next": "install-complete",
+      "phase": "desktop"
+    },
+    {
+      "name": "install-complete",
+      "next": "",
+      "phase": "desktop"
+    }
+  ]
+}

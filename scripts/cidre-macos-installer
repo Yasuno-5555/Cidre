@@ -29,6 +29,23 @@ RESCUE_CREATE_REPORT=0
 RESCUE_TARGET_VALUE=""
 RESCUE_SIZE_VALUE=""
 RESCUE_ARTIFACT_VALUE=""
+INSTALL_DASHBOARD=0
+INSTALL_PREFLIGHT=0
+INSTALL_GUIDE=0
+INSTALL_REPORT=0
+INSTALL_RESUME=0
+INSTALL_HANDOFF=0
+INSTALL_CONTINUE=0
+UNINSTALL_DASHBOARD=0
+UNINSTALL_PREFLIGHT=0
+UNINSTALL_TARGET_SCAN=0
+UNINSTALL_TARGET_REVIEW=0
+UNINSTALL_PLAN=0
+UNINSTALL_DRY_RUN=0
+UNINSTALL_REPORT=0
+UNINSTALL_RESUME=0
+JSON_MODE=0
+
 
 usage() {
   cat <<'EOF'
@@ -59,6 +76,21 @@ Options:
   --rescue-target-check Check an exact macOS rescue target
   --rescue-create-guide Generate a macOS rescue creation guide
   --rescue-create-report Generate a macOS rescue creation report
+  --dashboard          Show guided installer dashboard
+  --install-preflight  Run installation preflight checks
+  --install-guide      Generate guided install instructions
+  --install-report     Generate guided install report
+  --install-resume     Show or run guided install resume status
+  --install-handoff    Generate installation handoff files
+  --continue           Continue guided installation flow
+  --uninstall-dashboard Show guided uninstaller dashboard on macOS
+  --uninstall-preflight Run uninstaller preflight checks on macOS
+  --uninstall-target-scan Scan for uninstall targets on macOS
+  --uninstall-target-review Review exact uninstall target on macOS
+  --uninstall-plan      Generate guided uninstall plan on macOS
+  --uninstall-dry-run   Preview uninstall changes on macOS
+  --uninstall-report    Generate uninstall report on macOS
+  --uninstall-resume    Show or run pending uninstall command on macOS
   -h, --help           Show this help
 EOF
 }
@@ -72,8 +104,12 @@ validate_profile() {
 
 require_macos() {
   if [ "$(uname -s)" != "Darwin" ]; then
-    printf 'ERROR: this command requires macOS.\nNo disk operation was performed.\n' >&2
-    exit 1
+    if [ "${JSON_MODE:-0}" -eq 1 ]; then
+      printf '{\n  "schema_version": 1,\n  "command": "install-macos",\n  "status": "blocked",\n  "reason": "requires-macos",\n  "summary": "This command requires macOS. No disk operation was performed.",\n  "exit_code": 4\n}\n'
+    else
+      printf 'ERROR: this command requires macOS.\nNo disk operation was performed.\n' >&2
+    fi
+    exit 4
   fi
 }
 
@@ -224,6 +260,73 @@ while [ "$#" -gt 0 ]; do
       RESCUE_CREATE_REPORT=1
       shift
       ;;
+    --dashboard)
+      INSTALL_DASHBOARD=1
+      shift
+      ;;
+    --install-preflight)
+      INSTALL_PREFLIGHT=1
+      shift
+      ;;
+    --install-guide)
+      INSTALL_GUIDE=1
+      shift
+      ;;
+    --install-report)
+      INSTALL_REPORT=1
+      shift
+      ;;
+    --install-resume)
+      INSTALL_RESUME=1
+      shift
+      ;;
+    --install-handoff)
+      INSTALL_HANDOFF=1
+      shift
+      ;;
+    --continue)
+      INSTALL_CONTINUE=1
+      shift
+      ;;
+    --uninstall-dashboard)
+      UNINSTALL_DASHBOARD=1
+      shift
+      ;;
+    --uninstall-preflight)
+      UNINSTALL_PREFLIGHT=1
+      shift
+      ;;
+    --uninstall-target-scan)
+      UNINSTALL_TARGET_SCAN=1
+      shift
+      ;;
+    --uninstall-target-review)
+      UNINSTALL_TARGET_REVIEW=1
+      shift
+      ;;
+    --uninstall-plan)
+      UNINSTALL_PLAN=1
+      shift
+      ;;
+    --uninstall-dry-run)
+      UNINSTALL_DRY_RUN=1
+      shift
+      ;;
+    --uninstall-report)
+      UNINSTALL_REPORT=1
+      shift
+      ;;
+    --uninstall-resume)
+      UNINSTALL_RESUME=1
+      shift
+      ;;
+    --json)
+      JSON_MODE=1
+      shift
+      ;;
+    --plain|--no-color|--non-interactive)
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -235,6 +338,74 @@ while [ "$#" -gt 0 ]; do
       ;;
   esac
 done
+
+if [ "$INSTALL_DASHBOARD" -eq 1 ]; then
+  exec "$SCRIPT_DIR/cidre-macos-install-dashboard"
+fi
+
+if [ "$INSTALL_PREFLIGHT" -eq 1 ]; then
+  exec "$SCRIPT_DIR/cidre-macos-install-preflight"
+fi
+
+if [ "$INSTALL_GUIDE" -eq 1 ]; then
+  exec "$SCRIPT_DIR/cidre-macos-install-guide"
+fi
+
+if [ "$INSTALL_REPORT" -eq 1 ]; then
+  exec "$SCRIPT_DIR/cidre-macos-install-report"
+fi
+
+if [ "$INSTALL_RESUME" -eq 1 ]; then
+  exec "$SCRIPT_DIR/cidre-macos-install-resume"
+fi
+
+if [ "$INSTALL_HANDOFF" -eq 1 ]; then
+  exec "$SCRIPT_DIR/cidre-macos-install-handoff"
+fi
+
+if [ "$INSTALL_CONTINUE" -eq 1 ]; then
+  exec "$SCRIPT_DIR/cidre-macos-install-resume" --run
+fi
+
+if [ "$UNINSTALL_DASHBOARD" -eq 1 ]; then
+  require_macos
+  exec "$SCRIPT_DIR/cidre-macos-uninstall-dashboard"
+fi
+
+if [ "$UNINSTALL_PREFLIGHT" -eq 1 ]; then
+  require_macos
+  exec "$SCRIPT_DIR/cidre-macos-uninstall-preflight"
+fi
+
+if [ "$UNINSTALL_TARGET_SCAN" -eq 1 ]; then
+  require_macos
+  exec "$SCRIPT_DIR/cidre-macos-uninstall-target-scan"
+fi
+
+if [ "$UNINSTALL_TARGET_REVIEW" -eq 1 ]; then
+  require_macos
+  exec "$SCRIPT_DIR/cidre-macos-uninstall-target-review" "$@"
+fi
+
+if [ "$UNINSTALL_PLAN" -eq 1 ]; then
+  require_macos
+  exec "$SCRIPT_DIR/cidre-macos-uninstall-plan" "$@"
+fi
+
+if [ "$UNINSTALL_DRY_RUN" -eq 1 ]; then
+  require_macos
+  exec "$SCRIPT_DIR/cidre-macos-uninstall-dry-run" "$@"
+fi
+
+if [ "$UNINSTALL_REPORT" -eq 1 ]; then
+  require_macos
+  exec "$SCRIPT_DIR/cidre-macos-uninstall-report"
+fi
+
+if [ "$UNINSTALL_RESUME" -eq 1 ]; then
+  require_macos
+  exec "$SCRIPT_DIR/cidre-macos-uninstall-resume"
+fi
 
 if [ "$CHECK_ONLY" -eq 1 ]; then
   require_macos
@@ -396,36 +567,33 @@ fi
 
 require_macos
 
-printf 'Cidre macOS Bootstrap\n\n'
-printf 'This tool prepares your Apple Silicon Mac for a Cidre installation.\n'
-printf 'Cidre will not directly modify APFS containers, resize partitions, or change Apple Silicon boot policy.\n'
-printf 'Disk preparation and OS installation are handled by the Asahi/ALARM installer.\n\n'
+printf 'Cidre macOS Bootstrap (Guided Install Flow)\n\n'
 
-"$SCRIPT_DIR/cidre-macos-check"
+# Update states
+"$SCRIPT_DIR/cidre-install-state" --set-stage macos-preflight --set-status running --set-next-command "./install-macos --continue"
 
-printf '\nSelected profile:\n  %s\n' "$PROFILE"
-printf '\nNext:\n'
-printf '  1. Run the ALARM/Asahi installer\n'
-printf '  2. Boot into the new ALARM environment\n'
-printf '  3. Run Cidre preinstall/install continuation\n'
-
-if [ "$DRY_RUN" -eq 1 ]; then
-  printf '\n[DRY-RUN] Would create macOS bootstrap manifest under .local/state/cidre/macos-bootstrap/.\n'
-  if [ "$NO_SEED" -eq 1 ]; then
-    printf '[DRY-RUN] Seed creation disabled by --no-seed.\n'
-  else
-    "$SCRIPT_DIR/cidre-macos-seed" --profile "$PROFILE" --dry-run
-  fi
-  printf '[DRY-RUN] Would print ALARM/Asahi installer handoff instructions.\n\n'
-  "$SCRIPT_DIR/cidre-macos-handoff" --profile "$PROFILE" --state-dir "$REPO_ROOT/.local/state/cidre/macos-bootstrap"
-  exit 0
+if ! "$SCRIPT_DIR/cidre-macos-install-preflight"; then
+  "$SCRIPT_DIR/cidre-install-state" --mark-failed "preflight-failed"
+  exit 1
 fi
+"$SCRIPT_DIR/cidre-install-state" --set-stage macos-seed --set-status running
 
 if [ "$NO_SEED" -eq 0 ]; then
-  "$SCRIPT_DIR/cidre-macos-seed" --profile "$PROFILE"
-else
-  printf '\nSeed creation skipped by --no-seed.\n'
+  if ! "$SCRIPT_DIR/cidre-macos-seed" --profile "$PROFILE"; then
+    "$SCRIPT_DIR/cidre-install-state" --mark-failed "seed-failed"
+    exit 1
+  fi
 fi
 
-printf '\n'
-"$SCRIPT_DIR/cidre-macos-handoff" --profile "$PROFILE" --state-dir "$REPO_ROOT/.local/state/cidre/macos-bootstrap"
+"$SCRIPT_DIR/cidre-install-state" --set-stage macos-handoff --set-status running
+
+if ! "$SCRIPT_DIR/cidre-macos-install-handoff" --output "$REPO_ROOT/.local/state/cidre/install/current/install-handoff.md"; then
+  "$SCRIPT_DIR/cidre-install-state" --mark-failed "generic-failure"
+  exit 1
+fi
+
+"$SCRIPT_DIR/cidre-install-state" --set-stage alarm-install --set-status pending --set-next-command "./preinstall --resume" --set-next-stage "root-preinstall"
+"$SCRIPT_DIR/cidre-install-state" --set-status passed
+
+# Show dashboard
+"$SCRIPT_DIR/cidre-macos-install-dashboard"

@@ -1,0 +1,79 @@
+#!/bin/sh
+set -eu
+
+usage() {
+  cat <<'EOF'
+Usage:
+  cidre-command-schema [options]
+
+Options:
+  --list
+  --validate
+  --json
+  --help
+EOF
+}
+
+mode="list"
+json_mode=false
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --list) mode="list"; shift ;;
+    --validate) mode="validate"; shift ;;
+    --json) json_mode=true; shift ;;
+    --help|-h|help) usage; exit 0 ;;
+    *) printf 'ERROR: Unknown option: %s\n' "$1" >&2; usage; exit 2 ;;
+  esac
+done
+
+python3 -c '
+import sys, os, json
+
+mode = sys.argv[1]
+json_mode = sys.argv[2] == "true"
+repo_root = os.environ.get("CIDRE_REPO_ROOT", "/home/yasuno/Projects/Cidre")
+schema_dir = os.path.join(repo_root, "interface/schemas")
+
+schemas = []
+if os.path.exists(schema_dir):
+    schemas = [f for f in os.listdir(schema_dir) if f.endswith(".schema.json")]
+
+if mode == "list":
+    if json_mode:
+        print(json.dumps({"schemas": schemas}, indent=2))
+    else:
+        print("Available schemas:")
+        for s in schemas:
+            print("  %s" % s)
+elif mode == "validate":
+    results = []
+    passed = True
+    for s in schemas:
+        s_path = os.path.join(schema_dir, s)
+        try:
+            with open(s_path) as f:
+                data = json.load(f)
+            # basic checks
+            has_title = "title" in data
+            has_type = "type" in data
+            valid = has_title and has_type
+            if not valid:
+                passed = False
+            results.append({"schema": s, "valid": valid, "error": "" if valid else "missing title or type"})
+        except Exception as e:
+            passed = False
+            results.append({"schema": s, "valid": False, "error": str(e)})
+            
+    res_obj = {"passed": passed, "results": results}
+    if json_mode:
+        print(json.dumps(res_obj, indent=2))
+    else:
+        print("Schema Validation Results:")
+        for r in results:
+            status = "[OK]  " if r["valid"] else "[FAIL]"
+            err_msg = (" (" + r["error"] + ")") if r["error"] else ""
+            print("%s %s%s" % (status, r["schema"], err_msg))
+        print("Overall schema validation: %s" % ("PASSED" if passed else "FAILED"))
+        if not passed:
+            sys.exit(11)
+' "$mode" "$([ "$json_mode" = "true" ] && echo "true" || echo "false")"

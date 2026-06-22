@@ -1,0 +1,69 @@
+#!/bin/sh
+set -eu
+
+usage() {
+  cat <<'EOF'
+Usage:
+  cidre-app-ui-validation [options]
+
+Options:
+  --json
+  --help
+EOF
+}
+
+json_mode=false
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --json) json_mode=true; shift ;;
+    --help|-h|help) usage; exit 0 ;;
+    *) printf 'ERROR: Unknown option: %s\n' "$1" >&2; usage; exit 2 ;;
+  esac
+done
+
+python3 -c '
+import sys, os, json
+
+json_mode = sys.argv[1] == "true"
+repo_root = os.environ.get("CIDRE_REPO_ROOT", "/home/yasuno/Projects/Cidre")
+
+checks = []
+passed = True
+
+def check_file(path, label):
+    global passed
+    full = os.path.join(repo_root, path)
+    ok = os.path.isfile(full)
+    if not ok:
+        passed = False
+    checks.append({"name": label, "passed": ok, "path": path})
+
+check_file("apps/macos/CidreApp/Sources/CidreApp/Services/RepositoryPathStore.swift", "RepositoryPathStore Service")
+check_file("apps/macos/CidreApp/Sources/CidreApp/Services/SafeCommandPolicy.swift", "SafeCommandPolicy Service")
+check_file("apps/macos/CidreApp/Sources/CidreApp/Services/LiveCommandRunner.swift", "LiveCommandRunner Service")
+check_file("apps/macos/CidreApp/Sources/CidreApp/Services/ExecutionLogStore.swift", "ExecutionLogStore Service")
+check_file("apps/macos/CidreApp/Sources/CidreApp/Services/MarkdownReportRenderer.swift", "MarkdownReportRenderer Service")
+
+check_file("apps/macos/CidreApp/Sources/CidreApp/Views/RepositoryPickerView.swift", "RepositoryPickerView View")
+check_file("apps/macos/CidreApp/Sources/CidreApp/Views/LiveDashboardView.swift", "LiveDashboardView View")
+check_file("apps/macos/CidreApp/Sources/CidreApp/Views/ActionRunnerView.swift", "ActionRunnerView View")
+check_file("apps/macos/CidreApp/Sources/CidreApp/Views/ExecutionLogView.swift", "ExecutionLogView View")
+check_file("apps/macos/CidreApp/Sources/CidreApp/Views/SafetyStatusView.swift", "SafetyStatusView View")
+check_file("apps/macos/CidreApp/Sources/CidreApp/Views/ReportDetailView.swift", "ReportDetailView View")
+
+res = {
+    "passed": passed,
+    "checks": checks
+}
+
+if json_mode:
+    print(json.dumps(res, indent=2))
+else:
+    print("Cidre.app UI Validation:")
+    for c in checks:
+        status = "[OK]  " if c["passed"] else "[FAIL]"
+        print("  %s %s (%s)" % (status, c["name"], c["path"]))
+    print("Overall app UI validation: %s" % ("PASSED" if passed else "FAILED"))
+    if not passed:
+        sys.exit(1)
+' "$([ "$json_mode" = "true" ] && echo "true" || echo "false")"

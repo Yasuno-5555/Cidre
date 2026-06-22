@@ -1,0 +1,60 @@
+#!/bin/sh
+set -eu
+
+usage() {
+  cat <<'EOF'
+Usage:
+  cidre-app-execution-policy [options]
+
+Options:
+  --json
+  --markdown
+  --help
+EOF
+}
+
+format="plain"
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --json) format="json"; shift ;;
+    --markdown) format="markdown"; shift ;;
+    --help|-h|help) usage; exit 0 ;;
+    *) printf 'ERROR: Unknown option: %s\n' "$1" >&2; usage; exit 2 ;;
+  esac
+done
+
+python3 -c '
+import sys, json
+
+format_mode = sys.argv[1]
+
+policy = {
+    "version": "0.33.0",
+    "allow_mock_commands": True,
+    "allow_read_only_commands": True,
+    "allow_destructive_commands": False,
+    "allow_root_commands": False,
+    "blocked_reasons": [
+        "Destructive actions (e.g. partition mutations) are disabled in v0.33.0 prototype.",
+        "Root level access is blocked for safety in this prototype."
+    ]
+}
+
+if format_mode == "json":
+    print(json.dumps(policy, indent=2))
+elif format_mode == "markdown":
+    print("# Cidre.app Execution Policy")
+    print("- **Allow Mock Commands**: %s" % policy["allow_mock_commands"])
+    print("- **Allow Read-Only Commands**: %s" % policy["allow_read_only_commands"])
+    print("- **Allow Destructive Commands**: %s" % policy["allow_destructive_commands"])
+    print("- **Allow Root Commands**: %s" % policy["allow_root_commands"])
+    print("\n### Blocked Reasons")
+    for r in policy["blocked_reasons"]:
+        print("- %s" % r)
+else:
+    print("Cidre.app Execution Policy:")
+    print("  Mock Commands:        %s" % policy["allow_mock_commands"])
+    print("  Read-Only Commands:   %s" % policy["allow_read_only_commands"])
+    print("  Destructive Commands: %s" % policy["allow_destructive_commands"])
+    print("  Root Commands:        %s" % policy["allow_root_commands"])
+' "$format"

@@ -1,0 +1,116 @@
+#!/bin/sh
+set -eu
+
+CIDRE_REPO_ROOT="${CIDRE_REPO_ROOT:-/home/yasuno/Projects/Cidre}"
+STAGES_JSON="$CIDRE_REPO_ROOT/installer/stages.json"
+
+if [ -n "${CIDRE_INSTALL_STATE_FILE:-}" ]; then
+  STATE_FILE="$CIDRE_INSTALL_STATE_FILE"
+elif [ "$(id -u)" -eq 0 ] && [ "$(uname)" = "Linux" ]; then
+  STATE_FILE="/var/lib/cidre/install/install-state.json"
+else
+  STATE_FILE="${HOME}/.local/state/cidre/install/current/install-state.json"
+fi
+
+usage() {
+  cat <<'EOF'
+Usage:
+  cidre-install-report [options]
+
+Options:
+  --output <file>
+  --json
+  --help
+EOF
+}
+
+output_file=""
+json_mode="false"
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --output) output_file="$2"; shift 2 ;;
+    --json) json_mode="true"; shift ;;
+    --help|-h|help) usage; exit 0 ;;
+    *) printf 'ERROR: Unknown option: %s\n' "$1" >&2; usage; exit 1 ;;
+  esac
+done
+
+run_py() {
+  python3 -c '
+import sys, json, os, datetime
+
+stages_file = sys.argv[1]
+state_file = sys.argv[2]
+out_file = sys.argv[3]
+json_mode = sys.argv[4] == "true"
+
+with open(stages_file) as f:
+    stages_data = json.load(f)
+stages = stages_data.get("stages", [])
+
+state_data = {}
+if os.path.exists(state_file):
+    try:
+        with open(state_file) as f:
+            state_data = json.load(f)
+    except Exception:
+        pass
+
+current_stage = state_data.get("stage", "macos-preflight")
+current_status = state_data.get("status", "pending")
+failure_reason = state_data.get("failure_reason", "")
+timestamp = state_data.get("timestamp", datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"))
+
+report_data = {
+    "timestamp": timestamp,
+    "current_stage": current_stage,
+    "current_status": current_status,
+    "failure_reason": failure_reason,
+    "install_completed": current_stage == "install-complete"
+}
+
+if json_mode:
+    json_str = json.dumps(report_data, indent=2)
+    if out_file:
+        with open(out_file, "w") as f:
+            f.write(json_str + "\n")
+        print(f"[OK] Report written to {out_file}")
+    else:
+        print(json_str)
+    sys.exit(0)
+
+# Generate markdown report
+is_completed = "Success" if report_data["install_completed"] else "In Progress/Failed"
+md = f"""# Cidre Installation Report
+Generated at: {timestamp}
+Overall Status: **{is_completed}**
+
+## Stage Summary
+- Current Stage: `{current_stage}`
+- Stage Status: `{current_status}`
+"""
+
+if failure_reason:
+    md += f"""
+## Failure Details
+- Reason: {failure_reason}
+"""
+
+md += """
+## Next Action Items
+1. Verify system checklist: `cidre-doctor --guided-install`
+2. Check desktop integration using `cidre-install-verify --desktop`
+"""
+
+if out_file:
+    os.makedirs(os.path.dirname(os.path.abspath(out_file)), exist_ok=True)
+    with open(out_file, "w") as f:
+        f.write(md)
+    print(f"[OK] Report written to {out_file}")
+else:
+    print(md)
+' "$STAGES_JSON" "$STATE_FILE" "$output_file" "$json_mode"
+}
+
+run_py

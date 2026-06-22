@@ -200,6 +200,11 @@ mkdir -p "$STATE_DIR"
 
 set +e
 
+# Update guided installer state
+"$SCRIPT_DIR/cidre-install-state" --set-stage firstboot --set-status running --set-next-command "Reboot and let firstboot setup complete"
+trap 'if [ "$?" -ne 0 ]; then "$SCRIPT_DIR/cidre-install-state" --mark-failed "verify-failed"; "$SCRIPT_DIR/cidre-install-failure-report" --stage firstboot --reason "verify-failed" --output "$REPO_ROOT/.local/state/cidre/install/current/install-failure-report.md" 2>/dev/null || true; fi' EXIT
+
+
 # Stage: seed-check
 "$SCRIPT_DIR/cidre-firstboot-state" set-stage "seed-check" >/dev/null
 if [ -n "$IMPORT_SEED_PATH" ]; then
@@ -295,6 +300,11 @@ fi
 "$SCRIPT_DIR/cidre-firstboot-state" mark-completed >/dev/null
 rm -f "$STATE_DIR/failed"
 
+# Update guided installer state
+"$SCRIPT_DIR/cidre-install-state" --set-stage firstboot --set-status passed
+"$SCRIPT_DIR/cidre-install-state" --set-stage user-phase --set-status pending --set-next-command "Log in to your Cidre desktop session" --set-next-stage "desktop-verification"
+
+trap - EXIT
 set -e
 
 cat <<EOF

@@ -1,0 +1,22 @@
+{
+  "export-failed": {
+    "doctor": "cidre-doctor --guided-uninstall",
+    "recovery": "cidre-recovery status",
+    "next": "Verify disk space and permissions, then run: cidre-uninstall-export"
+  },
+  "ambiguous-target": {
+    "doctor": "cidre-doctor --guided-uninstall",
+    "recovery": "cidre-recovery status",
+    "next": "Confirm the exact device identifier and review candidate scan targets."
+  },
+  "protected-target": {
+    "doctor": "cidre-doctor --guided-uninstall",
+    "recovery": "cidre-recovery status",
+    "next": "Selecting protected macOS or system partitions is hard-blocked. Choose a verified Linux candidate partition."
+  },
+  "generic-failure": {
+    "doctor": "cidre-doctor --guided-uninstall",
+    "recovery": "cidre-recovery status",
+    "next": "Review error log output and rerun current subcommand with --resume"
+  }
+}

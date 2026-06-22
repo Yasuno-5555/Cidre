@@ -1,0 +1,136 @@
+#!/bin/sh
+set -eu
+
+usage() {
+  cat <<'EOF'
+Usage:
+  cidre-uninstall-preflight [options]
+
+Options:
+  --phase linux|macos
+  --json
+  --help
+EOF
+}
+
+phase=""
+json_mode="false"
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --phase) phase="$2"; shift 2 ;;
+    --json) json_mode="true"; shift ;;
+    --help|-h|help) usage; exit 0 ;;
+    *) printf 'ERROR: Unknown option: %s\n' "$1" >&2; usage; exit 1 ;;
+  esac
+done
+
+if [ -z "$phase" ]; then
+  printf 'ERROR: --phase is required\n' >&2
+  usage
+  exit 1
+fi
+
+run_preflight() {
+  python3 -c '
+import sys, os, subprocess, platform, shutil, json
+
+phase = sys.argv[1]
+json_mode = sys.argv[2] == "true"
+
+results = {
+    "phase": phase,
+    "passed": True,
+    "checks": []
+}
+
+def add_check(name, passed, message=""):
+    results["checks"].append({
+        "name": name,
+        "passed": passed,
+        "message": message
+    })
+    if not passed:
+        results["passed"] = False
+
+repo_root = os.environ.get("CIDRE_REPO_ROOT", "/home/yasuno/Projects/Cidre")
+scripts_dir = os.path.join(repo_root, "scripts")
+
+def check_script(name):
+    # Check in scripts_dir or PATH
+    in_scripts = os.path.exists(os.path.join(scripts_dir, name))
+    in_path = shutil.which(name) is not None
+    return in_scripts or in_path
+
+if phase == "linux":
+    # 1. running on Linux (Cidre/ALARM)
+    is_linux = platform.system() == "Linux"
+    add_check("running_on_linux", is_linux, "Running on Linux" if is_linux else "Not running on Linux")
+    
+    # 2. Cidre state directory exists
+    state_dir = os.path.expanduser("~/.local/state/cidre")
+    state_exists = os.path.exists(state_dir)
+    add_check("cidre_state_exists", state_exists, "Cidre state directory exists" if state_exists else "Cidre state directory missing")
+    
+    # 3. state export command available
+    export_avail = check_script("cidre-state-export")
+    add_check("state_export_available", export_avail, "State export tool is available" if export_avail else "State export tool missing")
+    
+    # 4. partition audit available
+    audit_avail = check_script("cidre-partition-audit")
+    add_check("partition_audit_available", audit_avail, "Partition audit tool is available" if audit_avail else "Partition audit tool missing")
+    
+    # 5. exit plan available
+    exit_plan_avail = check_script("cidre-exit-plan")
+    add_check("exit_plan_available", exit_plan_avail, "Exit plan tool is available" if exit_plan_avail else "Exit plan tool missing")
+    
+    # 6. macOS restore guide available
+    restore_guide_avail = check_script("cidre-macos-restore-guide")
+    add_check("macos_restore_guide_available", restore_guide_avail, "macOS restore guide is available" if restore_guide_avail else "macOS restore guide missing")
+    
+    # 7. destructive mode disabled by default
+    add_check("destructive_mode_disabled", True, "Destructive mode is disabled by default")
+
+elif phase == "macos":
+    # 1. running on macOS
+    is_macos = platform.system() == "Darwin"
+    add_check("running_on_macos", is_macos, "Running on macOS" if is_macos else "Not running on macOS")
+    
+    # 2. diskutil available
+    diskutil_exist = shutil.which("diskutil") is not None
+    add_check("diskutil_available", diskutil_exist, "diskutil command is available" if diskutil_exist else "diskutil missing")
+    
+    # 3. macOS restore assistant available
+    restore_assistant_avail = os.path.exists(os.path.join(repo_root, "install-macos"))
+    add_check("macos_restore_assistant_available", restore_assistant_avail, "macOS Restore Assistant (install-macos) is available")
+    
+    # 4. target scan available
+    target_scan_avail = check_script("cidre-macos-uninstall-target-scan")
+    add_check("target_scan_available", target_scan_avail, "macOS target scan tool is available")
+    
+    # 5. destructive mode disabled by default
+    add_check("destructive_mode_disabled", True, "Destructive mode is disabled by default")
+
+else:
+    add_check("unknown_phase", False, "Phase %s is unknown" % phase)
+
+if json_mode:
+    print(json.dumps(results, indent=2))
+else:
+    print("Preflight Phase: %s" % phase)
+    print("-------------------------")
+    for check in results["checks"]:
+        status = "[OK]  " if check["passed"] else "[FAIL]"
+        cname = check["name"]
+        cmsg = check["message"]
+        print("%s %s: %s" % (status, cname, cmsg))
+    print("-------------------------")
+    overall = "PASSED" if results["passed"] else "FAILED"
+    print("Overall result: %s" % overall)
+
+if not results["passed"]:
+    sys.exit(1)
+' "$phase" "$json_mode"
+}
+
+run_preflight

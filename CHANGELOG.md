@@ -2,6 +2,108 @@
 
 All notable changes to the Cidre project will be documented in this file.
 
+## [0.33.0] - 2026-06-22
+
+### Added
+
+- Added repository path selection support for Cidre.app.
+- Added safe read-only command execution support.
+- Added live dashboard and action runner UI components.
+- Added execution log UI.
+- Added report detail viewer.
+- Added app guided UI validation scripts.
+
+### Changed
+
+- Extended doctor/recovery with app guided UI checks.
+- Extended app prototype toward live read-only command execution.
+
+### Notes
+
+v0.33.0 does not implement privileged helper support, real install execution,
+real uninstall execution, partition mutation, signing, or notarization.
+
+## [0.32.0] - 2026-06-22
+
+### Added
+
+- Added initial Cidre.app prototype layout.
+- Added SwiftUI dashboard, install, uninstall, repair, reports, and settings views.
+- Added interface metadata readers.
+- Added mock fixtures for command manifests, app actions, command results, and reports.
+- Added app prototype validation scripts.
+
+### Changed
+
+- Extended doctor/recovery with app prototype checks.
+- Extended app-readiness flow toward GUI integration.
+
+### Notes
+
+v0.32.0 does not include privileged helper support or destructive install/uninstall execution.
+
+## [0.31.0] - 2026-06-22
+
+### Added
+
+- Added command manifest metadata.
+- Added shared exit code definitions.
+- Added shared status vocabulary.
+- Added JSON schema metadata for command output.
+- Added app-readiness checks.
+- Added report index and artifact path helpers.
+- Added command contract tests.
+
+### Changed
+
+- Extended guided installer commands with app-ready output options.
+- Extended guided uninstaller commands with app-ready output options.
+- Extended macOS wrappers with machine-readable safe refusal output.
+- Extended doctor/recovery with app-readiness and interface checks.
+
+### Notes
+
+v0.31.0 does not implement the macOS GUI app.
+It prepares the command interface required by a future Cidre.app.
+
+## [0.30.0] - 2026-06-22
+### Added
+- Added guided uninstall dashboard.
+- Added uninstall state tracking.
+- Added mandatory uninstall export flow.
+- Added target scan/review tooling.
+- Added uninstall dry-run and report generation.
+- Added macOS guided uninstall helpers.
+
+### Changed
+- Integrated uninstall flow with existing state export, exit plan, partition audit, and macOS restore assistant.
+- Extended `install-macos` with guided uninstall commands.
+- Extended `cidre-doctor` with guided uninstall checks.
+- Extended `cidre-recovery` with uninstall subcommands.
+
+### Notes
+- v0.30.0 provides guided uninstall planning and safety checks.
+- It does not automatically perform destructive disk operations by default.
+
+## [0.29.0] - 2026-06-22
+### Added
+- Added guided installer dashboard.
+- Added installer stage/state tracking.
+- Added install guide/report/failure report generation.
+- Added macOS install dashboard/preflight/guide/report/handoff helpers.
+- Added guided resume flow.
+- Added desktop verification helper.
+
+### Changed
+- Integrated `install-macos`, `preinstall`, and `install` with guided install state.
+- Integrated firstboot and user phase with guided install reporting.
+- Extended `cidre-doctor` with guided install checks.
+- Extended `cidre-recovery` with install status/report/resume commands.
+
+### Notes
+- v0.29.0 improves the guided install experience.
+- It does not perform automatic partition creation, APFS resize, or boot entry modification.
+
 ## [0.28.0] - 2026-06-21
 ### Added
 - Added guided Rescue Slot creation flow.

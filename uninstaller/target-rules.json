@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "default_action": "block",
+  "require_exact_target": true,
+  "require_state_export": true,
+  "block_current_root": true,
+  "block_external_backup": true,
+  "block_protected_apfs": true,
+  "allow_real_delete_by_default": false
+}

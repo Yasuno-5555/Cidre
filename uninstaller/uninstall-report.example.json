@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "timestamp": "2026-06-22T00:00:00Z",
+  "status": "passed",
+  "export_completed": true,
+  "target_scan": {
+    "candidates": [
+      {
+        "device": "disk0s6",
+        "size": "64GB",
+        "type": "candidate-cidre"
+      }
+    ]
+  },
+  "target_review": {
+    "selected": "disk0s6",
+    "status": "passed",
+    "risk": "low"
+  },
+  "dry_run": "passed"
+}

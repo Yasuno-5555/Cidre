@@ -1,0 +1,62 @@
+#!/bin/sh
+set -eu
+
+usage() {
+  cat <<'EOF'
+Usage:
+  cidre-interface-doctor [options]
+
+Options:
+  --json
+  --help
+EOF
+}
+
+json_mode=false
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --json) json_mode=true; shift ;;
+    --help|-h|help) usage; exit 0 ;;
+    *) printf 'ERROR: Unknown option: %s\n' "$1" >&2; usage; exit 2 ;;
+  esac
+done
+
+python3 -c '
+import sys, json, os
+
+json_mode = sys.argv[1] == "true"
+repo_root = os.environ.get("CIDRE_REPO_ROOT", "/home/yasuno/Projects/Cidre")
+
+checks = []
+passed = True
+
+def check_file(path, label):
+    global passed
+    full_path = os.path.join(repo_root, path)
+    ok = os.path.exists(full_path)
+    if not ok:
+        passed = False
+    checks.append({"name": label, "passed": ok, "path": path})
+
+check_file("interface/command-manifest.json", "Command Manifest")
+check_file("interface/exit-codes.json", "Exit Codes Metadata")
+check_file("interface/status-values.json", "Status Values Metadata")
+check_file("interface/artifact-layout.json", "Artifact Layout Metadata")
+check_file("interface/app-actions.json", "App Actions List Seed")
+
+res = {
+    "passed": passed,
+    "checks": checks
+}
+
+if json_mode:
+    print(json.dumps(res, indent=2))
+else:
+    print("Interface Pack Diagnostics:")
+    for c in checks:
+        status = "[OK]  " if c["passed"] else "[FAIL]"
+        print("  %s %s (%s)" % (status, c["name"], c["path"]))
+    print("Overall interface diagnostics: %s" % ("PASSED" if passed else "FAILED"))
+    if not passed:
+        sys.exit(11)
+' "$([ "$json_mode" = "true" ] && echo "true" || echo "false")"

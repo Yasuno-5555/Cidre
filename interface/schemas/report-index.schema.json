@@ -1,0 +1,11 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ReportIndex",
+  "type": "OBJECT",
+  "properties": {
+    "schema_version": { "type": "integer" },
+    "scanned_at": { "type": "string" },
+    "reports": { "type": "array" }
+  },
+  "required": ["schema_version", "scanned_at", "reports"]
+}
