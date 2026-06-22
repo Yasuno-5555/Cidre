@@ -23,6 +23,11 @@ struct DiskPlanningStepView: View {
                     .foregroundColor(.orange)
                     .font(.callout)
 
+                ProtectedPartitionGuardView(state: mutation.protectedPartitionState)
+                RecoverySurvivalView(state: mutation.recoverySurvivalState)
+                DiskSnapshotView(availability: mutation.snapshotAvailability)
+                DiskDiffSummaryView(state: mutation.diskDiffState)
+
                 Divider()
 
                 // ── Target ───────────────────────────────────────────────
@@ -131,6 +136,7 @@ struct DiskPlanningStepView: View {
         }
         .onAppear {
             mutation.refreshKillSwitch(repositoryPath: appVM.repositoryPath)
+            mutation.refreshSafetyStatus(repositoryPath: appVM.repositoryPath)
             mutation.detectStartupStore()
         }
     }

@@ -1,0 +1,141 @@
+#!/bin/sh
+set -eu
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+REPO_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+SNAPSHOT_DIR="$REPO_ROOT/.local/state/cidre/boot-safety/snapshots"
+
+label=""
+json_mode=false
+
+usage() {
+  echo "Usage: cidre-app-apfs-snapshot --label <name> [--json]"
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --label)
+      [ "$#" -ge 2 ] || { echo "ERROR: --label requires a value" >&2; exit 2; }
+      label="$2"
+      shift 2
+      ;;
+    --json) json_mode=true; shift ;;
+    --help|-h) usage; exit 0 ;;
+    *) echo "ERROR: unknown option: $1" >&2; usage; exit 2 ;;
+  esac
+done
+
+[ -n "$label" ] || { echo "ERROR: --label is required" >&2; exit 2; }
+
+if [ "$(uname -s)" != "Darwin" ]; then
+  python3 - "$json_mode" <<'PY'
+import json
+import sys
+payload = {
+    "schema_version": 1,
+    "command": "cidre-app-apfs-snapshot",
+    "status": "blocked",
+    "summary": "APFS snapshot requires macOS diskutil access.",
+    "phase": "safety",
+    "stage": "apfs-snapshot",
+    "exit_code": 4,
+    "warnings": [],
+    "errors": [{"code": "requires-macos", "message": "APFS snapshot requires macOS diskutil access."}],
+}
+print(json.dumps(payload, indent=2) if sys.argv[1] == "true" else payload["summary"])
+sys.exit(4)
+PY
+fi
+
+mkdir -p "$SNAPSHOT_DIR"
+timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
+snapshot_file="$SNAPSHOT_DIR/${timestamp}-${label}-apfs.json"
+
+python3 - "$snapshot_file" "$label" "$json_mode" <<'PY'
+import json
+import os
+import platform
+import plistlib
+import subprocess
+import sys
+from datetime import datetime, timezone
+
+snapshot_file, label, json_mode = sys.argv[1:]
+json_mode = json_mode == "true"
+
+def run_diskutil(*args):
+    completed = subprocess.run(["/usr/sbin/diskutil", *args], check=True, capture_output=True)
+    return plistlib.loads(completed.stdout)
+
+apfs_list = run_diskutil("apfs", "list", "-plist")
+root_info = run_diskutil("info", "-plist", "/")
+startup_container = root_info.get("APFSContainerReference")
+startup_stores = {
+    item.get("APFSPhysicalStore")
+    for item in root_info.get("APFSPhysicalStores", [])
+    if isinstance(item, dict) and item.get("APFSPhysicalStore")
+}
+
+containers = []
+for container in apfs_list.get("Containers", []):
+    identifier = container.get("ContainerReference")
+    physical_stores = [
+        item.get("DeviceIdentifier")
+        for item in container.get("PhysicalStores", [])
+        if isinstance(item, dict) and item.get("DeviceIdentifier")
+    ]
+    volumes = []
+    for volume in container.get("Volumes", []):
+        roles = volume.get("Roles") or []
+        name = volume.get("Name") or volume.get("VolumeName")
+        protected = (
+            identifier == startup_container
+            or bool(set(physical_stores) & startup_stores)
+            or any(str(role).lower() in {"system", "preboot", "recovery", "vm"} for role in roles)
+            or "recovery" in (name or "").lower()
+        )
+        volumes.append({
+            "identifier": volume.get("DeviceIdentifier"),
+            "name": name,
+            "roles": roles,
+            "protected": protected,
+        })
+    containers.append({
+        "identifier": identifier,
+        "physical_stores": physical_stores,
+        "protected": identifier == startup_container or bool(set(physical_stores) & startup_stores),
+        "volumes": volumes,
+    })
+
+payload = {
+    "schema_version": 1,
+    "command": "cidre-app-apfs-snapshot",
+    "status": "passed",
+    "timestamp": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+    "host": {"os": "macOS", "arch": platform.machine()},
+    "label": label,
+    "containers": containers,
+    "startup_container": startup_container,
+}
+
+os.makedirs(os.path.dirname(snapshot_file), exist_ok=True)
+with open(snapshot_file, "w", encoding="utf-8") as handle:
+    json.dump(payload, handle, indent=2)
+    handle.write("\n")
+
+result = {
+    "schema_version": 1,
+    "command": "cidre-app-apfs-snapshot",
+    "status": "passed",
+    "summary": "APFS snapshot captured.",
+    "phase": "safety",
+    "stage": "apfs-snapshot",
+    "exit_code": 0,
+    "warnings": [],
+    "errors": [],
+    "snapshot_file": snapshot_file,
+    "label": label,
+}
+
+print(json.dumps(result, indent=2) if json_mode else snapshot_file)
+PY

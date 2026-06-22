@@ -5,6 +5,7 @@ Cidre treats Apple recovery and startup-critical partitions as immutable during 
 Protected examples:
 
 - Apple_APFS_Recovery
+- Apple_APFS_ISC
 - recoveryOS-related partitions
 - preboot / VM roles tied to the active startup disk
 - current macOS startup APFS container and physical store

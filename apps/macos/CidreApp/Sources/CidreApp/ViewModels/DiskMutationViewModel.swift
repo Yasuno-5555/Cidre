@@ -27,6 +27,10 @@ enum PartitionMode: String, CaseIterable {
 
 final class DiskMutationViewModel: ObservableObject {
     @Published var killSwitchState: InstallerKillSwitchState = .containmentDefault
+    @Published var snapshotAvailability = DiskSnapshotAvailability(beforeAvailable: false, afterAvailable: false, beforePath: nil, afterPath: nil)
+    @Published var protectedPartitionState: ProtectedPartitionGuardState?
+    @Published var diskDiffState: DiskDiffState?
+    @Published var recoverySurvivalState: RecoverySurvivalState?
     @Published var target = ""
     @Published var partitionMode: PartitionMode = .auto
     @Published var containerSize = ""
@@ -54,7 +58,12 @@ final class DiskMutationViewModel: ObservableObject {
     }
 
     var canCreatePlan: Bool {
-        killSwitchState.destructiveInstallAllowed && !target.isEmpty && !isRunning
+        killSwitchState.destructiveInstallAllowed
+            && snapshotAvailability.beforeAvailable
+            && recoverySurvivalState?.status == "passed"
+            && protectedPartitionState != nil
+            && !target.isEmpty
+            && !isRunning
     }
 
     var maxPartitionHuman: String {
@@ -110,6 +119,13 @@ final class DiskMutationViewModel: ObservableObject {
             return
         }
         killSwitchState = state
+    }
+
+    func refreshSafetyStatus(repositoryPath: String) {
+        snapshotAvailability = DiskSnapshotService.shared.availability(repositoryPath: repositoryPath)
+        protectedPartitionState = ProtectedPartitionGuardService.shared.evaluate(repositoryPath: repositoryPath, snapshots: snapshotAvailability)
+        diskDiffState = DiskDiffService.shared.evaluate(repositoryPath: repositoryPath, snapshots: snapshotAvailability)
+        recoverySurvivalState = RecoverySurvivalService.shared.evaluate(repositoryPath: repositoryPath)
     }
 
     func fetchLimits() {

@@ -1,0 +1,81 @@
+#!/bin/sh
+set -eu
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+REPO_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+FIXTURE_DIR="$REPO_ROOT/test/fixtures/disk"
+json_mode=false
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --json) json_mode=true; shift ;;
+    --help|-h) echo "Usage: cidre-app-disk-fixture-check [--json]"; exit 0 ;;
+    *) echo "ERROR: unknown option: $1" >&2; exit 2 ;;
+  esac
+done
+
+python3 - "$FIXTURE_DIR" "$json_mode" "$SCRIPT_DIR" <<'PY'
+import json
+import os
+import subprocess
+import sys
+
+fixture_dir, json_mode, script_dir = sys.argv[1:]
+json_mode = json_mode == "true"
+
+before = os.path.join(fixture_dir, "fresh-macos-before.json")
+cases = [
+    ("after-safe-cidre-target-created.json", True),
+    ("after-safe-cidre-target-removed.json", True),
+    ("after-apple-recovery-missing.json", False),
+    ("after-system-recovery-changed.json", False),
+    ("after-startup-container-changed.json", False),
+    ("after-unknown-apple-partition-touched.json", False),
+]
+
+results = []
+overall_ok = True
+for filename, expect_pass in cases:
+    after = os.path.join(fixture_dir, filename)
+    diff_proc = subprocess.run(
+        [os.path.join(script_dir, "cidre-app-prepost-disk-diff"), "--before", before, "--after", after, "--json"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    guard_proc = subprocess.run(
+        [os.path.join(script_dir, "cidre-app-protected-partition-guard"), "--before", before, "--after", after, "--json"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    diff = json.loads(diff_proc.stdout)
+    guard = json.loads(guard_proc.stdout)
+    actual_pass = diff.get("status") == "passed" and guard.get("status") == "passed"
+    ok = actual_pass == expect_pass
+    overall_ok = overall_ok and ok
+    results.append({
+        "fixture": filename,
+        "expected_pass": expect_pass,
+        "actual_pass": actual_pass,
+        "ok": ok,
+        "diff_status": diff.get("status"),
+        "guard_status": guard.get("status"),
+    })
+
+payload = {
+    "schema_version": 1,
+    "command": "cidre-app-disk-fixture-check",
+    "status": "passed" if overall_ok else "failed",
+    "summary": "Disk fixture classification matches expectations." if overall_ok else "Disk fixture classification mismatch detected.",
+    "phase": "safety",
+    "stage": "disk-fixture-check",
+    "exit_code": 0 if overall_ok else 8,
+    "warnings": [],
+    "errors": [] if overall_ok else [{"code": "fixture-mismatch", "message": item["fixture"]} for item in results if not item["ok"]],
+    "results": results,
+}
+
+print(json.dumps(payload, indent=2) if json_mode else payload["summary"])
+sys.exit(payload["exit_code"])
+PY

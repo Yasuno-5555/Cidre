@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "status": "passed",
+  "root_identifiers": ["disk0s2", "disk3"],
+  "partitions": [
+    {
+      "identifier": "disk0s1",
+      "device_identifier": "disk0s1",
+      "type": "Apple_APFS_ISC",
+      "content": "Apple_APFS_ISC",
+      "name": "iSCPreboot",
+      "volume_name": "iSCPreboot",
+      "size_bytes": 524288000,
+      "role": "iboot-system-container",
+      "protected": true,
+      "roles": []
+    },
+    {
+      "identifier": "disk0s2",
+      "device_identifier": "disk0s2",
+      "type": "Apple_APFS",
+      "content": "Apple_APFS",
+      "name": "Macintosh HD Container",
+      "volume_name": "Macintosh HD Container",
+      "size_bytes": 500000000000,
+      "role": "startup-container",
+      "protected": true,
+      "roles": [],
+      "container_reference": "disk3"
+    },
+    {
+      "identifier": "disk0s3",
+      "device_identifier": "disk0s3",
+      "type": "Apple_APFS_Recovery",
+      "content": "Apple_APFS_Recovery",
+      "name": "Recovery",
+      "volume_name": "Recovery",
+      "size_bytes": 5500000000,
+      "role": "system-recovery",
+      "protected": true,
+      "roles": []
+    },
+    {
+      "identifier": "disk0s4",
+      "device_identifier": "disk0s4",
+      "type": "Apple_Boot",
+      "content": "Apple_Boot",
+      "name": "UnknownApple",
+      "volume_name": "UnknownApple",
+      "size_bytes": 1000000000,
+      "role": "unknown-apple-protected",
+      "protected": true,
+      "roles": []
+    }
+  ]
+}

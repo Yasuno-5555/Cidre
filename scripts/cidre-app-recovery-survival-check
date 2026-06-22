@@ -51,16 +51,19 @@ def run_diskutil(*args):
     return plistlib.loads(completed.stdout)
 
 disk_list = run_diskutil("list", "-plist")
+apfs_list = run_diskutil("apfs", "list", "-plist")
 root_info = run_diskutil("info", "-plist", "/")
 
 recovery_exists = False
+system_recovery_exists = False
 for disk in disk_list.get("AllDisksAndPartitions", []):
     for part in disk.get("Partitions") or []:
         content = (part.get("Content") or "").lower()
         name = (part.get("VolumeName") or part.get("MediaName") or "").lower()
         if "apple_apfs_recovery" in content or "recovery" in name:
             recovery_exists = True
-            break
+        if "apple_apfs_isc" in content:
+            system_recovery_exists = True
 
 startup_disk_readable = bool(root_info.get("MountPoint") == "/")
 physical_stores = [
@@ -68,27 +71,34 @@ physical_stores = [
     for item in root_info.get("APFSPhysicalStores", [])
     if isinstance(item, dict) and item.get("APFSPhysicalStore")
 ]
+startup_container_present = bool(root_info.get("APFSContainerReference"))
+containers_classifiable = bool(apfs_list.get("Containers"))
 
-errors = []
-if not recovery_exists:
-    errors.append({"code": "apple-recovery-missing", "message": "Apple_APFS_Recovery was not found."})
-if not startup_disk_readable:
-    errors.append({"code": "startup-disk-unreadable", "message": "macOS startup disk could not be read."})
-if not physical_stores:
-    errors.append({"code": "startup-physical-store-missing", "message": "Startup disk physical store information is missing."})
+checks = [
+    {"id": "apple-recovery-present", "status": "passed" if recovery_exists else "failed", "reason": None if recovery_exists else "Apple_APFS_Recovery was not found."},
+    {"id": "system-recovery-present", "status": "passed" if system_recovery_exists else "failed", "reason": None if system_recovery_exists else "System Recovery partition was not found."},
+    {"id": "startup-container-present", "status": "passed" if startup_container_present else "failed", "reason": None if startup_container_present else "macOS startup container is missing."},
+    {"id": "startup-disk-readable", "status": "passed" if startup_disk_readable else "failed", "reason": None if startup_disk_readable else "macOS startup disk could not be read."},
+    {"id": "startup-physical-store-present", "status": "passed" if physical_stores else "failed", "reason": None if physical_stores else "Startup disk physical store information is missing."},
+    {"id": "protected-partitions-classifiable", "status": "passed" if containers_classifiable else "failed", "reason": None if containers_classifiable else "APFS containers could not be classified."},
+]
+errors = [{"code": item["id"], "message": item["reason"]} for item in checks if item["status"] == "failed"]
 
 payload = {
     "schema_version": 1,
     "command": "cidre-app-recovery-survival-check",
-    "status": "pass" if not errors else "failed",
+    "status": "passed" if not errors else "failed",
     "summary": "Recovery survival checks passed." if not errors else "Recovery survival checks failed.",
     "phase": "safety",
     "stage": "recovery-survival-check",
-    "exit_code": 0 if not errors else 4,
+    "exit_code": 0 if not errors else 8,
     "warnings": [],
     "errors": errors,
+    "checks": checks,
     "captured_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
     "recovery_exists": recovery_exists,
+    "system_recovery_exists": system_recovery_exists,
+    "startup_container_present": startup_container_present,
     "startup_disk_readable": startup_disk_readable,
     "startup_physical_stores": physical_stores,
 }

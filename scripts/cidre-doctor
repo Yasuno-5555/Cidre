@@ -34,6 +34,9 @@ DFU_INCIDENT_MODE=false
 BOOT_SAFETY_MODE=false
 PROTECTED_PARTITIONS_MODE=false
 INSTALLER_KILLSWITCH_MODE=false
+DISK_SNAPSHOT_MODE=false
+DISK_DIFF_MODE=false
+RECOVERY_SURVIVAL_MODE=false
 MACOS_RESTORE_MODE=false
 RECOVERY_SCREEN_MODE=false
 SAFE_MODE_MODE=false
@@ -92,6 +95,9 @@ show_help() {
   echo "  --boot-safety       Inspect boot safety gate readiness"
   echo "  --protected-partitions Inspect protected partition guard readiness"
   echo "  --installer-killswitch Inspect installer containment switch status"
+  echo "  --disk-snapshot     Inspect disk snapshot tooling readiness"
+  echo "  --disk-diff         Inspect disk diff tooling readiness"
+  echo "  --recovery-survival Inspect recovery survival tooling readiness"
   echo "  --help              Show this help message"
 }
 
@@ -135,6 +141,9 @@ while [ $# -gt 0 ]; do
     --boot-safety) BOOT_SAFETY_MODE=true; shift ;;
     --protected-partitions) PROTECTED_PARTITIONS_MODE=true; shift ;;
     --installer-killswitch) INSTALLER_KILLSWITCH_MODE=true; shift ;;
+    --disk-snapshot) DISK_SNAPSHOT_MODE=true; shift ;;
+    --disk-diff) DISK_DIFF_MODE=true; shift ;;
+    --recovery-survival) RECOVERY_SURVIVAL_MODE=true; shift ;;
     --base-readiness) BASE_READINESS_MODE=true; shift ;;
     --seed) SEED_MODE=true; shift ;;
     --resume) RESUME_MODE=true; shift ;;
@@ -1168,6 +1177,36 @@ elif [ "$INSTALLER_KILLSWITCH_MODE" = true ]; then
   else
     print_result FAIL "Installer kill switch state is unavailable"
   fi
+
+elif [ "$DISK_SNAPSHOT_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  for file in scripts/cidre-app-disk-snapshot scripts/cidre-app-apfs-snapshot docs/disk-snapshot-schema.md; do
+    if [ -f "$REPO_ROOT/$file" ] && { [ -x "$REPO_ROOT/$file" ] || [ "${file#scripts/}" = "$file" ]; }; then
+      print_result OK "Disk snapshot asset present: $file"
+    else
+      print_result FAIL "Disk snapshot asset missing: $file"
+    fi
+  done
+
+elif [ "$DISK_DIFF_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  for file in scripts/cidre-app-prepost-disk-diff scripts/cidre-app-disk-diff-report scripts/cidre-app-disk-fixture-check docs/protected-partition-diff-validation.md; do
+    if [ -f "$REPO_ROOT/$file" ] && { [ -x "$REPO_ROOT/$file" ] || [ "${file#scripts/}" = "$file" ]; }; then
+      print_result OK "Disk diff asset present: $file"
+    else
+      print_result FAIL "Disk diff asset missing: $file"
+    fi
+  done
+
+elif [ "$RECOVERY_SURVIVAL_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  for file in scripts/cidre-app-recovery-survival-check docs/recovery-survival-check.md; do
+    if [ -f "$REPO_ROOT/$file" ] && { [ -x "$REPO_ROOT/$file" ] || [ "${file#scripts/}" = "$file" ]; }; then
+      print_result OK "Recovery survival asset present: $file"
+    else
+      print_result FAIL "Recovery survival asset missing: $file"
+    fi
+  done
 
 elif [ "$RECOVERY_SCREEN_MODE" = true ] || [ "$SAFE_MODE_MODE" = true ]; then
   RECOVERY_STATE_DIR="${HOME}/.local/state/cidre/recovery-screen/current"

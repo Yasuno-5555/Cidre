@@ -54,6 +54,7 @@ snapshot_file="$SNAPSHOT_DIR/${timestamp}-${label}.json"
 python3 - "$snapshot_file" "$label" "$json_mode" <<'PY'
 import json
 import os
+import platform
 import plistlib
 import subprocess
 import sys
@@ -69,48 +70,102 @@ def run_diskutil(*args):
 disk_list = run_diskutil("list", "-plist")
 apfs_list = run_diskutil("apfs", "list", "-plist")
 root_info = run_diskutil("info", "-plist", "/")
+startup_container = root_info.get("APFSContainerReference")
+startup_stores = {
+    item.get("APFSPhysicalStore")
+    for item in root_info.get("APFSPhysicalStores", [])
+    if isinstance(item, dict) and item.get("APFSPhysicalStore")
+}
 
 role_map = {}
 for container in apfs_list.get("Containers", []):
+    container_reference = container.get("ContainerReference")
     for volume in container.get("Volumes", []):
         identifier = volume.get("DeviceIdentifier")
         if identifier:
             role_map[identifier] = {
                 "roles": volume.get("Roles") or [],
                 "volume_name": volume.get("Name"),
-                "container_reference": container.get("ContainerReference"),
+                "container_reference": container_reference,
             }
 
+def classify_partition(identifier, content, name, roles, container_reference):
+    content_lower = (content or "").lower()
+    name_lower = (name or "").lower()
+    roles_lower = [str(item).lower() for item in roles]
+    if "apple_apfs_isc" in content_lower:
+        return True, "iboot-system-container"
+    if "apple_apfs_recovery" in content_lower:
+        return True, "system-recovery"
+    if container_reference == startup_container or identifier in startup_stores:
+        return True, "startup-container"
+    if "recovery" in name_lower or "recovery" in content_lower:
+        return True, "system-recovery"
+    if "preboot" in name_lower or "preboot" in roles_lower:
+        return True, "startup-preboot"
+    if "vm" == name_lower or "vm" in roles_lower:
+        return True, "startup-vm"
+    if "apple_" in content_lower and "linux" not in content_lower:
+        return True, "unknown-apple-protected"
+    if "cidre" in name_lower:
+        return False, "cidre-target"
+    return False, "unclassified"
+
+disks = []
 partitions = []
 
-def walk(entries, parent=None):
-    for entry in entries:
-        identifier = entry.get("DeviceIdentifier")
-        merged = dict(entry)
-        merged.update(role_map.get(identifier, {}))
-        partitions.append({
+for disk in disk_list.get("AllDisksAndPartitions", []):
+    disk_identifier = disk.get("DeviceIdentifier")
+    disk_partitions = []
+    for child in disk.get("Partitions") or []:
+        merged = dict(child)
+        merged.update(role_map.get(child.get("DeviceIdentifier"), {}))
+        identifier = merged.get("DeviceIdentifier")
+        content = merged.get("Content")
+        name = merged.get("VolumeName") or merged.get("volume_name") or merged.get("MediaName")
+        roles = merged.get("roles") or []
+        container_reference = merged.get("APFSContainerReference") or merged.get("container_reference")
+        protected, role = classify_partition(identifier, content, name, roles, container_reference)
+        partition = {
+            "identifier": identifier,
             "device_identifier": identifier,
-            "content": merged.get("Content"),
-            "volume_name": merged.get("VolumeName") or merged.get("volume_name") or merged.get("MediaName"),
+            "type": content,
+            "content": content,
+            "name": name,
+            "volume_name": name,
+            "size_bytes": merged.get("Size"),
             "size": merged.get("Size"),
-            "container_reference": merged.get("APFSContainerReference") or merged.get("container_reference"),
-            "roles": merged.get("roles") or [],
-            "parent_whole_disk": merged.get("ParentWholeDisk") or parent,
-        })
-        children = entry.get("Partitions") or []
-        if children:
-            walk(children, entry.get("DeviceIdentifier") or parent)
+            "role": role,
+            "protected": protected,
+            "roles": roles,
+            "container_reference": container_reference,
+            "parent_whole_disk": merged.get("ParentWholeDisk") or disk_identifier,
+        }
+        disk_partitions.append(partition)
+        partitions.append(partition)
+    disks.append({
+        "identifier": disk_identifier,
+        "internal": disk.get("Internal", True),
+        "partitions": disk_partitions,
+    })
 
-walk(disk_list.get("AllDisksAndPartitions", []))
+protected_summary = {
+    "apple_recovery_present": any(part.get("role") == "system-recovery" for part in partitions),
+    "system_recovery_present": any(part.get("role") == "system-recovery" for part in partitions),
+    "startup_container_present": any(part.get("role") == "startup-container" for part in partitions),
+}
 
 payload = {
     "schema_version": 1,
     "command": "cidre-app-disk-snapshot",
+    "status": "passed",
     "snapshot_version": 1,
     "label": label,
-    "captured_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-    "host_os": "Darwin",
+    "timestamp": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+    "host": {"os": "macOS", "arch": platform.machine()},
+    "disks": disks,
     "partitions": partitions,
+    "protected_summary": protected_summary,
     "root_identifiers": sorted({
         value
         for key, value in root_info.items()
@@ -145,7 +200,7 @@ with open(snapshot_file, "w", encoding="utf-8") as handle:
 result = {
     "schema_version": 1,
     "command": "cidre-app-disk-snapshot",
-    "status": "pass",
+    "status": "passed",
     "summary": "Disk snapshot captured.",
     "phase": "safety",
     "stage": "disk-snapshot",

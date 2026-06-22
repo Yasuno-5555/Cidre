@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.35.2] - 2026-06-22
+
+### Added
+- Added disk snapshot and APFS snapshot tooling for boot-safety evidence capture.
+- Added protected Apple partition guard, pre/post disk diff reporting, fixture validation, and recovery survival checks.
+- Added SwiftUI safety status views for protected partitions, recovery survival, disk snapshots, and disk diff summaries.
+
+### Changed
+- Tightened boot safety evaluation to distinguish blocked states from failed protected-partition or recovery states.
+- Extended doctor and recovery commands with disk snapshot, disk diff, and recovery survival inspection entrypoints.
+
+### Notes
+
+v0.35.2 still does not re-enable destructive disk-changing installer flows.
+
 ## [0.35.0] - 2026-06-22
 
 ### Added

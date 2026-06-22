@@ -28,7 +28,7 @@ try:
 except Exception:
     gate = {}
 
-allowed = gate.get("status") == "pass"
+allowed = gate.get("status") == "passed"
 payload = {
     "schema_version": 1,
     "command": "cidre-app-before-shutdown-gate",
@@ -38,7 +38,7 @@ payload = {
     "stage": "before-shutdown-gate",
     "exit_code": 0 if allowed else 4,
     "warnings": [] if allowed else ["Do not offer Finish, Restart, or Shutdown from the installer yet."],
-    "errors": [] if allowed else [{"code": "boot-safety-gate-blocked", "message": gate.get("summary", "Boot safety gate blocked shutdown.")}],
+    "errors": [] if allowed else [{"code": "boot-safety-not-verified", "message": gate.get("summary", "Boot safety gate blocked shutdown.")}],
     "shutdown_allowed": allowed,
 }
 

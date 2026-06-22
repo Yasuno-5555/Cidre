@@ -33,27 +33,43 @@ def load(path):
     with open(path, "r", encoding="utf-8") as handle:
         return json.load(handle)
 
+def partition_entries(snapshot):
+    return snapshot.get("partitions") or [
+        partition
+        for disk in snapshot.get("disks", [])
+        for partition in disk.get("partitions", [])
+    ]
+
 def partition_map(snapshot):
-    return {p.get("device_identifier"): p for p in snapshot.get("partitions", []) if p.get("device_identifier")}
+    result = {}
+    for item in partition_entries(snapshot):
+        identifier = item.get("device_identifier") or item.get("identifier")
+        if identifier:
+            result[identifier] = item
+    return result
 
 def protected_ids(snapshot):
     ids = set(snapshot.get("root_identifiers") or [])
-    for part in snapshot.get("partitions", []):
-        identifier = part.get("device_identifier")
-        content = (part.get("content") or "").lower()
-        name = (part.get("volume_name") or "").lower()
-        roles = [str(item).lower() for item in (part.get("roles") or [])]
-        if (
-            identifier in ids
-            or "recovery" in content
-            or "recovery" in name
-            or "preboot" in name
-            or "preboot" in roles
-            or "recovery" in roles
-            or "apple_" in content and "linux" not in content
-        ):
+    for part in partition_entries(snapshot):
+        identifier = part.get("device_identifier") or part.get("identifier")
+        role = part.get("role")
+        content = ((part.get("content") or part.get("type")) or "").lower()
+        name = ((part.get("volume_name") or part.get("name")) or "").lower()
+        if part.get("protected") or role in {
+            "iboot-system-container",
+            "system-recovery",
+            "startup-container",
+            "startup-preboot",
+            "startup-vm",
+            "unknown-apple-protected",
+        } or identifier in ids or "apple_" in content or "recovery" in name:
             ids.add(identifier)
     return ids
+
+def role_for(part):
+    if not part:
+        return "unclassified"
+    return part.get("role") or ("cidre-target" if "cidre" in ((part.get("name") or part.get("volume_name") or "").lower()) else "unclassified")
 
 before = load(before_path)
 after = load(after_path)
@@ -72,27 +88,46 @@ changed = sorted(
 unexpected = []
 allowed = []
 for identifier in added + removed + changed:
+    part = after_parts.get(identifier) or before_parts.get(identifier)
+    change_type = (
+        "partition-created" if identifier in added else
+        "partition-missing" if identifier in removed else
+        "partition-changed"
+    )
+    entry = {"type": change_type, "identifier": identifier, "role": role_for(part)}
     if identifier in protected:
-        unexpected.append(identifier)
+        unexpected.append(entry)
     else:
-        allowed.append(identifier)
+        allowed.append(entry)
+
+blocked_reasons = []
+for item in unexpected:
+    role = item["role"]
+    if role == "system-recovery":
+        blocked_reasons.append("apple-recovery-missing" if item["type"] == "partition-missing" else "system-recovery-changed")
+    elif role == "startup-container":
+        blocked_reasons.append("startup-container-changed")
+    elif role == "unknown-apple-protected":
+        blocked_reasons.append("unknown-apple-partition-touched")
+    else:
+        blocked_reasons.append("protected partition changed")
 
 payload = {
     "schema_version": 1,
     "command": "cidre-app-prepost-disk-diff",
-    "status": "pass" if not unexpected else "failed",
+    "status": "passed" if not unexpected else "failed",
     "summary": "Disk diff contains only non-protected changes." if not unexpected else "Disk diff detected protected partition changes.",
     "phase": "safety",
     "stage": "prepost-disk-diff",
-    "exit_code": 0 if not unexpected else 4,
+    "exit_code": 0 if not unexpected else 8,
     "warnings": [],
-    "errors": [] if not unexpected else [{"code": "protected-partition-change", "message": item} for item in unexpected],
+    "errors": [] if not unexpected else [{"code": "protected-partition-change", "message": f'{item["type"]}:{item["identifier"]}:{item["role"]}'} for item in unexpected],
     "added_identifiers": added,
     "removed_identifiers": removed,
     "changed_identifiers": changed,
     "unexpected_protected_changes": unexpected,
     "allowed_target_changes": allowed,
-    "blocked_reasons": [] if not unexpected else ["protected partition changed"],
+    "blocked_reasons": blocked_reasons,
 }
 
 print(json.dumps(payload, indent=2) if json_mode else payload["summary"])

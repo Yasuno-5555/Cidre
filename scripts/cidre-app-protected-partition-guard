@@ -32,62 +32,89 @@ def load(path):
     with open(path, "r", encoding="utf-8") as handle:
         return json.load(handle)
 
+def entries(snapshot):
+    return snapshot.get("partitions") or [
+        partition
+        for disk in snapshot.get("disks", [])
+        for partition in disk.get("partitions", [])
+    ]
+
 def classify(snapshot):
     root_ids = set(snapshot.get("root_identifiers") or [])
     protected = {}
-    for part in snapshot.get("partitions", []):
-        identifier = part.get("device_identifier")
+    for part in entries(snapshot):
+        identifier = part.get("device_identifier") or part.get("identifier")
         if not identifier:
             continue
-        content = (part.get("content") or "").lower()
-        name = (part.get("volume_name") or "").lower()
-        roles = [str(item).lower() for item in (part.get("roles") or [])]
-        is_protected = (
-            identifier in root_ids
-            or "recovery" in content
-            or "recovery" in name
-            or "preboot" in name
-            or "vm" == name
-            or "preboot" in roles
-            or "recovery" in roles
-            or "apple_apfs_isc" in content
-            or "apple_" in content and "linux" not in content
-        )
-        if is_protected:
+        role = part.get("role") or "unclassified"
+        protected_flag = part.get("protected")
+        content = part.get("content") or part.get("type")
+        name = part.get("volume_name") or part.get("name")
+        if protected_flag is None:
+            content_lower = (content or "").lower()
+            name_lower = (name or "").lower()
+            protected_flag = (
+                identifier in root_ids
+                or "recovery" in content_lower
+                or "recovery" in name_lower
+                or "apple_" in content_lower
+            )
+        if protected_flag:
             protected[identifier] = {
-                "content": part.get("content"),
-                "volume_name": part.get("volume_name"),
-                "size": part.get("size"),
+                "identifier": identifier,
+                "content": content,
+                "volume_name": name,
+                "size": part.get("size") or part.get("size_bytes"),
                 "roles": part.get("roles") or [],
+                "role": role,
+                "protected": True,
             }
     return protected
 
-def recovery_present(snapshot):
-    for part in snapshot.get("partitions", []):
-        content = (part.get("content") or "").lower()
-        name = (part.get("volume_name") or "").lower()
-        if "apple_apfs_recovery" in content or "recovery" in name:
-            return True
-    return False
+def check_set(snapshot, protected):
+    entry_list = entries(snapshot)
+    apple_recovery = any(item.get("role") == "system-recovery" for item in protected.values())
+    startup_container = any(item.get("role") == "startup-container" for item in protected.values())
+    return [
+        {
+            "id": "apple-recovery-present",
+            "status": "passed" if apple_recovery else "failed",
+            "reason": None if apple_recovery else "Apple_APFS_Recovery is missing",
+        },
+        {
+            "id": "startup-container-present",
+            "status": "passed" if startup_container else "failed",
+            "reason": None if startup_container else "macOS startup container is missing",
+        },
+        {
+            "id": "protected-partitions-classified",
+            "status": "passed" if protected else "failed",
+            "reason": None if protected else "Protected Apple partitions could not be classified",
+        },
+        {
+            "id": "unknown-apple-partitions-accounted",
+            "status": "passed" if entry_list else "failed",
+            "reason": None if entry_list else "Disk snapshot is empty",
+        },
+    ]
 
 if snapshot_path:
     snap = load(snapshot_path)
     protected = classify(snap)
-    failures = []
-    if not recovery_present(snap):
-        failures.append("apple-recovery-missing")
-    status = "pass" if not failures else "failed"
-    summary = "Protected partitions look intact." if not failures else "Protected partition guard failed."
+    checks = check_set(snap, protected)
+    failures = [item for item in checks if item["status"] == "failed"]
+    status = "passed" if not failures else "failed"
     payload = {
         "schema_version": 1,
         "command": "cidre-app-protected-partition-guard",
         "status": status,
-        "summary": summary,
+        "summary": "Protected Apple partitions are classifiable." if not failures else "Protected Apple partition safety checks failed.",
         "phase": "safety",
         "stage": "protected-partition-guard",
-        "exit_code": 0 if not failures else 4,
+        "exit_code": 0 if not failures else 8,
         "warnings": [],
-        "errors": [{"code": code, "message": code.replace("-", " ")} for code in failures],
+        "errors": [{"code": item["id"], "message": item["reason"] or item["id"]} for item in failures],
+        "checks": checks,
         "protected_partitions": protected,
     }
 else:
@@ -96,8 +123,6 @@ else:
     before_protected = classify(before)
     after_protected = classify(after)
     failures = []
-    if not recovery_present(after):
-        failures.append("apple-recovery-missing")
     for identifier, baseline in before_protected.items():
         current = after_protected.get(identifier)
         if current is None:
@@ -105,17 +130,23 @@ else:
             continue
         if baseline != current:
             failures.append(f"protected-partition-changed:{identifier}")
-    status = "pass" if not failures else "failed"
+    for identifier, current in after_protected.items():
+        if identifier not in before_protected:
+            failures.append(f"protected-partition-added:{identifier}:{current.get('role', 'unclassified')}")
+    checks = check_set(after, after_protected)
+    failures.extend(item["id"] for item in checks if item["status"] == "failed")
+    status = "passed" if not failures else "failed"
     payload = {
         "schema_version": 1,
         "command": "cidre-app-protected-partition-guard",
         "status": status,
-        "summary": "Protected partitions unchanged." if not failures else "Protected partition guard detected unsafe changes.",
+        "summary": "Protected Apple partitions remain unchanged." if not failures else "Protected Apple partition changed unexpectedly.",
         "phase": "safety",
         "stage": "protected-partition-guard",
-        "exit_code": 0 if not failures else 4,
+        "exit_code": 0 if not failures else 8,
         "warnings": [],
         "errors": [{"code": code.split(":")[0], "message": code} for code in failures],
+        "checks": checks,
         "before_protected_partitions": before_protected,
         "after_protected_partitions": after_protected,
     }

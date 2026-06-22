@@ -1,4 +1,4 @@
-# Cidre (v0.35.1 DFU Incident Containment & Boot Safety Gate Pack)
+# Cidre (v0.35.2 Protected Partition Diff Validation Pack)
 
 Cidre is an Apple Silicon Mac-oriented Linux experience layer built on ALARM (Arch Linux ARM) / Asahi Linux.
 
@@ -17,6 +17,14 @@ Current safety status:
 Disk-changing install flows are disabled by default after DFU_RESTORE_001.
 Boot survivability checks must pass before install completion can be considered safe.
 ```
+
+## Current Disk Safety Status
+
+Cidre.app currently keeps disk-changing install flows disabled by default.
+
+v0.35.2 adds disk snapshot, APFS snapshot, protected Apple partition guard,
+pre/post disk diff, fixture validation, and recovery survival checks. These
+checks are required before destructive installer flows can ever be re-enabled.
 
 > [!IMPORTANT]
 > **Cidre is not a niri fork.**

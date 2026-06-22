@@ -7,6 +7,7 @@ Required checks:
 - installer kill switch explicitly enabled for test
 - pre-install disk snapshot exists
 - post-install disk snapshot exists
+- APFS snapshot data is available when needed
 - protected partition guard passes
 - pre/post disk diff shows no protected partition mutation
 - recovery survival check passes

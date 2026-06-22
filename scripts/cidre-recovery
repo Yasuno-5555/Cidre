@@ -76,6 +76,10 @@ show_help() {
   echo "  dfu-incident-status  Show DFU incident containment status"
   echo "  boot-safety-status   Show boot safety gate status"
   echo "  protected-partition-check Show protected partition guard status"
+  echo "  disk-snapshot-status Show latest disk snapshot status"
+  echo "  protected-partition-status Show protected partition status"
+  echo "  disk-diff-status     Show disk diff status"
+  echo "  recovery-survival-status Show recovery survival status"
   echo "  installer-killswitch-status Show installer containment switch status"
   echo "  boot-failure-report  Generate or refresh DFU incident report"
 
@@ -534,6 +538,11 @@ case "$CMD" in
   boot-safety-status)
     exec "$(dirname "$0")/cidre-app-boot-safety-gate" --json
     ;;
+  disk-snapshot-status)
+    latest_before="$(find "$(dirname "$0")/../.local/state/cidre/boot-safety/snapshots" -type f -name '*before*.json' 2>/dev/null | sort | tail -n 1 || true)"
+    latest_after="$(find "$(dirname "$0")/../.local/state/cidre/boot-safety/snapshots" -type f -name '*after*.json' 2>/dev/null | sort | tail -n 1 || true)"
+    printf 'before=%s\nafter=%s\n' "${latest_before:-missing}" "${latest_after:-missing}"
+    ;;
   protected-partition-check)
     latest_after="$(find "$(dirname "$0")/../.local/state/cidre/boot-safety/snapshots" -type f -name '*.json' 2>/dev/null | sort | tail -n 1 || true)"
     if [ -z "$latest_after" ]; then
@@ -541,6 +550,21 @@ case "$CMD" in
       exit 4
     fi
     exec "$(dirname "$0")/cidre-app-protected-partition-guard" --snapshot "$latest_after" --json
+    ;;
+  protected-partition-status)
+    exec "$(dirname "$0")/cidre-recovery" protected-partition-check
+    ;;
+  disk-diff-status)
+    latest_before="$(find "$(dirname "$0")/../.local/state/cidre/boot-safety/snapshots" -type f -name '*before*.json' 2>/dev/null | sort | tail -n 1 || true)"
+    latest_after="$(find "$(dirname "$0")/../.local/state/cidre/boot-safety/snapshots" -type f -name '*after*.json' 2>/dev/null | sort | tail -n 1 || true)"
+    if [ -z "$latest_before" ] || [ -z "$latest_after" ]; then
+      echo "Disk diff requires before and after snapshots." >&2
+      exit 4
+    fi
+    exec "$(dirname "$0")/cidre-app-prepost-disk-diff" --before "$latest_before" --after "$latest_after" --json
+    ;;
+  recovery-survival-status)
+    exec "$(dirname "$0")/cidre-app-recovery-survival-check" --json
     ;;
   installer-killswitch-status)
     exec "$(dirname "$0")/cidre-app-installer-killswitch" --status --json
