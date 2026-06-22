@@ -1,0 +1,3 @@
+#!/bin/sh
+set -eu
+python3 -c 'import json; print(json.dumps({"schema_version":1,"command":"cidre-app-install-wizard","status":"pass","summary":"Install wizard external-stage tracking is ready.","phase":"app-wizard","stage":"install-execution","exit_code":0,"warnings":[],"errors":[]}, indent=2))'

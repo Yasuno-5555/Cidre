@@ -1,0 +1,26 @@
+#!/bin/sh
+set -eu
+
+json_mode=false
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --json) json_mode=true; shift ;;
+    --help|-h) echo "Usage: cidre-app-signing-check [--json]"; exit 0 ;;
+    *) echo "ERROR: unknown option: $1" >&2; exit 2 ;;
+  esac
+done
+
+identity="$(security find-identity -v -p codesigning 2>/dev/null | head -n 1 || true)"
+python3 - "$json_mode" "$identity" <<'PY'
+import json, sys
+json_mode = sys.argv[1] == "true"
+identity = sys.argv[2]
+payload = {
+    "schema_version": 1,
+    "command": "cidre-app-signing-check",
+    "status": "pass" if identity else "warn",
+    "summary": "Signing readiness checked.",
+    "signing_identity_detected": bool(identity),
+}
+print(json.dumps(payload, indent=2) if json_mode else payload["summary"])
+PY

@@ -6,19 +6,16 @@ class ActionRunnerViewModel: ObservableObject {
     @Published var isExecuting = false
     
     func loadActions(repositoryPath: String) {
-        let fixturesDir = URL(fileURLWithPath: (repositoryPath as NSString).expandingTildeInPath).appendingPathComponent("apps/macos/CidreApp/Fixtures")
-        let actionsUrl = fixturesDir.appendingPathComponent("app-actions.sample.json")
-        if let data = try? Data(contentsOf: actionsUrl),
-           let list = try? JSONDecoder().decode([AppAction].self, from: data) {
-            actions = list
-        } else {
-            actions = [
-                AppAction(id: "install-preflight", title: "Install Preflight Check", category: "install", command: "scripts/cidre-install-preflight --json", safeToRun: true, requiresPrivilege: false, destructive: false),
-                AppAction(id: "install-execute", title: "Real Install", category: "install", command: "scripts/cidre-install-execute", safeToRun: false, requiresPrivilege: true, destructive: true),
-                AppAction(id: "uninstall-preflight", title: "Uninstall Preflight Check", category: "uninstall", command: "scripts/cidre-uninstall-preflight --json", safeToRun: true, requiresPrivilege: false, destructive: false),
-                AppAction(id: "uninstall-execute", title: "Real Uninstall", category: "uninstall", command: "scripts/cidre-uninstall-execute", safeToRun: false, requiresPrivilege: true, destructive: true)
-            ]
-        }
+        actions = [
+            AppAction(id: "app-readiness", title: "App Readiness", category: "install", command: "scripts/cidre-app-readiness --json", safeToRun: true, requiresPrivilege: false, destructive: false),
+            AppAction(id: "interface-doctor", title: "Interface Doctor", category: "repair", command: "scripts/cidre-interface-doctor --json", safeToRun: true, requiresPrivilege: false, destructive: false),
+            AppAction(id: "report-index", title: "Report Index", category: "repair", command: "scripts/cidre-report-index --scan --json", safeToRun: true, requiresPrivilege: false, destructive: false),
+            AppAction(id: "artifact-paths", title: "Artifact Paths", category: "repair", command: "scripts/cidre-artifact-paths --json", safeToRun: true, requiresPrivilege: false, destructive: false),
+            AppAction(id: "install-dashboard-read", title: "Install Dashboard Read", category: "install", command: "scripts/cidre-install-dashboard --json", safeToRun: true, requiresPrivilege: false, destructive: false),
+            AppAction(id: "uninstall-dashboard-read", title: "Uninstall Dashboard Read", category: "uninstall", command: "scripts/cidre-uninstall-dashboard --json", safeToRun: true, requiresPrivilege: false, destructive: false),
+            AppAction(id: "real-install", title: "Real Install", category: "install", command: "scripts/cidre-installer --apply", safeToRun: false, requiresPrivilege: true, destructive: true),
+            AppAction(id: "real-uninstall", title: "Real Uninstall", category: "uninstall", command: "scripts/cidre-uninstall-execute", safeToRun: false, requiresPrivilege: true, destructive: true)
+        ]
     }
     
     func runAction(_ action: AppAction, repositoryPath: String, isMockMode: Bool, manifest: CommandManifest?, logStore: ExecutionLogStore) {
@@ -50,7 +47,16 @@ class ActionRunnerViewModel: ObservableObject {
                 status: "blocked",
                 stdout: "",
                 stderr: reason ?? "Blocked",
-                parsedResult: errorResult
+                parsedResult: errorResult,
+                parseError: nil
+            )
+            logStore.append(
+                command: action.command,
+                arguments: [],
+                exitCode: 1,
+                status: "blocked",
+                summary: errorResult.summary,
+                duration: 0
             )
             return
         }

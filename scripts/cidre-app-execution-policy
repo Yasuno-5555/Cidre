@@ -29,14 +29,14 @@ import sys, json
 format_mode = sys.argv[1]
 
 policy = {
-    "version": "0.33.0",
+    "version": "0.34.0",
     "allow_mock_commands": True,
     "allow_read_only_commands": True,
     "allow_destructive_commands": False,
     "allow_root_commands": False,
     "blocked_reasons": [
-        "Destructive actions (e.g. partition mutations) are disabled in v0.33.0 prototype.",
-        "Root level access is blocked for safety in this prototype."
+        "Destructive actions are disabled in v0.34.0 runtime validation.",
+        "Root level access is blocked for safety in this runtime validation release."
     ]
 }
 

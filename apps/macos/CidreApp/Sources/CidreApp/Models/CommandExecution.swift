@@ -12,4 +12,5 @@ struct CommandExecution: Identifiable, Codable {
     var stdout: String
     var stderr: String
     var parsedResult: CommandResult?
+    var parseError: String?
 }

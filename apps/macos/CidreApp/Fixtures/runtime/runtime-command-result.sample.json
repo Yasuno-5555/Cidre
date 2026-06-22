@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "command": "cidre-app-readiness",
+  "status": "pass",
+  "summary": "Fixture command completed successfully.",
+  "phase": "app-runtime",
+  "stage": "safe-command-execution",
+  "exit_code": 0,
+  "warnings": [],
+  "errors": []
+}

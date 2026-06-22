@@ -1,8 +1,10 @@
-# Cidre (v0.33.0 Cidre.app Guided Action UI Pack)
+# Cidre (v0.35.0 Complete Terminal-Free Setup Wizard Pack)
 
 Cidre is an Apple Silicon Mac-oriented Linux experience layer built on ALARM (Arch Linux ARM) / Asahi Linux.
 
 This repository contains the Cidre environment, including installer, recovery, rescue tooling, documentation, package metadata, and the `niri-cidre` desktop layer.
+
+The launchable macOS installer is [`dist/Cidre.app`](dist/Cidre.app). It provides a setup wizard with APFS inspection, validated partition planning, an administrator-authenticated disk helper, packaged backend resources, and operation logs. Disk mutations require a preview and an exact per-plan confirmation phrase.
 
 > [!IMPORTANT]
 > **Cidre is not a niri fork.**
@@ -152,6 +154,12 @@ reports, and keep an execution log.
 
 Destructive install/uninstall operations remain blocked.
 
+## Cidre.app runtime validation
+
+Cidre v0.34.0 adds runtime validation tooling for the macOS app prototype.
+
+The goal is to verify build, launch readiness, repository selection, safe read-only command execution, report preview, and blocked destructive action display on a real macOS machine.
+
 
 ## Installation Flow
 
@@ -275,12 +283,18 @@ After switching to the normal user, resume the Cidre setup:
 - [v0.31.0 Release Notes](./docs/v0.31.0-app-ready-command-interface.md)
 - [v0.32.0 Release Notes](./docs/v0.32.0-cidre-app-prototype.md)
 - [v0.33.0 Release Notes](./docs/v0.33.0-cidre-app-guided-action-ui.md)
+- [v0.34.0 Release Notes](./docs/v0.34.0-cidre-app-runtime-validation.md)
 - [Cidre.app Prototype](./docs/cidre-app-prototype.md)
 - [Cidre.app Architecture](./docs/cidre-app-architecture.md)
 - [Cidre.app UI Flow](./docs/cidre-app-ui-flow.md)
 - [Cidre.app Backend Bridge](./docs/cidre-app-backend-bridge.md)
 - [Cidre.app Safety Model](./docs/cidre-app-safety-model.md)
 - [Cidre.app Guided Action UI](./docs/cidre-app-guided-action-ui.md)
+- [Cidre.app Runtime Validation](./docs/cidre-app-runtime-validation.md)
+- [Cidre.app Build Validation](./docs/cidre-app-build-validation.md)
+- [Cidre.app Launch Validation](./docs/cidre-app-launch-validation.md)
+- [Cidre.app Runtime Report](./docs/cidre-app-runtime-report.md)
+- [Cidre.app Runtime Known Issues](./docs/cidre-app-runtime-known-issues.md)
 - [Cidre.app Command Execution](./docs/cidre-app-command-execution.md)
 - [Cidre.app Repository Selection](./docs/cidre-app-repository-selection.md)
 - [Cidre.app Execution Log](./docs/cidre-app-execution-log.md)

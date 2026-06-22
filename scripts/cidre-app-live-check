@@ -21,11 +21,16 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+REPO_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+CIDRE_REPO_ROOT="${CIDRE_REPO_ROOT:-$REPO_ROOT}"
+export CIDRE_REPO_ROOT
+
 python3 -c '
 import sys, os, json, subprocess
 
 json_mode = sys.argv[1] == "true"
-repo_root = os.environ.get("CIDRE_REPO_ROOT", "/home/yasuno/Projects/Cidre")
+repo_root = os.environ["CIDRE_REPO_ROOT"]
 
 checks = []
 passed = True
@@ -61,8 +66,20 @@ report_script = os.path.join(repo_root, "scripts/cidre-report-index")
 report_ok = os.path.isfile(report_script) and os.access(report_script, os.X_OK)
 add_check("Report Index Script", report_ok, "scripts/cidre-report-index")
 
+runtime_script = os.path.join(repo_root, "scripts/cidre-app-runtime-check")
+runtime_ok = os.path.isfile(runtime_script) and os.access(runtime_script, os.X_OK)
+add_check("App Runtime Check Script", runtime_ok, "scripts/cidre-app-runtime-check")
+
 res = {
-    "passed": passed,
+    "schema_version": 1,
+    "command": "cidre-app-live-check",
+    "status": "pass" if passed else "fail",
+    "summary": "App live compatibility checks passed." if passed else "App live compatibility checks failed.",
+    "phase": "app-runtime",
+    "stage": "repository-selection",
+    "exit_code": 0 if passed else 1,
+    "warnings": [],
+    "errors": [] if passed else [{"code": "app-live-check-failed", "message": "One or more live compatibility checks failed."}],
     "checks": checks
 }
 

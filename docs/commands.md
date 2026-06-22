@@ -348,3 +348,29 @@ Inspects directories and code files to verify the presence of required Views, Mo
 
 ### `scripts/cidre-app-log-fixture`
 Prepares log history data fixtures for the application UI.
+
+## Cidre.app Runtime Validation Commands
+
+### `scripts/cidre-app-runtime-check`
+Runs macOS-only runtime preflight validation for the app prototype.
+
+### `scripts/cidre-app-build-check`
+Runs `swift build` for the macOS app and stores the build log.
+
+### `scripts/cidre-app-launch-check`
+Validates launch readiness for the SwiftPM-built executable.
+
+### `scripts/cidre-app-runtime-report`
+Aggregates runtime validation state into markdown and JSON reports.
+
+### `scripts/cidre-app-runtime-clean`
+Removes temporary runtime validation logs and state without deleting reports.
+
+### `scripts/cidre-app-runtime-fixture`
+Generates runtime validation sample state and sample command/log payloads.
+
+### `scripts/cidre-app-runtime-log-collect`
+Copies runtime validation logs and reports into a collection directory.
+
+### `scripts/cidre-app-runtime-result`
+Shows or marks the current runtime validation result.

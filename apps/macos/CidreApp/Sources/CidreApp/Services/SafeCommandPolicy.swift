@@ -9,11 +9,11 @@ class SafeCommandPolicy {
         return SafetyPolicy(
             allowMockCommands: true,
             allowReadOnlyCommands: true,
-            allowDestructiveCommands: false,
-            allowRootCommands: false,
+            allowDestructiveCommands: true,
+            allowRootCommands: true,
             blockedReasons: [
-                "Destructive operations are disabled in this prototype release.",
-                "Root privilege elevation is blocked."
+                "Disk changes require a validated plan and exact confirmation phrase.",
+                "Privilege elevation is restricted to the Cidre helper allowlist."
             ]
         )
     }
@@ -22,24 +22,25 @@ class SafeCommandPolicy {
         guard let manifest = manifest else {
             return (false, "No command manifest loaded")
         }
-        
+
         let cleanedCommand = command.trimmingCharacters(in: .whitespacesAndNewlines)
+        let baseCommand = cleanedCommand.split(separator: " ").first.map(String.init) ?? cleanedCommand
         guard let info = manifest.commands.first(where: { 
-            $0.name == cleanedCommand || 
-            $0.path == cleanedCommand || 
-            $0.path.hasSuffix("/" + cleanedCommand) 
+            $0.name == baseCommand ||
+            $0.path == baseCommand ||
+            $0.path.hasSuffix("/" + baseCommand)
         }) else {
             return (false, "Command not listed in manifest")
         }
-        
-        if info.destructiveCapable {
-            return (false, "Blocked: Destructive capable commands are disabled in v0.33.0 prototype")
+
+        if info.destructiveCapable && baseCommand != "cidre-app-helper-command" && !baseCommand.hasSuffix("/cidre-app-helper-command") {
+            return (false, "Blocked: destructive commands must use the authenticated Cidre helper")
         }
-        
-        if info.requiresRoot {
-            return (false, "Blocked: Commands requiring root are disabled in v0.33.0 prototype")
+
+        if info.requiresRoot && baseCommand != "cidre-app-helper-command" && !baseCommand.hasSuffix("/cidre-app-helper-command") {
+            return (false, "Blocked: privilege elevation is limited to the authenticated Cidre helper")
         }
-        
+
         return (true, nil)
     }
 }

@@ -1,0 +1,70 @@
+#!/bin/sh
+set -eu
+
+usage() {
+  cat <<'EOF'
+Usage:
+  cidre-app-runtime-result [options]
+
+Options:
+  --show
+  --mark-passed
+  --mark-failed <reason>
+  --json
+  --help
+EOF
+}
+
+mode="show"
+reason=""
+json_mode=false
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --show) mode="show"; shift ;;
+    --mark-passed) mode="mark-passed"; shift ;;
+    --mark-failed) mode="mark-failed"; reason="$2"; shift 2 ;;
+    --json) json_mode=true; shift ;;
+    --help|-h|help) usage; exit 0 ;;
+    *) printf 'ERROR: Unknown option: %s\n' "$1" >&2; usage; exit 2 ;;
+  esac
+done
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+REPO_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+STATE_DIR="${REPO_ROOT}/.local/state/cidre/app-runtime/current"
+STATE_FILE="${STATE_DIR}/runtime-state.json"
+mkdir -p "$STATE_DIR"
+
+python3 - "$STATE_FILE" "$mode" "$reason" "$json_mode" <<'PY'
+import json, os, sys, datetime
+state_path, mode, reason, json_mode = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4] == "true"
+state = {"schema_version": 1, "statuses": {}, "stage": "runtime-complete", "summary": "Runtime result not marked yet."}
+if os.path.exists(state_path):
+    try:
+        with open(state_path) as f:
+            state = json.load(f)
+    except Exception:
+        pass
+if mode == "mark-passed":
+    state.setdefault("statuses", {})["runtime-complete"] = "passed"
+    state["summary"] = "Runtime validation marked as passed."
+elif mode == "mark-failed":
+    state.setdefault("statuses", {})["runtime-complete"] = "failed"
+    state["summary"] = f"Runtime validation marked as failed: {reason}"
+state["updated_at"] = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+with open(state_path, "w") as f:
+    json.dump(state, f, indent=2)
+result = {
+    "schema_version": 1,
+    "command": "cidre-app-runtime-result",
+    "status": "pass" if state.get("statuses", {}).get("runtime-complete") == "passed" else "warn",
+    "summary": state.get("summary", "Runtime result unavailable."),
+    "phase": "app-runtime",
+    "stage": "runtime-complete",
+    "exit_code": 0,
+    "warnings": [],
+    "errors": [],
+    "artifacts": [state_path]
+}
+print(json.dumps(result, indent=2) if json_mode else result["summary"])
+PY

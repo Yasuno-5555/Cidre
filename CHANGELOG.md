@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.35.0] - 2026-06-22
+
+### Added
+- Terminal-free setup, uninstall, and repair wizard shells in `Cidre.app`.
+- Real APFS partition creation, resize, volume deletion, and partition deletion execution through an allowlisted privileged helper.
+- Per-plan confirmation phrases, execution-time target revalidation, startup disk protection, and helper audit logs.
+- A locally signed `Cidre.app` packaging flow with bundled backend scripts and helper deployment to Application Support.
+
+### Changed
+- Live wizard execution is now the default; mock mode remains available for testing.
+
 All notable changes to the Cidre project will be documented in this file.
 
 ## [0.33.0] - 2026-06-22
@@ -22,6 +33,24 @@ All notable changes to the Cidre project will be documented in this file.
 
 v0.33.0 does not implement privileged helper support, real install execution,
 real uninstall execution, partition mutation, signing, or notarization.
+
+## [0.34.0] - 2026-06-22
+
+### Added
+
+- Added app runtime validation entrypoints for preflight, build, launch, reporting, fixture generation, log collection, cleanup, and result marking.
+- Added runtime validation documentation for build, launch, reports, and known issues.
+- Added dashboard runtime status display and parse-failure surfacing in the macOS app.
+
+### Changed
+
+- Extended repository validation to include the macOS app directory.
+- Updated safe action policy data and command manifest coverage for v0.34.0 runtime validation.
+- Extended `cidre-doctor` and `cidre-recovery` with app runtime validation commands.
+
+### Notes
+
+v0.34.0 validates the macOS app at runtime but still blocks real install, real uninstall, privileged helper flow, and destructive disk mutation.
 
 ## [0.32.0] - 2026-06-22
 

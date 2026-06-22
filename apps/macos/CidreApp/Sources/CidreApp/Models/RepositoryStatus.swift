@@ -5,6 +5,7 @@ struct RepositoryStatus: Codable {
     let exists: Bool
     let hasInterfaceDirectory: Bool
     let hasScriptsDirectory: Bool
+    let hasMacOSAppDirectory: Bool
     let hasCommandManifest: Bool
     let hasAppActions: Bool
     let valid: Bool

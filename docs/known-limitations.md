@@ -179,3 +179,17 @@ This document lists all known limits, caveats, and risk factors regarding the Ci
 - No privileged helper is included.
 - SwiftUI runtime validation on real macOS remains required.
 - Execution log is for diagnostics and may not be persisted permanently.
+
+## v0.34.0 limitations
+
+- Runtime validation is macOS-only and returns a safe refusal on Linux.
+- Launch validation focuses on SwiftPM executable readiness more than finished app bundle packaging.
+- Real install and real uninstall remain blocked from the UI.
+- Full UI automation is not included yet; manual runtime sign-off is still required.
+
+## v0.35.0 limitations
+
+- The distributed app is ad-hoc signed for local use; Developer ID signing and Apple notarization still require release credentials.
+- Partition creation is enabled through the authenticated helper, but a complete backup remains mandatory because APFS resize failures can require macOS recovery.
+- The helper intentionally refuses deletion of the startup volume, its APFS physical store, Recovery, Preboot, and VM volumes.
+- Automated UI testing of the macOS administrator authentication sheet remains pending.

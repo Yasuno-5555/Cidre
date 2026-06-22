@@ -19,6 +19,7 @@ struct SettingsView: View {
                         Toggle("Enable Mock Mode", isOn: $appVM.mockMode)
                         
                         Picker("Execution Mode", selection: $appVM.executionMode) {
+                            Text("Live Wizard").tag("live")
                             Text("Mock Commands").tag("mock")
                             Text("Read-only execution").tag("read-only")
                         }

@@ -1,5 +1,7 @@
 /target
 /result
+/dist/
+**/.build/
 
 .idea
 

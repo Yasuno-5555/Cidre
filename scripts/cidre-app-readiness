@@ -23,11 +23,16 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+REPO_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+CIDRE_REPO_ROOT="${CIDRE_REPO_ROOT:-$REPO_ROOT}"
+export CIDRE_REPO_ROOT
+
 python3 -c '
-import sys, os, json, platform
+import sys, os, json
 
 format_mode = sys.argv[1]
-repo_root = os.environ.get("CIDRE_REPO_ROOT", "/home/yasuno/Projects/Cidre")
+repo_root = os.environ["CIDRE_REPO_ROOT"]
 
 results = []
 passed = True
@@ -64,7 +69,12 @@ res = {
     "schema_version": 1,
     "command": "cidre-app-readiness",
     "status": "pass" if passed else "fail",
+    "summary": "App readiness checks passed." if passed else "App readiness checks failed.",
+    "phase": "app-runtime",
+    "stage": "safe-command-execution",
     "exit_code": 0 if passed else 6,
+    "warnings": [],
+    "errors": [] if passed else [{"code": "app-readiness-failed", "message": "One or more readiness checks failed."}],
     "checks": results
 }
 

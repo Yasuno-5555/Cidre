@@ -21,11 +21,16 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+REPO_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+CIDRE_REPO_ROOT="${CIDRE_REPO_ROOT:-$REPO_ROOT}"
+export CIDRE_REPO_ROOT
+
 python3 -c '
 import sys, json, os
 
 json_mode = sys.argv[1] == "true"
-repo_root = os.environ.get("CIDRE_REPO_ROOT", "/home/yasuno/Projects/Cidre")
+repo_root = os.environ["CIDRE_REPO_ROOT"]
 
 checks = []
 passed = True
@@ -45,7 +50,15 @@ check_file("interface/artifact-layout.json", "Artifact Layout Metadata")
 check_file("interface/app-actions.json", "App Actions List Seed")
 
 res = {
-    "passed": passed,
+    "schema_version": 1,
+    "command": "cidre-interface-doctor",
+    "status": "pass" if passed else "fail",
+    "summary": "Interface metadata checks passed." if passed else "Interface metadata checks failed.",
+    "phase": "app-runtime",
+    "stage": "metadata-load",
+    "exit_code": 0 if passed else 11,
+    "warnings": [],
+    "errors": [] if passed else [{"code": "interface-doctor-failed", "message": "One or more interface metadata files are missing."}],
     "checks": checks
 }
 

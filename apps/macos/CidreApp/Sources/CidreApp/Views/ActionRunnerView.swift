@@ -25,7 +25,7 @@ struct ActionRunnerView: View {
                         Spacer()
                         
                         if action.destructive {
-                            Text("Blocked (Destructive)")
+                            Text("Blocked")
                                 .font(.caption)
                                 .foregroundColor(.red)
                                 .padding(.horizontal, 8)
@@ -75,6 +75,21 @@ struct ActionRunnerView: View {
                             .background(Color(.controlBackgroundColor))
                             .cornerRadius(4)
                     } else {
+                        if let parseError = result.parseError {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("JSON parse failed")
+                                    .fontWeight(.bold)
+                                Text("Command:")
+                                Text("\(result.command) \(result.arguments.joined(separator: " "))")
+                                    .font(.system(.caption, design: .monospaced))
+                                Text("Exit code: \(result.exitCode ?? -1)")
+                                Text("Parser error: \(parseError)")
+                            }
+                            .padding()
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color(.controlBackgroundColor))
+                            .cornerRadius(4)
+                        }
                         if !result.stdout.isEmpty {
                             Text(result.stdout)
                                 .font(.system(.body, design: .monospaced))

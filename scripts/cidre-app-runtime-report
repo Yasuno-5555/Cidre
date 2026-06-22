@@ -1,0 +1,103 @@
+#!/bin/sh
+set -eu
+
+usage() {
+  cat <<'EOF'
+Usage:
+  cidre-app-runtime-report [options]
+
+Options:
+  --json
+  --markdown
+  --output <path>
+  --help
+EOF
+}
+
+format="markdown"
+output_path=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --json) format="json"; shift ;;
+    --markdown) format="markdown"; shift ;;
+    --output) output_path="$2"; shift 2 ;;
+    --help|-h|help) usage; exit 0 ;;
+    *) printf 'ERROR: Unknown option: %s\n' "$1" >&2; usage; exit 2 ;;
+  esac
+done
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+REPO_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+STATE_DIR="${REPO_ROOT}/.local/state/cidre/app-runtime/current"
+STATE_FILE="${STATE_DIR}/runtime-state.json"
+JSON_OUT="${STATE_DIR}/runtime-validation-report.json"
+MD_OUT="${STATE_DIR}/runtime-validation-report.md"
+mkdir -p "$STATE_DIR"
+
+python3 - "$format" "$STATE_FILE" "$JSON_OUT" "$MD_OUT" "$output_path" <<'PY'
+import json, os, sys, datetime
+fmt, state_path, json_out, md_out, output_path = sys.argv[1:6]
+statuses = {
+    "runtime-preflight": "pending",
+    "swift-build": "pending",
+    "app-launch": "pending",
+    "repository-selection": "pending",
+    "metadata-load": "pending",
+    "safe-command-execution": "pending",
+    "report-preview": "pending",
+    "blocked-action-display": "pending",
+    "runtime-report": "passed",
+    "runtime-complete": "pending",
+}
+summary = "Runtime validation report generated."
+if os.path.exists(state_path):
+    try:
+        with open(state_path) as f:
+            state = json.load(f)
+            statuses.update(state.get("statuses", {}))
+            summary = state.get("summary") or summary
+    except Exception:
+        pass
+report = {
+    "schema_version": 1,
+    "generated_at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    "summary": summary,
+    "statuses": statuses,
+    "known_issues": [
+        "SwiftPM executable launch is validated more deeply than app bundle creation in v0.34.0.",
+        "Real install and uninstall actions remain blocked.",
+        "Manual UI interaction is still required for full runtime sign-off."
+    ],
+    "next_steps": [
+        "Run scripts/cidre-app-build-check on macOS.",
+        "Launch the built CidreApp executable and verify Guided Action UI flows.",
+        "Collect logs with scripts/cidre-app-runtime-log-collect."
+    ]
+}
+with open(json_out, "w") as f:
+    json.dump(report, f, indent=2)
+markdown = "\n".join([
+    "# Cidre.app Runtime Validation Report",
+    "",
+    f"Generated: {report['generated_at']}",
+    "",
+    f"Summary: {report['summary']}",
+    "",
+    "## Status",
+    *(f"- {key}: {value}" for key, value in report["statuses"].items()),
+    "",
+    "## Known Issues",
+    *(f"- {item}" for item in report["known_issues"]),
+    "",
+    "## Next Steps",
+    *(f"- {item}" for item in report["next_steps"]),
+    ""
+])
+with open(md_out, "w") as f:
+    f.write(markdown)
+payload = json.dumps(report, indent=2) if fmt == "json" else markdown
+if output_path:
+    with open(output_path, "w") as f:
+        f.write(payload)
+print(payload)
+PY

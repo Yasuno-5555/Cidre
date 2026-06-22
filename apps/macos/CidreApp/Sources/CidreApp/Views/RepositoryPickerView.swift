@@ -43,6 +43,7 @@ struct RepositoryPickerView: View {
             Button("Save Settings") {
                 settingsVM.save(appVM: appVM)
                 appVM.loadManifest()
+                appVM.updateLaunchSelection()
             }
             .disabled(settingsVM.status?.valid != true)
         }

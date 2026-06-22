@@ -5,6 +5,15 @@ struct SidebarView: View {
     
     var body: some View {
         List(selection: $selection) {
+            NavigationLink(destination: SetupWizardRootView(), tag: "setup-wizard", selection: $selection) {
+                Label("Setup Wizard", systemImage: "wand.and.stars")
+            }
+            NavigationLink(destination: UninstallWizardRootView(), tag: "uninstall-wizard", selection: $selection) {
+                Label("Uninstall Wizard", systemImage: "trash.slash")
+            }
+            NavigationLink(destination: RepairWizardRootView(), tag: "repair-wizard", selection: $selection) {
+                Label("Repair Wizard", systemImage: "cross.case")
+            }
             NavigationLink(destination: LiveDashboardView(), tag: "dashboard", selection: $selection) {
                 Label("Dashboard", systemImage: "speedometer")
             }

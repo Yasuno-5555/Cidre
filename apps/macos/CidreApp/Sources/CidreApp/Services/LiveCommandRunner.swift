@@ -23,7 +23,8 @@ class LiveCommandRunner {
                 status: result.status,
                 stdout: result.summary,
                 stderr: "",
-                parsedResult: result
+                parsedResult: result,
+                parseError: nil
             )
         }
         
@@ -57,8 +58,15 @@ class LiveCommandRunner {
             let exitCode = Int(process.terminationStatus)
             
             var parsedResult: CommandResult? = nil
+            var parseError: String? = nil
             if let jsonData = stdoutString.data(using: .utf8) {
-                parsedResult = try? JSONDecoder().decode(CommandResult.self, from: jsonData)
+                do {
+                    parsedResult = try JSONDecoder().decode(CommandResult.self, from: jsonData)
+                } catch {
+                    if arguments.contains("--json") && !stdoutString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        parseError = error.localizedDescription
+                    }
+                }
             }
             
             let status = parsedResult?.status ?? (exitCode == 0 ? "pass" : "fail")
@@ -74,7 +82,8 @@ class LiveCommandRunner {
                 status: status,
                 stdout: stdoutString,
                 stderr: stderrString,
-                parsedResult: parsedResult
+                parsedResult: parsedResult,
+                parseError: parseError
             )
         } catch {
             return CommandExecution(
@@ -88,13 +97,13 @@ class LiveCommandRunner {
                 status: "fail",
                 stdout: "",
                 stderr: "Execution error: \(error.localizedDescription)",
-                parsedResult: nil
+                parsedResult: nil,
+                parseError: nil
             )
         }
     }
     
     private func mockResult(for command: String, arguments: [String], workingDir: String) -> CommandResult {
-        let fm = FileManager.default
         let fixturesDir = URL(fileURLWithPath: workingDir).appendingPathComponent("apps/macos/CidreApp/Fixtures")
         
         var filename = "command-result.pass.json"

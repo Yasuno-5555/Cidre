@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "stage": "runtime-report",
+  "statuses": {
+    "runtime-preflight": "passed",
+    "swift-build": "passed",
+    "app-launch": "warn",
+    "repository-selection": "passed",
+    "metadata-load": "passed",
+    "safe-command-execution": "passed",
+    "report-preview": "passed",
+    "blocked-action-display": "passed",
+    "runtime-report": "passed",
+    "runtime-complete": "pending"
+  },
+  "summary": "Sample runtime validation fixture.",
+  "updated_at": "2026-06-22T02:20:51Z"
+}

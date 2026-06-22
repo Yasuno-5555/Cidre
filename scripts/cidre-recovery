@@ -69,6 +69,10 @@ show_help() {
   echo "  app-execution-policy Show App execution policy boundaries"
   echo "  app-fixtures         Generate SwiftUI App mock fixtures"
   echo "  app-report-preview   Generate SwiftUI App report preview"
+  echo "  app-runtime-status   Show app runtime validation status"
+  echo "  app-build-check      Run app build validation"
+  echo "  app-runtime-report   Generate app runtime validation report"
+  echo "  app-runtime-logs     Collect app runtime logs"
 
   echo "  rescue-build         Build Rescue Slot overlay artifact"
   echo "  rescue-inspect       Inspect Rescue Slot overlay"
@@ -506,6 +510,18 @@ case "$CMD" in
     ;;
   app-report-preview)
     exec "$(dirname "$0")/cidre-app-report-preview" "$@"
+    ;;
+  app-runtime-status)
+    exec "$(dirname "$0")/cidre-app-runtime-result" --show "$@"
+    ;;
+  app-build-check)
+    exec "$(dirname "$0")/cidre-app-build-check" "$@"
+    ;;
+  app-runtime-report)
+    exec "$(dirname "$0")/cidre-app-runtime-report" "$@"
+    ;;
+  app-runtime-logs)
+    exec "$(dirname "$0")/cidre-app-runtime-log-collect" "$@"
     ;;
 
   rescue-build)

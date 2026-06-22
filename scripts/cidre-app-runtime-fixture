@@ -1,0 +1,84 @@
+#!/bin/sh
+set -eu
+
+usage() {
+  cat <<'EOF'
+Usage:
+  cidre-app-runtime-fixture [options]
+
+Options:
+  --json
+  --output <dir>
+  --help
+EOF
+}
+
+json_mode=false
+output_dir=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --json) json_mode=true; shift ;;
+    --output) output_dir="$2"; shift 2 ;;
+    --help|-h|help) usage; exit 0 ;;
+    *) printf 'ERROR: Unknown option: %s\n' "$1" >&2; usage; exit 2 ;;
+  esac
+done
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+REPO_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+FIXTURE_DIR="${output_dir:-$REPO_ROOT/apps/macos/CidreApp/Fixtures/runtime}"
+mkdir -p "$FIXTURE_DIR"
+
+python3 - "$FIXTURE_DIR" "$json_mode" <<'PY'
+import json, os, sys, datetime
+fixture_dir = sys.argv[1]
+json_mode = sys.argv[2] == "true"
+generated_at = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+state = {
+    "schema_version": 1,
+    "stage": "runtime-report",
+    "statuses": {
+        "runtime-preflight": "passed",
+        "swift-build": "passed",
+        "app-launch": "warn",
+        "repository-selection": "passed",
+        "metadata-load": "passed",
+        "safe-command-execution": "passed",
+        "report-preview": "passed",
+        "blocked-action-display": "passed",
+        "runtime-report": "passed",
+        "runtime-complete": "pending"
+    },
+    "summary": "Sample runtime validation fixture.",
+    "updated_at": generated_at
+}
+command = {
+    "schema_version": 1,
+    "command": "cidre-app-readiness",
+    "status": "pass",
+    "summary": "Fixture command completed successfully.",
+    "phase": "app-runtime",
+    "stage": "safe-command-execution",
+    "exit_code": 0,
+    "warnings": [],
+    "errors": []
+}
+log = {
+    "schema_version": 1,
+    "generated_at": generated_at,
+    "entries": [
+        {"command": "scripts/cidre-app-readiness --json", "status": "pass", "exit_code": 0},
+        {"command": "scripts/cidre-interface-doctor --json", "status": "pass", "exit_code": 0}
+    ]
+}
+payloads = {
+    "runtime-state.sample.json": state,
+    "runtime-command-result.sample.json": command,
+    "runtime-log.sample.json": log
+}
+for name, payload in payloads.items():
+    with open(os.path.join(fixture_dir, name), "w") as f:
+        json.dump(payload, f, indent=2)
+result = {"schema_version": 1, "output_dir": fixture_dir, "files": sorted(payloads.keys())}
+print(json.dumps(result, indent=2) if json_mode else "\n".join(result["files"]))
+PY

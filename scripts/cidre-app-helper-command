@@ -1,0 +1,123 @@
+#!/bin/sh
+set -eu
+
+operation=""
+target=""
+container_size=""
+volume_name="Cidre"
+partition_size=""
+plan_id=""
+confirmation=""
+dry_run=false
+json_mode=false
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --operation) operation="$2"; shift 2 ;;
+    --target) target="$2"; shift 2 ;;
+    --container-size) container_size="$2"; shift 2 ;;
+    --volume-name) volume_name="$2"; shift 2 ;;
+    --partition-size) partition_size="$2"; shift 2 ;;
+    --plan-id) plan_id="$2"; shift 2 ;;
+    --confirm) confirmation="$2"; shift 2 ;;
+    --dry-run) dry_run=true; shift ;;
+    --json) json_mode=true; shift ;;
+    --help|-h)
+      echo "Usage: cidre-app-helper-command --operation partition-create|partition-delete|apfs-delete-volume|apfs-resize-container --target diskNsM [--container-size 200G] [--volume-name Cidre] [--partition-size 80G] --plan-id ID [--confirm 'CIDRE EXECUTE ID'] [--dry-run] [--json]"
+      exit 0
+      ;;
+    *) echo "ERROR: unknown option: $1" >&2; exit 2 ;;
+  esac
+done
+
+[ -n "$operation" ] || { echo "ERROR: --operation is required" >&2; exit 2; }
+[ -n "$target" ] || { echo "ERROR: --target is required" >&2; exit 2; }
+[ -n "$plan_id" ] || plan_id="$(date -u +%Y%m%dT%H%M%SZ)-$$"
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+REPO_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+HELPER_PACKAGE="$REPO_ROOT/apps/macos/CidreApp/Helper/CidrePrivilegedHelper"
+PACKAGED_HELPER="$REPO_ROOT/libexec/CidrePrivilegedHelper"
+STATE_DIR="${CIDRE_STATE_DIR:-$HOME/Library/Application Support/Cidre/state/app-wizard/current}"
+mkdir -p "$STATE_DIR"
+request_file="$(mktemp /tmp/cidre-helper-request.XXXXXX.json)"
+trap 'rm -f "$request_file"' EXIT HUP INT TERM
+
+arguments_json="$(python3 - "$operation" "$container_size" "$volume_name" "$partition_size" <<'PY'
+import json, sys
+operation, container_size, volume_name, partition_size = sys.argv[1:]
+if operation == "partition-create":
+    args = [container_size, volume_name, partition_size]
+elif operation == "apfs-resize-container":
+    args = [container_size]
+else:
+    args = []
+print(json.dumps(args))
+PY
+)"
+
+python3 - "$request_file" "$operation" "$target" "$dry_run" "$confirmation" "$plan_id" "$STATE_DIR/helper-audit.log" "$arguments_json" <<'PY'
+import json, sys
+path, operation, target, dry_run, confirmation, plan_id, audit_path, arguments = sys.argv[1:]
+payload = {
+    "schema_version": 1,
+    "operation": operation,
+    "target": target,
+    "dry_run": dry_run == "true",
+    "confirmation_token": confirmation or None,
+    "plan_id": plan_id,
+    "audit_log_path": audit_path,
+    "arguments": json.loads(arguments),
+}
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump(payload, handle)
+PY
+chmod 600 "$request_file"
+
+if [ "$(uname -s)" != "Darwin" ]; then
+  python3 - "$json_mode" <<'PY'
+import json, sys
+payload = {"schema_version":1,"command":"cidre-app-helper-command","status":"blocked","summary":"Privileged disk operations require macOS.","phase":"disk","stage":"execute","exit_code":4,"warnings":[],"errors":[{"code":"requires-macos","message":"Privileged disk operations require macOS."}]}
+print(json.dumps(payload, indent=2) if sys.argv[1] == "true" else payload["summary"])
+PY
+  exit 4
+fi
+
+if [ -x "$PACKAGED_HELPER" ]; then
+  helper="$PACKAGED_HELPER"
+else
+  bin_dir="$(swift build -c release --package-path "$HELPER_PACKAGE" --show-bin-path)"
+  helper="$bin_dir/CidrePrivilegedHelper"
+  if [ ! -x "$helper" ] || [ -n "$(find "$HELPER_PACKAGE/Sources" -type f -newer "$helper" -print -quit 2>/dev/null)" ]; then
+    swift build -c release --package-path "$HELPER_PACKAGE" >/dev/null
+  fi
+fi
+
+if [ "$dry_run" = true ]; then
+  output="$($helper "$request_file" || true)"
+else
+  [ "$confirmation" = "CIDRE EXECUTE $plan_id" ] || {
+    echo "ERROR: confirmation must be exactly: CIDRE EXECUTE $plan_id" >&2
+    exit 4
+  }
+  elevated_command="$(python3 - "$helper" "$request_file" <<'PY'
+import shlex, sys
+print(f"{shlex.quote(sys.argv[1])} {shlex.quote(sys.argv[2])} || true")
+PY
+)"
+  output="$(/usr/bin/osascript \
+    -e 'on run argv' \
+    -e 'do shell script (item 1 of argv) with administrator privileges' \
+    -e 'end run' \
+    "$elevated_command")"
+fi
+
+printf '%s\n' "$output" >> "$STATE_DIR/helper-results.jsonl"
+if [ "$json_mode" = true ]; then
+  printf '%s\n' "$output"
+else
+  printf '%s\n' "$output" | python3 -c 'import json,sys; print(json.load(sys.stdin)["summary"])'
+fi
+
+status="$(printf '%s\n' "$output" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("status", "fail"))')"
+[ "$status" = pass ]

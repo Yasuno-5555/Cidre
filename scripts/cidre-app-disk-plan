@@ -1,0 +1,78 @@
+#!/bin/sh
+set -eu
+
+mode="install"
+target=""
+container_size=""
+partition_size=""
+volume_name="Cidre"
+json_mode=false
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --mode) mode="$2"; shift 2 ;;
+    --target) target="$2"; shift 2 ;;
+    --container-size) container_size="$2"; shift 2 ;;
+    --partition-size) partition_size="$2"; shift 2 ;;
+    --volume-name) volume_name="$2"; shift 2 ;;
+    --json) json_mode=true; shift ;;
+    --help|-h) echo "Usage: cidre-app-disk-plan --mode install|uninstall --target diskNsM [--container-size 200G --partition-size 80G --volume-name Cidre] [--json]"; exit 0 ;;
+    *) echo "ERROR: unknown option: $1" >&2; exit 2 ;;
+  esac
+done
+
+python3 - "$mode" "$target" "$container_size" "$partition_size" "$volume_name" "$json_mode" <<'PY'
+import hashlib, json, platform, plistlib, re, subprocess, sys
+mode, target, container_size, partition_size, volume_name, json_mode = sys.argv[1:]
+errors = []
+if mode not in ("install", "uninstall"):
+    errors.append("mode must be install or uninstall")
+if not re.fullmatch(r"disk\d+s\d+", target):
+    errors.append("target must look like disk3s2")
+if mode == "install":
+    if not re.fullmatch(r"[1-9]\d*(?:B|K|M|G|T|P)", container_size, re.I):
+        errors.append("container size is invalid")
+    if not re.fullmatch(r"[1-9]\d*(?:B|K|M|G|T|P)", partition_size, re.I):
+        errors.append("partition size is invalid")
+    if not volume_name or "/" in volume_name or len(volume_name) > 64:
+        errors.append("volume name is invalid")
+    if not errors and platform.system() == "Darwin":
+        def size_bytes(value):
+            scale = {"B":1,"K":1000,"M":1000**2,"G":1000**3,"T":1000**4,"P":1000**5}
+            return int(value[:-1]) * scale[value[-1].upper()]
+        try:
+            completed = subprocess.run(["/usr/sbin/diskutil", "apfs", "resizeContainer", target, "limits", "-plist"], check=True, capture_output=True)
+            limits = plistlib.loads(completed.stdout)
+            requested = size_bytes(container_size)
+            partition = size_bytes(partition_size)
+            if requested < limits["MinimumSizePreferred"]:
+                errors.append(f"container size is below macOS recommended minimum ({limits['MinimumSizePreferred']} bytes)")
+            if requested + partition > limits["CurrentSize"]:
+                errors.append("container and partition sizes exceed the current physical store")
+        except Exception as error:
+            errors.append(f"could not read APFS resize limits: {error}")
+operation = "partition-create" if mode == "install" else "partition-delete"
+canonical = "\n".join((mode, operation, target, container_size, partition_size, volume_name if mode == "install" else ""))
+plan_id = hashlib.sha256(canonical.encode()).hexdigest()[:16]
+payload = {
+    "schema_version": 1,
+    "command": "cidre-app-disk-plan",
+    "status": "pass" if not errors else "blocked",
+    "summary": "Disk mutation plan is ready for review." if not errors else "Disk plan validation failed.",
+    "phase": "disk",
+    "stage": "plan",
+    "exit_code": 0 if not errors else 4,
+    "warnings": ["This operation changes the partition map. Keep a current backup and power connected."],
+    "errors": [{"code":"invalid-plan","message":item} for item in errors],
+    "plan_id": plan_id,
+    "mode": mode,
+    "operation": operation,
+    "target": target,
+    "container_size": container_size or None,
+    "partition_size": partition_size or None,
+    "volume_name": volume_name if mode == "install" else None,
+    "helper_required": True,
+    "required_confirmation": f"CIDRE EXECUTE {plan_id}",
+}
+print(json.dumps(payload, indent=2) if json_mode == "true" else payload["summary"])
+sys.exit(payload["exit_code"])
+PY

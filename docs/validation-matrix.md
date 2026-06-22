@@ -301,3 +301,18 @@ The following matrix documents the verification scopes completed on Cidre before
 | Recovery app safe actions | `scripts/cidre-recovery app-safe-actions --json` |
 | Recovery app live check | `scripts/cidre-recovery app-live-check --json` |
 | Recovery app execution policy | `scripts/cidre-recovery app-execution-policy --json` |
+
+## Cidre.app Runtime Validation (v0.34.0)
+
+| Check | Command |
+|---|---|
+| Runtime preflight | `scripts/cidre-app-runtime-check --json` |
+| Build validation | `scripts/cidre-app-build-check --json` |
+| Launch validation | `scripts/cidre-app-launch-check --json` |
+| Runtime report | `scripts/cidre-app-runtime-report --json` |
+| Runtime fixtures | `scripts/cidre-app-runtime-fixture --json` |
+| Runtime log collection | `scripts/cidre-app-runtime-log-collect --json` |
+| Runtime result | `scripts/cidre-app-runtime-result --show --json` |
+| Doctor app runtime | `scripts/cidre-doctor --app-runtime` |
+| Recovery app runtime status | `scripts/cidre-recovery app-runtime-status --json` |
+| Recovery app build check | `scripts/cidre-recovery app-build-check --json` |
