@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.35.3] - 2026-06-22
+
+### Added
+- Added integrated gate evaluation, gate state, gate reports, finish gate, wizard gate, helper gate, and rollback report checks.
+- Added SwiftUI gate enforcement models, services, and views for finish and boot-safety blocking.
+
+### Changed
+- Wired boot safety, helper mutation, and wizard progression checks into enforced app and script behavior.
+- Tightened before-shutdown and helper execution to require gate success instead of passive diagnostics.
+
+### Notes
+
+v0.35.3 still keeps destructive disk-changing flows blocked by default.
+
 ## [0.35.2] - 2026-06-22
 
 ### Added

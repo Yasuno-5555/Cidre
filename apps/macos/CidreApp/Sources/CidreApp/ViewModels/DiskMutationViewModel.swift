@@ -31,6 +31,8 @@ final class DiskMutationViewModel: ObservableObject {
     @Published var protectedPartitionState: ProtectedPartitionGuardState?
     @Published var diskDiffState: DiskDiffState?
     @Published var recoverySurvivalState: RecoverySurvivalState?
+    @Published var gateState: GateState?
+    @Published var helperGateDecision: GateDecision?
     @Published var target = ""
     @Published var partitionMode: PartitionMode = .auto
     @Published var containerSize = ""
@@ -54,6 +56,7 @@ final class DiskMutationViewModel: ObservableObject {
     var canExecute: Bool {
         killSwitchState.destructiveInstallAllowed
             && canPreview
+            && helperGateDecision?.status == "passed"
             && confirmation.trimmingCharacters(in: .whitespacesAndNewlines) == requiredConfirmation
     }
 
@@ -126,6 +129,8 @@ final class DiskMutationViewModel: ObservableObject {
         protectedPartitionState = ProtectedPartitionGuardService.shared.evaluate(repositoryPath: repositoryPath, snapshots: snapshotAvailability)
         diskDiffState = DiskDiffService.shared.evaluate(repositoryPath: repositoryPath, snapshots: snapshotAvailability)
         recoverySurvivalState = RecoverySurvivalService.shared.evaluate(repositoryPath: repositoryPath)
+        gateState = GateEvaluationService.shared.evaluate(scope: "install", repositoryPath: repositoryPath)
+        helperGateDecision = HelperGateService.shared.evaluate(operation: "partition-create", repositoryPath: repositoryPath)
     }
 
     func fetchLimits() {

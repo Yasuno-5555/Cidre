@@ -6,6 +6,7 @@ final class SetupWizardViewModel: ObservableObject {
     @Published var state: WizardState = .initial(mode: .install)
     @Published var lastExecution: CommandExecution?
     @Published var isRunning = false
+    @Published var gateDecision: WizardGateState?
 
     func load(repositoryPath: String) {
         state = WizardStateStore.shared.load(repositoryPath: repositoryPath, mode: .install)
@@ -16,6 +17,27 @@ final class SetupWizardViewModel: ObservableObject {
 
     func advance(repositoryPath: String) {
         guard currentIndex + 1 < stages.count else { return }
+        let from = stages[currentIndex]
+        let to = stages[currentIndex + 1]
+        if let decision = WizardGateService.shared.evaluate(from: from, to: to, repositoryPath: repositoryPath),
+           decision.status != "passed" {
+            gateDecision = decision
+            lastExecution = CommandExecution(
+                id: UUID(),
+                command: "scripts/cidre-app-wizard-gate",
+                arguments: ["--from", from.rawValue, "--to", to.rawValue, "--json"],
+                workingDirectory: repositoryPath,
+                startedAt: Date(),
+                finishedAt: Date(),
+                exitCode: decision.exitCode,
+                status: "blocked",
+                stdout: decision.summary,
+                stderr: "",
+                parsedResult: nil,
+                parseError: nil
+            )
+            return
+        }
         currentIndex += 1
         state.stage = stages[currentIndex]
         state.nextAction = stages.indices.contains(currentIndex + 1) ? stages[currentIndex + 1].title : nil

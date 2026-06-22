@@ -37,6 +37,10 @@ INSTALLER_KILLSWITCH_MODE=false
 DISK_SNAPSHOT_MODE=false
 DISK_DIFF_MODE=false
 RECOVERY_SURVIVAL_MODE=false
+GATE_ENFORCEMENT_MODE=false
+FINISH_GATE_MODE=false
+HELPER_GATE_MODE=false
+WIZARD_GATE_MODE=false
 MACOS_RESTORE_MODE=false
 RECOVERY_SCREEN_MODE=false
 SAFE_MODE_MODE=false
@@ -98,6 +102,10 @@ show_help() {
   echo "  --disk-snapshot     Inspect disk snapshot tooling readiness"
   echo "  --disk-diff         Inspect disk diff tooling readiness"
   echo "  --recovery-survival Inspect recovery survival tooling readiness"
+  echo "  --gate-enforcement  Inspect gate enforcement tooling readiness"
+  echo "  --finish-gate       Inspect finish gate readiness"
+  echo "  --helper-gate       Inspect helper gate readiness"
+  echo "  --wizard-gate       Inspect wizard gate readiness"
   echo "  --help              Show this help message"
 }
 
@@ -144,6 +152,10 @@ while [ $# -gt 0 ]; do
     --disk-snapshot) DISK_SNAPSHOT_MODE=true; shift ;;
     --disk-diff) DISK_DIFF_MODE=true; shift ;;
     --recovery-survival) RECOVERY_SURVIVAL_MODE=true; shift ;;
+    --gate-enforcement) GATE_ENFORCEMENT_MODE=true; shift ;;
+    --finish-gate) FINISH_GATE_MODE=true; shift ;;
+    --helper-gate) HELPER_GATE_MODE=true; shift ;;
+    --wizard-gate) WIZARD_GATE_MODE=true; shift ;;
     --base-readiness) BASE_READINESS_MODE=true; shift ;;
     --seed) SEED_MODE=true; shift ;;
     --resume) RESUME_MODE=true; shift ;;
@@ -1207,6 +1219,52 @@ elif [ "$RECOVERY_SURVIVAL_MODE" = true ]; then
       print_result FAIL "Recovery survival asset missing: $file"
     fi
   done
+
+elif [ "$GATE_ENFORCEMENT_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  for file in \
+    scripts/cidre-app-gate-evaluate \
+    scripts/cidre-app-gate-state \
+    scripts/cidre-app-gate-report \
+    scripts/cidre-app-finish-gate \
+    scripts/cidre-app-wizard-gate \
+    scripts/cidre-app-helper-gate \
+    scripts/cidre-app-rollback-report-check \
+    scripts/cidre-app-boot-safety-fixture-check \
+    docs/boot-safety-gate-enforcement.md \
+    docs/before-shutdown-enforcement.md \
+    docs/helper-gate-enforcement.md \
+    docs/wizard-gate-enforcement.md; do
+    if [ -f "$REPO_ROOT/$file" ] && { [ -x "$REPO_ROOT/$file" ] || [ "${file#scripts/}" = "$file" ]; }; then
+      print_result OK "Gate enforcement asset present: $file"
+    else
+      print_result FAIL "Gate enforcement asset missing: $file"
+    fi
+  done
+
+elif [ "$FINISH_GATE_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  if "$REPO_ROOT/scripts/cidre-app-finish-gate" --json >/dev/null 2>&1; then
+    print_result OK "Finish gate command works"
+  else
+    print_result WARN "Finish gate currently blocks completion"
+  fi
+
+elif [ "$HELPER_GATE_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  if "$REPO_ROOT/scripts/cidre-app-helper-gate" --operation partition-create --json >/dev/null 2>&1; then
+    print_result OK "Helper gate command works"
+  else
+    print_result WARN "Helper gate currently blocks mutation"
+  fi
+
+elif [ "$WIZARD_GATE_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  if "$REPO_ROOT/scripts/cidre-app-wizard-gate" --from disk-planning --to install-execution --json >/dev/null 2>&1; then
+    print_result OK "Wizard gate command works"
+  else
+    print_result WARN "Wizard gate currently blocks progression"
+  fi
 
 elif [ "$RECOVERY_SCREEN_MODE" = true ] || [ "$SAFE_MODE_MODE" = true ]; then
   RECOVERY_STATE_DIR="${HOME}/.local/state/cidre/recovery-screen/current"

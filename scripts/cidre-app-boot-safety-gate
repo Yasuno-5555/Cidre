@@ -19,6 +19,7 @@ mkdir -p "$CURRENT_DIR" "$SNAPSHOT_DIR"
 
 killswitch_json="$("$SCRIPT_DIR/cidre-app-installer-killswitch" --status --json)"
 recovery_json="$("$SCRIPT_DIR/cidre-app-recovery-survival-check" --json 2>/dev/null || true)"
+rollback_json="$("$SCRIPT_DIR/cidre-app-rollback-report-check" --json 2>/dev/null || true)"
 
 before_snapshot="$(find "$SNAPSHOT_DIR" -type f -name '*before*.json' | sort | tail -n 1 || true)"
 after_snapshot="$(find "$SNAPSHOT_DIR" -type f -name '*after*.json' | sort | tail -n 1 || true)"
@@ -30,12 +31,12 @@ if [ -n "$before_snapshot" ] && [ -n "$after_snapshot" ]; then
 fi
 
 incident_json_path="$REPO_ROOT/.local/state/cidre/incidents/DFU_RESTORE_001/report.json"
-python3 - "$CURRENT_DIR/boot-safety-state.json" "$json_mode" "$killswitch_json" "$recovery_json" "$guard_json" "$diff_json" "$before_snapshot" "$after_snapshot" "$incident_json_path" <<'PY'
+python3 - "$CURRENT_DIR/boot-safety-state.json" "$json_mode" "$killswitch_json" "$recovery_json" "$guard_json" "$diff_json" "$before_snapshot" "$after_snapshot" "$incident_json_path" "$rollback_json" <<'PY'
 import json
 import os
 import sys
 
-state_file, json_mode, killswitch_raw, recovery_raw, guard_raw, diff_raw, before_snapshot, after_snapshot, incident_path = sys.argv[1:]
+state_file, json_mode, killswitch_raw, recovery_raw, guard_raw, diff_raw, before_snapshot, after_snapshot, incident_path, rollback_raw = sys.argv[1:]
 json_mode = json_mode == "true"
 
 def parse(raw):
@@ -51,6 +52,7 @@ killswitch = parse(killswitch_raw) or {}
 recovery = parse(recovery_raw) or {}
 guard = parse(guard_raw) or {}
 diff = parse(diff_raw) or {}
+rollback = parse(rollback_raw) or {}
 
 checks = []
 blocked = []
@@ -64,6 +66,7 @@ def add_check(name, kind, ok, details):
 install_enabled = bool(killswitch.get("destructive_install_allowed"))
 add_check("installer-killswitch", "blocked", install_enabled, "Disk-changing install remains disabled by containment." if not install_enabled else "Disk-changing install test override enabled.")
 add_check("incident-report", "blocked", os.path.exists(incident_path), "DFU incident report is missing." if not os.path.exists(incident_path) else "DFU incident report exists.")
+add_check("rollback-report", "blocked", rollback.get("status") == "passed", rollback.get("summary") or "Rollback report missing.")
 add_check("before-snapshot", "blocked", bool(before_snapshot), "Missing pre-install disk snapshot." if not before_snapshot else before_snapshot)
 add_check("after-snapshot", "blocked", bool(after_snapshot), "Missing post-install disk snapshot." if not after_snapshot else after_snapshot)
 add_check("recovery-survival", "failed" if recovery.get("status") == "failed" else "blocked", recovery.get("status") == "passed", recovery.get("summary") or "Recovery survival state unavailable.")

@@ -1,4 +1,4 @@
-# Cidre (v0.35.2 Protected Partition Diff Validation Pack)
+# Cidre (v0.35.3 Boot Safety Gate Enforcement Pack)
 
 Cidre is an Apple Silicon Mac-oriented Linux experience layer built on ALARM (Arch Linux ARM) / Asahi Linux.
 
@@ -25,6 +25,9 @@ Cidre.app currently keeps disk-changing install flows disabled by default.
 v0.35.2 adds disk snapshot, APFS snapshot, protected Apple partition guard,
 pre/post disk diff, fixture validation, and recovery survival checks. These
 checks are required before destructive installer flows can ever be re-enabled.
+
+v0.35.3 promotes those checks into enforced gate conditions for helper
+execution, wizard progression, finish, restart, and shutdown.
 
 > [!IMPORTANT]
 > **Cidre is not a niri fork.**

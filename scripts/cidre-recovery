@@ -82,6 +82,11 @@ show_help() {
   echo "  recovery-survival-status Show recovery survival status"
   echo "  installer-killswitch-status Show installer containment switch status"
   echo "  boot-failure-report  Generate or refresh DFU incident report"
+  echo "  gate-status         Show integrated gate status"
+  echo "  finish-gate-status  Show finish gate status"
+  echo "  helper-gate-status  Show helper gate status"
+  echo "  wizard-gate-status  Show wizard gate status"
+  echo "  gate-report         Generate gate report"
 
   echo "  rescue-build         Build Rescue Slot overlay artifact"
   echo "  rescue-inspect       Inspect Rescue Slot overlay"
@@ -568,6 +573,21 @@ case "$CMD" in
     ;;
   installer-killswitch-status)
     exec "$(dirname "$0")/cidre-app-installer-killswitch" --status --json
+    ;;
+  gate-status)
+    exec "$(dirname "$0")/cidre-app-gate-evaluate" --scope install --json
+    ;;
+  finish-gate-status)
+    exec "$(dirname "$0")/cidre-app-finish-gate" --json
+    ;;
+  helper-gate-status)
+    exec "$(dirname "$0")/cidre-app-helper-gate" --operation partition-create --json
+    ;;
+  wizard-gate-status)
+    exec "$(dirname "$0")/cidre-app-wizard-gate" --from disk-planning --to install-execution --json
+    ;;
+  gate-report)
+    exec "$(dirname "$0")/cidre-app-gate-report" --json
     ;;
   boot-failure-report)
     exec "$(dirname "$0")/cidre-app-boot-failure-report" --incident DFU_RESTORE_001 --json

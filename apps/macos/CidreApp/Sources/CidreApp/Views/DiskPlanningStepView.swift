@@ -27,6 +27,10 @@ struct DiskPlanningStepView: View {
                 RecoverySurvivalView(state: mutation.recoverySurvivalState)
                 DiskSnapshotView(availability: mutation.snapshotAvailability)
                 DiskDiffSummaryView(state: mutation.diskDiffState)
+                BootSafetyGateEnforcementView(gateState: mutation.gateState)
+                if mutation.gateState?.status != "passed" {
+                    RollbackReportRequiredView()
+                }
 
                 Divider()
 
@@ -119,6 +123,14 @@ struct DiskPlanningStepView: View {
                         mutation.preview(repositoryPath: appVM.repositoryPath)
                     }
                     .disabled(!mutation.canPreview || mutation.isRunning)
+                }
+
+                if mutation.gateState?.status != "passed" {
+                    Text("Disk changes: Disabled")
+                        .font(.headline)
+                    Text("Reason: Installer killswitch is active or Boot Safety Gate has not passed.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
 
                 // ── Confirmation & Execute ────────────────────────────────

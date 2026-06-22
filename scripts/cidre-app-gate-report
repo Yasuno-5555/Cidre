@@ -1,0 +1,56 @@
+#!/bin/sh
+set -eu
+
+format="json"
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --json) format="json"; shift ;;
+    --markdown) format="markdown"; shift ;;
+    --help|-h) echo "Usage: cidre-app-gate-report [--json|--markdown]"; exit 0 ;;
+    *) echo "ERROR: unknown option: $1" >&2; exit 2 ;;
+  esac
+done
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+REPO_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+CURRENT_DIR="$REPO_ROOT/.local/state/cidre/boot-safety/current"
+mkdir -p "$CURRENT_DIR"
+gate_json="$("$SCRIPT_DIR/cidre-app-gate-evaluate" --scope install --json 2>/dev/null || true)"
+
+python3 - "$CURRENT_DIR" "$format" "$gate_json" <<'PY'
+import json
+import os
+import sys
+
+current_dir, fmt, gate_raw = sys.argv[1:]
+gate = json.loads(gate_raw) if gate_raw.strip() else {"status": "unknown", "summary": "Gate state unavailable.", "checks": []}
+report_json = os.path.join(current_dir, "gate-report.json")
+report_md = os.path.join(current_dir, "gate-report.md")
+with open(report_json, "w", encoding="utf-8") as handle:
+    json.dump(gate, handle, indent=2)
+    handle.write("\n")
+with open(report_md, "w", encoding="utf-8") as handle:
+    handle.write("# Gate Report\n\n")
+    handle.write(f"- Status: `{gate.get('status')}`\n")
+    handle.write(f"- Summary: {gate.get('summary')}\n")
+    checks = gate.get("checks") or []
+    if checks:
+        handle.write("\n## Checks\n")
+        for item in checks:
+            handle.write(f"- `{item.get('id')}`: `{item.get('status')}`")
+            if item.get("reason"):
+                handle.write(f" - {item.get('reason')}")
+            handle.write("\n")
+payload = {
+    "schema_version": 1,
+    "command": "cidre-app-gate-report",
+    "status": "passed",
+    "summary": "Gate report generated.",
+    "report_json": report_json,
+    "report_markdown": report_md,
+}
+if fmt == "markdown":
+    print(report_md)
+else:
+    print(json.dumps(payload, indent=2))
+PY

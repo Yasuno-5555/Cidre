@@ -1,0 +1,29 @@
+#!/bin/sh
+set -eu
+json_mode=false
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --json) json_mode=true; shift ;;
+    --help|-h) echo "Usage: cidre-app-finish-gate [--json]"; exit 0 ;;
+    *) echo "ERROR: unknown option: $1" >&2; exit 2 ;;
+  esac
+done
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+result="$("$SCRIPT_DIR/cidre-app-gate-evaluate" --scope finish --json)"
+python3 - "$json_mode" "$result" <<'PY'
+import json, sys
+json_mode = sys.argv[1] == "true"
+gate = json.loads(sys.argv[2])
+payload = {
+    "schema_version": 1,
+    "command": "cidre-app-finish-gate",
+    "status": "passed" if gate.get("status") == "passed" else "blocked",
+    "summary": "Finish is allowed." if gate.get("status") == "passed" else "Cidre cannot finish setup yet.",
+    "blocked_actions": gate.get("blocked_actions", ["finish", "restart", "shutdown"]),
+    "checks": gate.get("checks", []),
+    "exit_code": 0 if gate.get("status") == "passed" else 8,
+}
+print(json.dumps(payload, indent=2) if json_mode else payload["summary"])
+sys.exit(payload["exit_code"])
+PY
