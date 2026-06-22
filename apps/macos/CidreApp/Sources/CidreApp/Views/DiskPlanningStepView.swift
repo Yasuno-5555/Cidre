@@ -7,31 +7,111 @@ struct DiskPlanningStepView: View {
     var body: some View {
         WizardStepContainerView(
             title: "Disk Plan",
-            bodyText: "Create a new APFS partition from an existing APFS container. The plan is validated before macOS requests administrator authentication."
+            bodyText: "Create a new APFS partition from the macOS APFS container. Choose how much space to allocate, then validate and execute with administrator authentication."
         ) {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Keep a current backup, connect power, and close disk-intensive applications before continuing.")
-                    .foregroundColor(.orange)
+            VStack(alignment: .leading, spacing: 16) {
 
-                HStack {
-                    TextField("APFS container, e.g. disk3s2", text: $mutation.target)
-                    TextField("Container after resize, e.g. 350G", text: $mutation.containerSize)
+                // ── Warning ──────────────────────────────────────────────
+                Label("Keep a current backup and connect power before continuing.", systemImage: "exclamationmark.triangle.fill")
+                    .foregroundColor(.orange)
+                    .font(.callout)
+
+                Divider()
+
+                // ── Target ───────────────────────────────────────────────
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("macOS Physical Store")
+                        .font(.headline)
+                    HStack {
+                        TextField("e.g. disk0s2", text: $mutation.target)
+                            .frame(maxWidth: 160)
+                            .onChange(of: mutation.target) { _ in mutation.fetchLimits() }
+                        if let limits = mutation.limitsInfo,
+                           let currentBytes = limits["current_bytes"] as? Int {
+                            Text("Current: \(formatGB(currentBytes))")
+                                .foregroundColor(.secondary)
+                                .font(.callout)
+                        }
+                    }
                 }
-                HStack {
-                    TextField("New partition size, e.g. 80G", text: $mutation.partitionSize)
-                    TextField("New volume name", text: $mutation.volumeName)
+
+                Divider()
+
+                // ── Partition Mode ────────────────────────────────────────
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Cidre Partition Size")
+                        .font(.headline)
+
+                    HStack(spacing: 8) {
+                        ForEach(PartitionMode.allCases, id: \.self) { mode in
+                            Button(action: { mutation.partitionMode = mode }) {
+                                VStack(spacing: 2) {
+                                    Text(mode.label)
+                                        .font(.system(.body, design: .rounded).weight(.semibold))
+                                    if let badge = modeBadge(mode) {
+                                        Text(badge)
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                                .background(mutation.partitionMode == mode ? Color.accentColor.opacity(0.15) : Color.clear)
+                                .cornerRadius(8)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(mutation.partitionMode == mode ? Color.accentColor : Color.secondary.opacity(0.4), lineWidth: 1.5)
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+
+                    Text(mutation.partitionMode.description)
+                        .font(.callout)
+                        .foregroundColor(.secondary)
                 }
-                HStack {
+
+                // ── Custom size inputs ────────────────────────────────────
+                if mutation.partitionMode == .custom {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("macOS container size after resize")
+                                    .font(.caption).foregroundColor(.secondary)
+                                TextField("e.g. 350G", text: $mutation.containerSize)
+                            }
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("New Cidre partition size")
+                                    .font(.caption).foregroundColor(.secondary)
+                                TextField("e.g. 80G", text: $mutation.partitionSize)
+                            }
+                        }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Volume name")
+                                .font(.caption).foregroundColor(.secondary)
+                            TextField("Cidre", text: $mutation.volumeName)
+                                .frame(maxWidth: 200)
+                        }
+                    }
+                }
+
+                // ── Actions ───────────────────────────────────────────────
+                HStack(spacing: 8) {
                     Button("Create Plan") {
                         mutation.createPlan(repositoryPath: appVM.repositoryPath)
                     }
+                    .disabled(mutation.target.isEmpty || mutation.isRunning)
+
                     Button("Validate Preview") {
                         mutation.preview(repositoryPath: appVM.repositoryPath)
                     }
                     .disabled(!mutation.canPreview || mutation.isRunning)
                 }
 
+                // ── Confirmation & Execute ────────────────────────────────
                 if let phrase = mutation.requiredConfirmation {
+                    Divider()
                     WizardConfirmationView(prompt: "Type exactly: \(phrase)", text: $mutation.confirmation)
                     Button("Authenticate and Modify Disk", role: .destructive) {
                         mutation.execute(repositoryPath: appVM.repositoryPath)
@@ -45,5 +125,24 @@ struct DiskPlanningStepView: View {
         .onAppear {
             mutation.detectStartupStore()
         }
+    }
+
+    private func modeBadge(_ mode: PartitionMode) -> String? {
+        guard let limits = mutation.limitsInfo else { return nil }
+        switch mode {
+        case .max:
+            if let bytes = limits["max_partition_bytes"] as? Int { return formatGB(bytes) }
+        case .auto:
+            if let bytes = limits["auto_partition_bytes"] as? Int { return formatGB(bytes) }
+        case .min:
+            return "20.0 GB"
+        case .custom:
+            return nil
+        }
+        return nil
+    }
+
+    private func formatGB(_ bytes: Int) -> String {
+        String(format: "%.1f GB", Double(bytes) / 1_000_000_000)
     }
 }
