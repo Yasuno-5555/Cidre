@@ -1,0 +1,93 @@
+#!/bin/sh
+set -eu
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+REPO_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+CURRENT_DIR="$REPO_ROOT/.local/state/cidre/boot-safety/current"
+SNAPSHOT_DIR="$REPO_ROOT/.local/state/cidre/boot-safety/snapshots"
+json_mode=false
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --json) json_mode=true; shift ;;
+    --help|-h) echo "Usage: cidre-app-boot-safety-gate [--json]"; exit 0 ;;
+    *) echo "ERROR: unknown option: $1" >&2; exit 2 ;;
+  esac
+done
+
+mkdir -p "$CURRENT_DIR" "$SNAPSHOT_DIR"
+
+killswitch_json="$("$SCRIPT_DIR/cidre-app-installer-killswitch" --status --json)"
+recovery_json="$("$SCRIPT_DIR/cidre-app-recovery-survival-check" --json 2>/dev/null || true)"
+
+before_snapshot="$(find "$SNAPSHOT_DIR" -type f -name '*before*.json' | sort | tail -n 1 || true)"
+after_snapshot="$(find "$SNAPSHOT_DIR" -type f -name '*after*.json' | sort | tail -n 1 || true)"
+guard_json=""
+diff_json=""
+if [ -n "$before_snapshot" ] && [ -n "$after_snapshot" ]; then
+  guard_json="$("$SCRIPT_DIR/cidre-app-protected-partition-guard" --before "$before_snapshot" --after "$after_snapshot" --json 2>/dev/null || true)"
+  diff_json="$("$SCRIPT_DIR/cidre-app-prepost-disk-diff" --before "$before_snapshot" --after "$after_snapshot" --json 2>/dev/null || true)"
+fi
+
+incident_json_path="$REPO_ROOT/.local/state/cidre/incidents/DFU_RESTORE_001/report.json"
+python3 - "$CURRENT_DIR/boot-safety-state.json" "$json_mode" "$killswitch_json" "$recovery_json" "$guard_json" "$diff_json" "$before_snapshot" "$after_snapshot" "$incident_json_path" <<'PY'
+import json
+import os
+import sys
+
+state_file, json_mode, killswitch_raw, recovery_raw, guard_raw, diff_raw, before_snapshot, after_snapshot, incident_path = sys.argv[1:]
+json_mode = json_mode == "true"
+
+def parse(raw):
+    raw = (raw or "").strip()
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except Exception:
+        return None
+
+killswitch = parse(killswitch_raw) or {}
+recovery = parse(recovery_raw) or {}
+guard = parse(guard_raw) or {}
+diff = parse(diff_raw) or {}
+
+errors = []
+checks = []
+
+def add_check(name, ok, details):
+    checks.append({"name": name, "ok": ok, "details": details})
+    if not ok:
+        errors.append({"code": name, "message": details})
+
+install_enabled = bool(killswitch.get("destructive_install_allowed"))
+add_check("installer-killswitch", install_enabled, "Disk-changing install remains disabled by containment." if not install_enabled else "Disk-changing install test override enabled.")
+add_check("recovery-survival", recovery.get("status") == "pass", recovery.get("summary") or "Recovery survival state unavailable.")
+add_check("incident-report", os.path.exists(incident_path), "DFU incident report is missing." if not os.path.exists(incident_path) else "DFU incident report exists.")
+add_check("before-snapshot", bool(before_snapshot), "Missing pre-install disk snapshot." if not before_snapshot else before_snapshot)
+add_check("after-snapshot", bool(after_snapshot), "Missing post-install disk snapshot." if not after_snapshot else after_snapshot)
+add_check("protected-partition-guard", guard.get("status") == "pass", guard.get("summary") or "Protected partition guard has not passed.")
+add_check("prepost-disk-diff", diff.get("status") == "pass", diff.get("summary") or "Disk diff has not passed.")
+
+status = "pass" if not errors else "blocked"
+payload = {
+    "schema_version": 1,
+    "command": "cidre-app-boot-safety-gate",
+    "status": status,
+    "summary": "Boot safety gate passed." if not errors else "Boot safety gate blocked install completion.",
+    "phase": "safety",
+    "stage": "boot-safety-gate",
+    "exit_code": 0 if not errors else 4,
+    "warnings": [] if not errors else ["Finish, restart, and shutdown should remain blocked."],
+    "errors": errors,
+    "checks": checks,
+    "shutdown_allowed": not errors,
+}
+
+with open(state_file, "w", encoding="utf-8") as handle:
+    json.dump(payload, handle, indent=2)
+    handle.write("\n")
+
+print(json.dumps(payload, indent=2) if json_mode else payload["summary"])
+sys.exit(payload["exit_code"])
+PY

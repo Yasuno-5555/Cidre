@@ -50,9 +50,11 @@ case "$operation" in
     artifacts="$STATE_DIR"
     ;;
   post-install-verify)
-    summary="Post-install verification plan completed."
-    op_status="pass"
-    artifacts="$STATE_DIR/setup-report.json"
+    if [ "$json_mode" = true ]; then
+      exec "$SCRIPT_DIR/cidre-app-boot-safety-gate" --json
+    else
+      exec "$SCRIPT_DIR/cidre-app-boot-safety-gate"
+    fi
     ;;
   post-uninstall-verify)
     summary="Post-uninstall verification plan completed."

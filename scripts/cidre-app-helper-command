@@ -43,6 +43,30 @@ mkdir -p "$STATE_DIR"
 request_file="$(mktemp /tmp/cidre-helper-request.XXXXXX.json)"
 trap 'rm -f "$request_file"' EXIT HUP INT TERM
 
+if [ "$operation" = "partition-create" ] || [ "$operation" = "apfs-resize-container" ]; then
+  killswitch_json="$("$SCRIPT_DIR/cidre-app-installer-killswitch" --status --json)"
+  destructive_allowed="$(printf '%s\n' "$killswitch_json" | python3 -c 'import json,sys; print(str(json.load(sys.stdin).get("destructive_install_allowed", False)).lower())')"
+  if [ "$destructive_allowed" != "true" ]; then
+    python3 - "$json_mode" <<'PY'
+import json
+import sys
+payload = {
+    "schema_version": 1,
+    "command": "cidre-app-helper-command",
+    "status": "blocked",
+    "summary": "Disk-changing install is disabled by DFU incident containment.",
+    "phase": "disk",
+    "stage": "execute",
+    "exit_code": 4,
+    "warnings": ["Enable the installer test override only after implementing and validating the full boot safety gate pack."],
+    "errors": [{"code": "installer-killswitch-disabled", "message": "Disk-changing install is disabled by DFU incident containment."}],
+}
+print(json.dumps(payload, indent=2) if sys.argv[1] == "true" else payload["summary"])
+sys.exit(4)
+PY
+  fi
+fi
+
 arguments_json="$(python3 - "$operation" "$container_size" "$volume_name" "$partition_size" <<'PY'
 import json, sys
 operation, container_size, volume_name, partition_size = sys.argv[1:]

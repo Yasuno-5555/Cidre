@@ -73,6 +73,11 @@ show_help() {
   echo "  app-build-check      Run app build validation"
   echo "  app-runtime-report   Generate app runtime validation report"
   echo "  app-runtime-logs     Collect app runtime logs"
+  echo "  dfu-incident-status  Show DFU incident containment status"
+  echo "  boot-safety-status   Show boot safety gate status"
+  echo "  protected-partition-check Show protected partition guard status"
+  echo "  installer-killswitch-status Show installer containment switch status"
+  echo "  boot-failure-report  Generate or refresh DFU incident report"
 
   echo "  rescue-build         Build Rescue Slot overlay artifact"
   echo "  rescue-inspect       Inspect Rescue Slot overlay"
@@ -522,6 +527,26 @@ case "$CMD" in
     ;;
   app-runtime-logs)
     exec "$(dirname "$0")/cidre-app-runtime-log-collect" "$@"
+    ;;
+  dfu-incident-status)
+    exec "$(dirname "$0")/cidre-app-boot-failure-report" --incident DFU_RESTORE_001 --json
+    ;;
+  boot-safety-status)
+    exec "$(dirname "$0")/cidre-app-boot-safety-gate" --json
+    ;;
+  protected-partition-check)
+    latest_after="$(find "$(dirname "$0")/../.local/state/cidre/boot-safety/snapshots" -type f -name '*.json' 2>/dev/null | sort | tail -n 1 || true)"
+    if [ -z "$latest_after" ]; then
+      echo "No disk snapshot found yet." >&2
+      exit 4
+    fi
+    exec "$(dirname "$0")/cidre-app-protected-partition-guard" --snapshot "$latest_after" --json
+    ;;
+  installer-killswitch-status)
+    exec "$(dirname "$0")/cidre-app-installer-killswitch" --status --json
+    ;;
+  boot-failure-report)
+    exec "$(dirname "$0")/cidre-app-boot-failure-report" --incident DFU_RESTORE_001 --json
     ;;
 
   rescue-build)

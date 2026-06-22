@@ -1,0 +1,100 @@
+#!/bin/sh
+set -eu
+
+before=""
+after=""
+json_mode=false
+
+usage() {
+  echo "Usage: cidre-app-prepost-disk-diff --before <file> --after <file> [--json]"
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --before) before="$2"; shift 2 ;;
+    --after) after="$2"; shift 2 ;;
+    --json) json_mode=true; shift ;;
+    --help|-h) usage; exit 0 ;;
+    *) echo "ERROR: unknown option: $1" >&2; usage; exit 2 ;;
+  esac
+done
+
+[ -n "$before" ] || { echo "ERROR: --before is required" >&2; exit 2; }
+[ -n "$after" ] || { echo "ERROR: --after is required" >&2; exit 2; }
+
+python3 - "$before" "$after" "$json_mode" <<'PY'
+import json
+import sys
+
+before_path, after_path, json_mode = sys.argv[1:]
+json_mode = json_mode == "true"
+
+def load(path):
+    with open(path, "r", encoding="utf-8") as handle:
+        return json.load(handle)
+
+def partition_map(snapshot):
+    return {p.get("device_identifier"): p for p in snapshot.get("partitions", []) if p.get("device_identifier")}
+
+def protected_ids(snapshot):
+    ids = set(snapshot.get("root_identifiers") or [])
+    for part in snapshot.get("partitions", []):
+        identifier = part.get("device_identifier")
+        content = (part.get("content") or "").lower()
+        name = (part.get("volume_name") or "").lower()
+        roles = [str(item).lower() for item in (part.get("roles") or [])]
+        if (
+            identifier in ids
+            or "recovery" in content
+            or "recovery" in name
+            or "preboot" in name
+            or "preboot" in roles
+            or "recovery" in roles
+            or "apple_" in content and "linux" not in content
+        ):
+            ids.add(identifier)
+    return ids
+
+before = load(before_path)
+after = load(after_path)
+before_parts = partition_map(before)
+after_parts = partition_map(after)
+protected = protected_ids(before) | protected_ids(after)
+
+added = sorted(set(after_parts) - set(before_parts))
+removed = sorted(set(before_parts) - set(after_parts))
+changed = sorted(
+    identifier
+    for identifier in (set(before_parts) & set(after_parts))
+    if before_parts[identifier] != after_parts[identifier]
+)
+
+unexpected = []
+allowed = []
+for identifier in added + removed + changed:
+    if identifier in protected:
+        unexpected.append(identifier)
+    else:
+        allowed.append(identifier)
+
+payload = {
+    "schema_version": 1,
+    "command": "cidre-app-prepost-disk-diff",
+    "status": "pass" if not unexpected else "failed",
+    "summary": "Disk diff contains only non-protected changes." if not unexpected else "Disk diff detected protected partition changes.",
+    "phase": "safety",
+    "stage": "prepost-disk-diff",
+    "exit_code": 0 if not unexpected else 4,
+    "warnings": [],
+    "errors": [] if not unexpected else [{"code": "protected-partition-change", "message": item} for item in unexpected],
+    "added_identifiers": added,
+    "removed_identifiers": removed,
+    "changed_identifiers": changed,
+    "unexpected_protected_changes": unexpected,
+    "allowed_target_changes": allowed,
+    "blocked_reasons": [] if not unexpected else ["protected partition changed"],
+}
+
+print(json.dumps(payload, indent=2) if json_mode else payload["summary"])
+sys.exit(payload["exit_code"])
+PY

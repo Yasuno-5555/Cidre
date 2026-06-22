@@ -1,0 +1,125 @@
+#!/bin/sh
+set -eu
+
+before=""
+after=""
+snapshot=""
+json_mode=false
+
+usage() {
+  echo "Usage: cidre-app-protected-partition-guard (--snapshot <file> | --before <file> --after <file>) [--json]"
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --before) before="$2"; shift 2 ;;
+    --after) after="$2"; shift 2 ;;
+    --snapshot) snapshot="$2"; shift 2 ;;
+    --json) json_mode=true; shift ;;
+    --help|-h) usage; exit 0 ;;
+    *) echo "ERROR: unknown option: $1" >&2; usage; exit 2 ;;
+  esac
+done
+
+python3 - "$before" "$after" "$snapshot" "$json_mode" <<'PY'
+import json
+import sys
+
+before_path, after_path, snapshot_path, json_mode = sys.argv[1:]
+json_mode = json_mode == "true"
+
+def load(path):
+    with open(path, "r", encoding="utf-8") as handle:
+        return json.load(handle)
+
+def classify(snapshot):
+    root_ids = set(snapshot.get("root_identifiers") or [])
+    protected = {}
+    for part in snapshot.get("partitions", []):
+        identifier = part.get("device_identifier")
+        if not identifier:
+            continue
+        content = (part.get("content") or "").lower()
+        name = (part.get("volume_name") or "").lower()
+        roles = [str(item).lower() for item in (part.get("roles") or [])]
+        is_protected = (
+            identifier in root_ids
+            or "recovery" in content
+            or "recovery" in name
+            or "preboot" in name
+            or "vm" == name
+            or "preboot" in roles
+            or "recovery" in roles
+            or "apple_apfs_isc" in content
+            or "apple_" in content and "linux" not in content
+        )
+        if is_protected:
+            protected[identifier] = {
+                "content": part.get("content"),
+                "volume_name": part.get("volume_name"),
+                "size": part.get("size"),
+                "roles": part.get("roles") or [],
+            }
+    return protected
+
+def recovery_present(snapshot):
+    for part in snapshot.get("partitions", []):
+        content = (part.get("content") or "").lower()
+        name = (part.get("volume_name") or "").lower()
+        if "apple_apfs_recovery" in content or "recovery" in name:
+            return True
+    return False
+
+if snapshot_path:
+    snap = load(snapshot_path)
+    protected = classify(snap)
+    failures = []
+    if not recovery_present(snap):
+        failures.append("apple-recovery-missing")
+    status = "pass" if not failures else "failed"
+    summary = "Protected partitions look intact." if not failures else "Protected partition guard failed."
+    payload = {
+        "schema_version": 1,
+        "command": "cidre-app-protected-partition-guard",
+        "status": status,
+        "summary": summary,
+        "phase": "safety",
+        "stage": "protected-partition-guard",
+        "exit_code": 0 if not failures else 4,
+        "warnings": [],
+        "errors": [{"code": code, "message": code.replace("-", " ")} for code in failures],
+        "protected_partitions": protected,
+    }
+else:
+    before = load(before_path)
+    after = load(after_path)
+    before_protected = classify(before)
+    after_protected = classify(after)
+    failures = []
+    if not recovery_present(after):
+        failures.append("apple-recovery-missing")
+    for identifier, baseline in before_protected.items():
+        current = after_protected.get(identifier)
+        if current is None:
+            failures.append(f"protected-partition-missing:{identifier}")
+            continue
+        if baseline != current:
+            failures.append(f"protected-partition-changed:{identifier}")
+    status = "pass" if not failures else "failed"
+    payload = {
+        "schema_version": 1,
+        "command": "cidre-app-protected-partition-guard",
+        "status": status,
+        "summary": "Protected partitions unchanged." if not failures else "Protected partition guard detected unsafe changes.",
+        "phase": "safety",
+        "stage": "protected-partition-guard",
+        "exit_code": 0 if not failures else 4,
+        "warnings": [],
+        "errors": [{"code": code.split(":")[0], "message": code} for code in failures],
+        "before_protected_partitions": before_protected,
+        "after_protected_partitions": after_protected,
+    }
+
+print(json.dumps(payload, indent=2) if json_mode else payload["summary"])
+sys.exit(payload["exit_code"])
+PY

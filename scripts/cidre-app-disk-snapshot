@@ -1,0 +1,160 @@
+#!/bin/sh
+set -eu
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+REPO_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+SNAPSHOT_DIR="$REPO_ROOT/.local/state/cidre/boot-safety/snapshots"
+
+label=""
+json_mode=false
+
+usage() {
+  echo "Usage: cidre-app-disk-snapshot --label <name> [--json]"
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --label)
+      [ "$#" -ge 2 ] || { echo "ERROR: --label requires a value" >&2; exit 2; }
+      label="$2"
+      shift 2
+      ;;
+    --json) json_mode=true; shift ;;
+    --help|-h) usage; exit 0 ;;
+    *) echo "ERROR: unknown option: $1" >&2; usage; exit 2 ;;
+  esac
+done
+
+[ -n "$label" ] || { echo "ERROR: --label is required" >&2; exit 2; }
+
+if [ "$(uname -s)" != "Darwin" ]; then
+  python3 - "$json_mode" <<'PY'
+import json
+import sys
+payload = {
+    "schema_version": 1,
+    "command": "cidre-app-disk-snapshot",
+    "status": "blocked",
+    "summary": "Disk snapshot requires macOS diskutil access.",
+    "phase": "safety",
+    "stage": "disk-snapshot",
+    "exit_code": 4,
+    "warnings": [],
+    "errors": [{"code": "requires-macos", "message": "Disk snapshot requires macOS diskutil access."}],
+}
+print(json.dumps(payload, indent=2) if sys.argv[1] == "true" else payload["summary"])
+sys.exit(4)
+PY
+fi
+
+mkdir -p "$SNAPSHOT_DIR"
+timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
+snapshot_file="$SNAPSHOT_DIR/${timestamp}-${label}.json"
+
+python3 - "$snapshot_file" "$label" "$json_mode" <<'PY'
+import json
+import os
+import plistlib
+import subprocess
+import sys
+from datetime import datetime, timezone
+
+snapshot_file, label, json_mode = sys.argv[1:]
+json_mode = json_mode == "true"
+
+def run_diskutil(*args):
+    completed = subprocess.run(["/usr/sbin/diskutil", *args], check=True, capture_output=True)
+    return plistlib.loads(completed.stdout)
+
+disk_list = run_diskutil("list", "-plist")
+apfs_list = run_diskutil("apfs", "list", "-plist")
+root_info = run_diskutil("info", "-plist", "/")
+
+role_map = {}
+for container in apfs_list.get("Containers", []):
+    for volume in container.get("Volumes", []):
+        identifier = volume.get("DeviceIdentifier")
+        if identifier:
+            role_map[identifier] = {
+                "roles": volume.get("Roles") or [],
+                "volume_name": volume.get("Name"),
+                "container_reference": container.get("ContainerReference"),
+            }
+
+partitions = []
+
+def walk(entries, parent=None):
+    for entry in entries:
+        identifier = entry.get("DeviceIdentifier")
+        merged = dict(entry)
+        merged.update(role_map.get(identifier, {}))
+        partitions.append({
+            "device_identifier": identifier,
+            "content": merged.get("Content"),
+            "volume_name": merged.get("VolumeName") or merged.get("volume_name") or merged.get("MediaName"),
+            "size": merged.get("Size"),
+            "container_reference": merged.get("APFSContainerReference") or merged.get("container_reference"),
+            "roles": merged.get("roles") or [],
+            "parent_whole_disk": merged.get("ParentWholeDisk") or parent,
+        })
+        children = entry.get("Partitions") or []
+        if children:
+            walk(children, entry.get("DeviceIdentifier") or parent)
+
+walk(disk_list.get("AllDisksAndPartitions", []))
+
+payload = {
+    "schema_version": 1,
+    "command": "cidre-app-disk-snapshot",
+    "snapshot_version": 1,
+    "label": label,
+    "captured_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+    "host_os": "Darwin",
+    "partitions": partitions,
+    "root_identifiers": sorted({
+        value
+        for key, value in root_info.items()
+        if key in {"APFSContainerReference", "DeviceIdentifier", "ParentWholeDisk", "VolumeUUID", "APFSVolumeGroupUUID"}
+        and isinstance(value, str)
+    } | {
+        item.get("APFSPhysicalStore")
+        for item in root_info.get("APFSPhysicalStores", [])
+        if isinstance(item, dict) and item.get("APFSPhysicalStore")
+    }),
+    "startup_disk": {
+        "container_reference": root_info.get("APFSContainerReference"),
+        "mount_point": root_info.get("MountPoint"),
+        "physical_stores": [
+            item.get("APFSPhysicalStore")
+            for item in root_info.get("APFSPhysicalStores", [])
+            if isinstance(item, dict) and item.get("APFSPhysicalStore")
+        ],
+    },
+    "raw": {
+        "diskutil_list": disk_list,
+        "diskutil_apfs_list": apfs_list,
+        "diskutil_info_root": root_info,
+    },
+}
+
+os.makedirs(os.path.dirname(snapshot_file), exist_ok=True)
+with open(snapshot_file, "w", encoding="utf-8") as handle:
+    json.dump(payload, handle, indent=2)
+    handle.write("\n")
+
+result = {
+    "schema_version": 1,
+    "command": "cidre-app-disk-snapshot",
+    "status": "pass",
+    "summary": "Disk snapshot captured.",
+    "phase": "safety",
+    "stage": "disk-snapshot",
+    "exit_code": 0,
+    "warnings": [],
+    "errors": [],
+    "snapshot_file": snapshot_file,
+    "label": label,
+}
+
+print(json.dumps(result, indent=2) if json_mode else snapshot_file)
+PY

@@ -30,6 +30,10 @@ INTERFACE_MODE=false
 APP_PROTOTYPE_MODE=false
 APP_GUIDED_UI_MODE=false
 APP_RUNTIME_MODE=false
+DFU_INCIDENT_MODE=false
+BOOT_SAFETY_MODE=false
+PROTECTED_PARTITIONS_MODE=false
+INSTALLER_KILLSWITCH_MODE=false
 MACOS_RESTORE_MODE=false
 RECOVERY_SCREEN_MODE=false
 SAFE_MODE_MODE=false
@@ -84,6 +88,10 @@ show_help() {
   echo "  --app-prototype     Inspect app prototype readiness"
   echo "  --app-guided-ui     Inspect app guided action UI readiness"
   echo "  --app-runtime       Inspect app runtime validation readiness"
+  echo "  --dfu-incident      Inspect DFU incident containment reporting"
+  echo "  --boot-safety       Inspect boot safety gate readiness"
+  echo "  --protected-partitions Inspect protected partition guard readiness"
+  echo "  --installer-killswitch Inspect installer containment switch status"
   echo "  --help              Show this help message"
 }
 
@@ -123,6 +131,10 @@ while [ $# -gt 0 ]; do
     --app-prototype) APP_PROTOTYPE_MODE=true; shift ;;
     --app-guided-ui) APP_GUIDED_UI_MODE=true; shift ;;
     --app-runtime) APP_RUNTIME_MODE=true; shift ;;
+    --dfu-incident) DFU_INCIDENT_MODE=true; shift ;;
+    --boot-safety) BOOT_SAFETY_MODE=true; shift ;;
+    --protected-partitions) PROTECTED_PARTITIONS_MODE=true; shift ;;
+    --installer-killswitch) INSTALLER_KILLSWITCH_MODE=true; shift ;;
     --base-readiness) BASE_READINESS_MODE=true; shift ;;
     --seed) SEED_MODE=true; shift ;;
     --resume) RESUME_MODE=true; shift ;;
@@ -1093,6 +1105,68 @@ elif [ "$APP_RUNTIME_MODE" = true ]; then
     print_result OK "App runtime state dir exists or is creatable"
   else
     print_result FAIL "App runtime state dir is not writable"
+  fi
+
+elif [ "$DFU_INCIDENT_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  if [ -f "$REPO_ROOT/docs/incidents/DFU_RESTORE_001.md" ]; then
+    print_result OK "DFU incident document exists"
+  else
+    print_result FAIL "DFU incident document missing"
+  fi
+  if "$REPO_ROOT/scripts/cidre-app-boot-failure-report" --incident DFU_RESTORE_001 --json >/dev/null; then
+    print_result OK "DFU incident report generation works"
+  else
+    print_result FAIL "DFU incident report generation failed"
+  fi
+
+elif [ "$BOOT_SAFETY_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  for file in \
+    scripts/cidre-app-disk-snapshot \
+    scripts/cidre-app-prepost-disk-diff \
+    scripts/cidre-app-protected-partition-guard \
+    scripts/cidre-app-recovery-survival-check \
+    scripts/cidre-app-boot-safety-gate \
+    scripts/cidre-app-before-shutdown-gate \
+    docs/boot-safety-gate.md \
+    docs/pre-post-disk-diff.md \
+    docs/before-shutdown-gate.md; do
+    if [ -f "$REPO_ROOT/$file" ] && { [ -x "$REPO_ROOT/$file" ] || [ "${file#scripts/}" = "$file" ]; }; then
+      print_result OK "Boot safety asset present: $file"
+    else
+      print_result FAIL "Boot safety asset missing: $file"
+    fi
+  done
+  if "$REPO_ROOT/scripts/cidre-app-before-shutdown-gate" --json >/dev/null 2>&1; then
+    print_result OK "Before-shutdown gate returned pass"
+  else
+    print_result WARN "Before-shutdown gate is blocking completion, which is expected before verified safe state exists"
+  fi
+
+elif [ "$PROTECTED_PARTITIONS_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  for file in \
+    scripts/cidre-app-protected-partition-guard \
+    docs/protected-apple-partitions.md; do
+    if [ -f "$REPO_ROOT/$file" ] && { [ -x "$REPO_ROOT/$file" ] || [ "${file#scripts/}" = "$file" ]; }; then
+      print_result OK "Protected partition asset present: $file"
+    else
+      print_result FAIL "Protected partition asset missing: $file"
+    fi
+  done
+
+elif [ "$INSTALLER_KILLSWITCH_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  if "$REPO_ROOT/scripts/cidre-app-installer-killswitch" --status --json >/dev/null; then
+    print_result OK "Installer kill switch status command works"
+  else
+    print_result FAIL "Installer kill switch status command failed"
+  fi
+  if [ -f "$REPO_ROOT/.local/state/cidre/killswitch/installer-killswitch.json" ] || "$REPO_ROOT/scripts/cidre-app-installer-killswitch" --status >/dev/null; then
+    print_result OK "Installer kill switch state is available"
+  else
+    print_result FAIL "Installer kill switch state is unavailable"
   fi
 
 elif [ "$RECOVERY_SCREEN_MODE" = true ] || [ "$SAFE_MODE_MODE" = true ]; then

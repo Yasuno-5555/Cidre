@@ -1,15 +1,22 @@
-# Cidre (v0.35.0 Complete Terminal-Free Setup Wizard Pack)
+# Cidre (v0.35.1 DFU Incident Containment & Boot Safety Gate Pack)
 
 Cidre is an Apple Silicon Mac-oriented Linux experience layer built on ALARM (Arch Linux ARM) / Asahi Linux.
 
 This repository contains the Cidre environment, including installer, recovery, rescue tooling, documentation, package metadata, and the `niri-cidre` desktop layer.
 
-The launchable macOS installer is [`dist/Cidre.app`](dist/Cidre.app). It provides a setup wizard with APFS inspection, validated partition planning, an administrator-authenticated disk helper, packaged backend resources, and operation logs. Disk mutations require a preview and an exact per-plan confirmation phrase.
+The launchable macOS installer is [`dist/Cidre.app`](dist/Cidre.app). It provides a setup wizard with APFS inspection, validated partition planning, an administrator-authenticated disk helper, packaged backend resources, and operation logs. Disk mutations now sit behind DFU incident containment and remain disabled by default.
 
 > [!WARNING]
 > Cidre is experimental and currently not safe for general installation.
-> A recent GUI install flow caused a boot-level failure on Apple Silicon hardware.
-> Do not run the installer on a machine you cannot DFU revive/restore.
+> A recent GUI install flow caused a pre-m1n1 / Apple Recovery-level boot failure on Apple Silicon hardware.
+> Do not run disk-changing installer flows on a machine you cannot erase and DFU restore.
+
+Current safety status:
+
+```text
+Disk-changing install flows are disabled by default after DFU_RESTORE_001.
+Boot survivability checks must pass before install completion can be considered safe.
+```
 
 > [!IMPORTANT]
 > **Cidre is not a niri fork.**

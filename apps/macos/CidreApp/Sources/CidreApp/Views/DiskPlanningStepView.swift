@@ -7,11 +7,18 @@ struct DiskPlanningStepView: View {
     var body: some View {
         WizardStepContainerView(
             title: "Disk Plan",
-            bodyText: "Create a new APFS partition from the macOS APFS container. Choose how much space to allocate, then validate and execute with administrator authentication."
+            bodyText: "Disk-changing install is currently under DFU incident containment. The UI keeps planning visible, but blocks real partition changes until the boot safety gate pack is explicitly enabled for test."
         ) {
             VStack(alignment: .leading, spacing: 16) {
 
-                // ── Warning ──────────────────────────────────────────────
+                Label("This installer is in incident containment mode. Disk-changing install is disabled by default after DFU_RESTORE_001.", systemImage: "exclamationmark.octagon.fill")
+                    .foregroundColor(.red)
+                    .font(.callout)
+
+                Text(mutation.killSwitchState.reason)
+                    .font(.callout)
+                    .foregroundColor(.secondary)
+
                 Label("Keep a current backup and connect power before continuing.", systemImage: "exclamationmark.triangle.fill")
                     .foregroundColor(.orange)
                     .font(.callout)
@@ -101,7 +108,7 @@ struct DiskPlanningStepView: View {
                     Button("Create Plan") {
                         mutation.createPlan(repositoryPath: appVM.repositoryPath)
                     }
-                    .disabled(mutation.target.isEmpty || mutation.isRunning)
+                    .disabled(!mutation.canCreatePlan)
 
                     Button("Validate Preview") {
                         mutation.preview(repositoryPath: appVM.repositoryPath)
@@ -123,6 +130,7 @@ struct DiskPlanningStepView: View {
             }
         }
         .onAppear {
+            mutation.refreshKillSwitch(repositoryPath: appVM.repositoryPath)
             mutation.detectStartupStore()
         }
     }

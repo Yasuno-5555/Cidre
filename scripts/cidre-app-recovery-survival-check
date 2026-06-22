@@ -1,0 +1,102 @@
+#!/bin/sh
+set -eu
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+REPO_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+STATE_DIR="$REPO_ROOT/.local/state/cidre/boot-safety/current"
+json_mode=false
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --json) json_mode=true; shift ;;
+    --help|-h) echo "Usage: cidre-app-recovery-survival-check [--json]"; exit 0 ;;
+    *) echo "ERROR: unknown option: $1" >&2; exit 2 ;;
+  esac
+done
+
+mkdir -p "$STATE_DIR"
+
+if [ "$(uname -s)" != "Darwin" ]; then
+  python3 - "$json_mode" <<'PY'
+import json
+import sys
+payload = {
+    "schema_version": 1,
+    "command": "cidre-app-recovery-survival-check",
+    "status": "blocked",
+    "summary": "Recovery survival checks require macOS diskutil access.",
+    "phase": "safety",
+    "stage": "recovery-survival-check",
+    "exit_code": 4,
+    "warnings": [],
+    "errors": [{"code": "requires-macos", "message": "Recovery survival checks require macOS diskutil access."}],
+}
+print(json.dumps(payload, indent=2) if sys.argv[1] == "true" else payload["summary"])
+sys.exit(4)
+PY
+fi
+
+python3 - "$STATE_DIR/recovery-survival-check.json" "$json_mode" <<'PY'
+import json
+import plistlib
+import subprocess
+import sys
+from datetime import datetime, timezone
+
+state_file, json_mode = sys.argv[1:]
+json_mode = json_mode == "true"
+
+def run_diskutil(*args):
+    completed = subprocess.run(["/usr/sbin/diskutil", *args], check=True, capture_output=True)
+    return plistlib.loads(completed.stdout)
+
+disk_list = run_diskutil("list", "-plist")
+root_info = run_diskutil("info", "-plist", "/")
+
+recovery_exists = False
+for disk in disk_list.get("AllDisksAndPartitions", []):
+    for part in disk.get("Partitions") or []:
+        content = (part.get("Content") or "").lower()
+        name = (part.get("VolumeName") or part.get("MediaName") or "").lower()
+        if "apple_apfs_recovery" in content or "recovery" in name:
+            recovery_exists = True
+            break
+
+startup_disk_readable = bool(root_info.get("MountPoint") == "/")
+physical_stores = [
+    item.get("APFSPhysicalStore")
+    for item in root_info.get("APFSPhysicalStores", [])
+    if isinstance(item, dict) and item.get("APFSPhysicalStore")
+]
+
+errors = []
+if not recovery_exists:
+    errors.append({"code": "apple-recovery-missing", "message": "Apple_APFS_Recovery was not found."})
+if not startup_disk_readable:
+    errors.append({"code": "startup-disk-unreadable", "message": "macOS startup disk could not be read."})
+if not physical_stores:
+    errors.append({"code": "startup-physical-store-missing", "message": "Startup disk physical store information is missing."})
+
+payload = {
+    "schema_version": 1,
+    "command": "cidre-app-recovery-survival-check",
+    "status": "pass" if not errors else "failed",
+    "summary": "Recovery survival checks passed." if not errors else "Recovery survival checks failed.",
+    "phase": "safety",
+    "stage": "recovery-survival-check",
+    "exit_code": 0 if not errors else 4,
+    "warnings": [],
+    "errors": errors,
+    "captured_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+    "recovery_exists": recovery_exists,
+    "startup_disk_readable": startup_disk_readable,
+    "startup_physical_stores": physical_stores,
+}
+
+with open(state_file, "w", encoding="utf-8") as handle:
+    json.dump(payload, handle, indent=2)
+    handle.write("\n")
+
+print(json.dumps(payload, indent=2) if json_mode else payload["summary"])
+sys.exit(payload["exit_code"])
+PY

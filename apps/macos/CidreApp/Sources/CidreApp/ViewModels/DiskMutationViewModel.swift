@@ -26,6 +26,7 @@ enum PartitionMode: String, CaseIterable {
 }
 
 final class DiskMutationViewModel: ObservableObject {
+    @Published var killSwitchState: InstallerKillSwitchState = .containmentDefault
     @Published var target = ""
     @Published var partitionMode: PartitionMode = .auto
     @Published var containerSize = ""
@@ -40,13 +41,20 @@ final class DiskMutationViewModel: ObservableObject {
     private var plannedInputSignature: String?
 
     var canPreview: Bool {
-        planID != nil
+        killSwitchState.destructiveInstallAllowed
+            && planID != nil
             && plannedInputSignature == inputSignature
             && !target.isEmpty
     }
 
     var canExecute: Bool {
-        canPreview && confirmation.trimmingCharacters(in: .whitespacesAndNewlines) == requiredConfirmation
+        killSwitchState.destructiveInstallAllowed
+            && canPreview
+            && confirmation.trimmingCharacters(in: .whitespacesAndNewlines) == requiredConfirmation
+    }
+
+    var canCreatePlan: Bool {
+        killSwitchState.destructiveInstallAllowed && !target.isEmpty && !isRunning
     }
 
     var maxPartitionHuman: String {
@@ -87,6 +95,21 @@ final class DiskMutationViewModel: ObservableObject {
         }
         // Fetch limits once target is known
         fetchLimits()
+    }
+
+    func refreshKillSwitch(repositoryPath: String) {
+        let execution = LiveCommandRunner.shared.run(
+            "scripts/cidre-app-installer-killswitch",
+            arguments: ["--status", "--json"],
+            repositoryPath: repositoryPath,
+            isMockMode: false
+        )
+        guard let data = execution.stdout.data(using: .utf8),
+              let state = try? JSONDecoder().decode(InstallerKillSwitchState.self, from: data) else {
+            killSwitchState = .containmentDefault
+            return
+        }
+        killSwitchState = state
     }
 
     func fetchLimits() {
