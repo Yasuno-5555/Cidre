@@ -6,6 +6,11 @@ This repository contains the Cidre environment, including installer, recovery, r
 
 The launchable macOS installer is [`dist/Cidre.app`](dist/Cidre.app). It provides a setup wizard with APFS inspection, validated partition planning, an administrator-authenticated disk helper, packaged backend resources, and operation logs. Disk mutations require a preview and an exact per-plan confirmation phrase.
 
+> [!WARNING]
+> Cidre is experimental and currently not safe for general installation.
+> A recent GUI install flow caused a boot-level failure on Apple Silicon hardware.
+> Do not run the installer on a machine you cannot DFU revive/restore.
+
 > [!IMPORTANT]
 > **Cidre is not a niri fork.**
 > `niri-cidre` is the desktop/compositor component shipped as part of Cidre. It is not the whole project. Cidre itself is a full integration layer that manages installer scripts, configuration deployment, system recovery, sound optimization, and desktop session profiles.
