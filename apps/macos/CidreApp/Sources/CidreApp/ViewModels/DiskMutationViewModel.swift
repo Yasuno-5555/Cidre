@@ -221,6 +221,18 @@ final class DiskMutationViewModel: ObservableObject {
         return formatHuman(bytes)
     }
 
+    var bootSafetyDisplayStatus: String {
+        if let status = gateState?.status, !status.isEmpty {
+            return status
+        }
+        if guidedActionTitle == "Recheck Boot Safety",
+           let status = guidedActionExecution?.parsedResult?.status,
+           !status.isEmpty {
+            return status
+        }
+        return "unknown"
+    }
+
     private func formatHuman(_ bytes: Int) -> String {
         let gb = Double(bytes) / 1_000_000_000
         return String(format: "%.1f GB", gb)
