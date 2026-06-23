@@ -1,0 +1,155 @@
+#!/bin/sh
+set -eu
+# cidre-app-alarm-acquire
+# Downloads ALARM (Arch Linux ARM) rootfs for Apple Silicon.
+# Kernel and initramfs are extracted from the rootfs tarball.
+#
+# Sources (priority order):
+#   1. --rootfs-path <file>     (explicit local file)
+#   2. Cached download
+#   3. ALARM mirror download
+
+rootfs_path=""
+cache_dir="${HOME}/.local/share/cidre/alarm"
+kernel_output=""
+initramfs_output=""
+json_mode=false
+dry_run=false
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --rootfs-path) rootfs_path="$2"; shift 2 ;;
+    --cache-dir) cache_dir="$2"; shift 2 ;;
+    --kernel-output) kernel_output="$2"; shift 2 ;;
+    --initramfs-output) initramfs_output="$2"; shift 2 ;;
+    --dry-run) dry_run=true; shift ;;
+    --json) json_mode=true; shift ;;
+    --help|-h)
+      echo "Usage: cidre-app-alarm-acquire [--rootfs-path <file>] [--kernel-output <path>] [--initramfs-output <path>] [--dry-run] [--json]"
+      echo "Downloads ALARM rootfs and extracts kernel/initramfs for Apple Silicon."
+      exit 0
+      ;;
+    *) echo "ERROR: unknown option: $1" >&2; exit 2 ;;
+  esac
+done
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+ALARM_MIRROR="http://os.archlinuxarm.org/os"
+ALARM_TARBALL="ArchLinuxARM-aarch64-latest.tar.gz"
+ALARM_URL="${ALARM_MIRROR}/${ALARM_TARBALL}"
+
+found_kernel=""
+found_initramfs=""
+found_rootfs=""
+status="passed"
+summary=""
+errors=""
+steps=""
+
+# ── Source 1: Explicit path ─────────────────────────────────────────
+if [ -n "$rootfs_path" ] && [ -f "$rootfs_path" ]; then
+  found_rootfs="$rootfs_path"
+  steps="${steps}explicit-rootfs "
+fi
+
+# ── Source 2: Cached ────────────────────────────────────────────────
+if [ -z "$found_rootfs" ]; then
+  cached_tarball="$cache_dir/$ALARM_TARBALL"
+  if [ -f "$cached_tarball" ]; then
+    found_rootfs="$cached_tarball"
+    steps="${steps}cached-rootfs "
+  fi
+fi
+
+# ── Source 3: Download ──────────────────────────────────────────────
+if [ -z "$found_rootfs" ] && [ "$dry_run" = false ]; then
+  mkdir -p "$cache_dir"
+  steps="${steps}downloading-rootfs "
+  if curl -L --progress-bar -o "$cache_dir/$ALARM_TARBALL" "$ALARM_URL" 2>/dev/null; then
+    found_rootfs="$cache_dir/$ALARM_TARBALL"
+    steps="${steps}downloaded "
+  else
+    errors="${errors}download-failed "
+  fi
+fi
+
+# ── Extract kernel and initramfs ────────────────────────────────────
+if [ -n "$found_rootfs" ] && [ -f "$found_rootfs" ]; then
+  work_dir="${cache_dir}/extract.$$"
+  mkdir -p "$work_dir"
+
+  # Extract boot directory from the rootfs tarball
+  if tar xzf "$found_rootfs" -C "$work_dir" ./boot 2>/dev/null; then
+    # Find kernel (Image or vmlinuz)
+    kernel_candidate="$(find "$work_dir/boot" -name "Image*" -o -name "vmlinuz*" 2>/dev/null | grep -v ".img" | head -1)"
+    if [ -n "$kernel_candidate" ] && [ -s "$kernel_candidate" ]; then
+      if [ -n "$kernel_output" ]; then
+        cp "$kernel_candidate" "$kernel_output"
+        found_kernel="$kernel_output"
+      else
+        found_kernel="$kernel_candidate"
+      fi
+      steps="${steps}kernel-found "
+    fi
+
+    # Find initramfs
+    initramfs_candidate="$(find "$work_dir/boot" -name "initramfs*" -o -name "*.img" 2>/dev/null | head -1)"
+    if [ -n "$initramfs_candidate" ] && [ -s "$initramfs_candidate" ]; then
+      if [ -n "$initramfs_output" ]; then
+        cp "$initramfs_candidate" "$initramfs_output"
+        found_initramfs="$initramfs_output"
+      else
+        found_initramfs="$initramfs_candidate"
+      fi
+      steps="${steps}initramfs-found "
+    fi
+
+    # Extract full rootfs if needed
+    if [ -z "$kernel_output" ] && [ -z "$initramfs_output" ]; then
+      # User wants the full rootfs path
+      :
+    fi
+  else
+    errors="${errors}extract-failed "
+  fi
+
+  rm -rf "$work_dir"
+fi
+
+# ── Dry run ─────────────────────────────────────────────────────────
+if [ "$dry_run" = true ]; then
+  found_rootfs="/dry-run/rootfs.tar.gz"
+  found_kernel="/dry-run/Image"
+  found_initramfs="/dry-run/initramfs.img"
+  steps="dry-run "
+fi
+
+# ── Output ──────────────────────────────────────────────────────────
+if [ -z "$found_rootfs" ] && [ "$dry_run" = false ]; then
+  status="blocked"
+  summary="ALARM rootfs not found. Download from $ALARM_URL or provide via --rootfs-path"
+fi
+
+python3 - "$json_mode" "$status" "$summary" "$found_rootfs" "$found_kernel" "$found_initramfs" "$steps" "$errors" <<'PY'
+import json, sys
+json_mode, status, summary, rootfs, kernel, initramfs, steps, errors = sys.argv[1:]
+json_mode = json_mode == "true"
+exit_code = 0 if status == "passed" else 4
+
+payload = {
+    "schema_version": 1,
+    "command": "cidre-app-alarm-acquire",
+    "status": status,
+    "summary": summary if summary else f"ALARM rootfs acquired: {steps}",
+    "exit_code": exit_code,
+    "rootfs_path": rootfs if rootfs else None,
+    "kernel_path": kernel if kernel else None,
+    "initramfs_path": initramfs if initramfs else None,
+    "steps_completed": steps.strip() if steps.strip() else None,
+}
+if errors.strip():
+    payload["errors"] = [{"code": "acquire-error", "message": errors.strip()}]
+
+print(json.dumps(payload, indent=2) if json_mode else payload["summary"])
+sys.exit(exit_code)
+PY

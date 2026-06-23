@@ -1,5 +1,9 @@
 #!/bin/sh
 set -eu
+# cidre-app-boot-asset-prepare
+# Ensures the Cidre APFS volume has a proper Volume Group and its boot assets
+# are synced to the Preboot volume. Uses Apple's diskutil (SIP-compatible).
+# Inspired by the Asahi Linux installer approach.
 
 target=""
 dry_run=false
@@ -17,171 +21,322 @@ done
 
 [ -n "$target" ] || { echo "ERROR: --target is required" >&2; exit 2; }
 
-python3 - "$target" "$dry_run" "$json_mode" <<'PY'
+# Phase 1: Discovery
+discovery_json="$(python3 - "$target" <<'PY'
 import json
 import os
 import subprocess
 import sys
 
-target, dry_run, json_mode = sys.argv[1:]
-dry_run = dry_run == "true"
-json_mode = json_mode == "true"
+target = sys.argv[1]
+result = {
+    "volume_uuid": "",
+    "cidre_container": "",
+    "volume_name": "",
+    "mount_point": "",
+    "has_system_role": False,
+    "has_data_volume": False,
+    "data_volume": "",
+    "data_volume_uuid": "",
+    "volume_group_exists": False,
+    "volume_group_uuid": "",
+    "system_preboot_device": "",
+    "system_preboot_mount": "",
+    "errors": [],
+}
 
-volume_uuid = "00000000-0000-0000-0000-000000000000"
-preboot_device = "unknown"
-preboot_mount = "/tmp/mock-preboot"
-configured_policy = False
-staged_assets = []
+if os.uname().sysname != "Darwin":
+    result["errors"].append("Requires macOS")
+    print(json.dumps(result))
+    sys.exit(0)
 
-# macOS detection and Preboot discovery
-if os.uname().sysname == "Darwin":
-    try:
-        import plistlib
-        # Get target Volume UUID and container info
-        completed = subprocess.run(["/usr/sbin/diskutil", "info", "-plist", target], capture_output=True, check=True)
-        info = plistlib.loads(completed.stdout)
-        volume_uuid = info.get("VolumeUUID", volume_uuid)
-        container_uuid = info.get("APFSContainerUUID", "")
-        container_ref = info.get("APFSContainerReference") or info.get("ParentWholeDisk", "")
+try:
+    import plistlib
 
-        # If APFSContainerUUID is not available on the volume, resolve via container ref
-        if not container_uuid and container_ref:
-            try:
-                c_info = plistlib.loads(subprocess.run(["/usr/sbin/diskutil", "info", "-plist", container_ref], capture_output=True, check=True).stdout)
-                container_uuid = c_info.get("APFSContainerUUID") or c_info.get("DiskUUID", "")
-            except Exception:
-                pass
+    info = plistlib.loads(subprocess.run(
+        ["/usr/sbin/diskutil", "info", "-plist", target],
+        capture_output=True, check=True
+    ).stdout)
 
-        # Enumerate all APFS containers
-        apfs = plistlib.loads(subprocess.run(["/usr/sbin/diskutil", "apfs", "list", "-plist"], capture_output=True, check=True).stdout)
+    result["volume_uuid"] = info.get("VolumeUUID", "")
+    result["volume_name"] = info.get("VolumeName", "")
+    result["mount_point"] = info.get("MountPoint", "")
+    container_ref = info.get("APFSContainerReference") or info.get("ParentWholeDisk", "")
+    result["cidre_container"] = container_ref
 
-        # Find which container holds our target volume (by UUID match OR by ContainerReference)
-        # Also find the macOS startup Preboot volume: the Preboot role volume that lives
-        # in the same container as a System-role volume (i.e., the macOS boot container).
-        target_container = None
-        system_preboot_device = "unknown"
-        system_preboot_mount = ""
-        for container in apfs.get("Containers", []):
-            c_uuid = container.get("APFSContainerUUID", "")
-            c_ref = container.get("ContainerReference", "")
-            is_target = (container_uuid and c_uuid == container_uuid) or (container_ref and c_ref == container_ref)
-            if is_target:
-                target_container = container
-                # Prefer Cidre volume UUID if it lives in this container
-                for volume in container.get("Volumes", []):
-                    if volume.get("Name") == "Cidre":
-                        v_uuid = volume.get("APFSVolumeUUID") or volume.get("VolumeUUID")
-                        if v_uuid:
-                            volume_uuid = v_uuid
-            # Track the macOS startup Preboot: only from the container that also has a
-            # System-role volume. iSCPreboot (disk1) is for hardware security, not boot entries.
-            volume_roles_in_container = []
+    if not container_ref:
+        result["errors"].append("Could not determine APFS container")
+        print(json.dumps(result))
+        sys.exit(0)
+
+    # Enumerate all APFS containers
+    apfs = plistlib.loads(subprocess.run(
+        ["/usr/sbin/diskutil", "apfs", "list", "-plist"],
+        capture_output=True, check=True
+    ).stdout)
+
+    for container in apfs.get("Containers", []):
+        c_ref = container.get("ContainerReference", "")
+
+        # Find volumes in Cidre container
+        if c_ref == container_ref:
             for volume in container.get("Volumes", []):
-                volume_roles_in_container.extend(volume.get("Roles", []) or [])
-            has_system_vol = "System" in volume_roles_in_container
-            if has_system_vol:
-                for volume in container.get("Volumes", []):
-                    roles = volume.get("Roles", []) or []
-                    if "Preboot" in roles and system_preboot_device == "unknown":
-                        system_preboot_device = volume.get("DeviceIdentifier", "unknown")
-                        system_preboot_mount = volume.get("MountPoint") or ""
-
-        if target_container:
-            # Strategy: On Apple Silicon, all startup entries are registered in the
-            # system-wide Preboot volume (e.g. disk4s2). Cidre should write its UUID
-            # directory there, not into a per-container Preboot.
-            # Look first inside the Cidre container for an existing Preboot volume.
-            container_preboot_device = "unknown"
-            for volume in target_container.get("Volumes", []):
                 roles = volume.get("Roles", []) or []
                 name = volume.get("Name", "")
-                if "Preboot" in roles or "Installer" in roles or name == "Preboot":
-                    container_preboot_device = volume.get("DeviceIdentifier", "unknown")
-                    preboot_device = container_preboot_device
-                    preboot_mount = volume.get("MountPoint") or ""
-                    break
+                if "System" in roles:
+                    result["has_system_role"] = True
+                if "Data" in roles:
+                    result["has_data_volume"] = True
+                    result["data_volume"] = volume.get("DeviceIdentifier", "")
+                    result["data_volume_uuid"] = volume.get("APFSVolumeUUID") or volume.get("VolumeUUID", "")
 
-            # If no Preboot inside the Cidre container, use the system-wide Preboot.
-            # This is the standard Apple Silicon multi-boot behavior.
-            if container_preboot_device == "unknown":
-                if system_preboot_device != "unknown":
-                    preboot_device = system_preboot_device
-                    preboot_mount = system_preboot_mount
-                    sys.stderr.write(f"Using system-wide Preboot volume: {preboot_device}\n")
-                elif not dry_run:
-                    # Last resort: create a Preboot volume in the Cidre container
-                    c_dev = target_container.get("ContainerReference") or container_ref or target
-                    add_run = subprocess.run(
-                        ["/usr/sbin/diskutil", "apfs", "addVolume", c_dev, "APFS", "Preboot", "-role", "I", "-plist"],
-                        capture_output=True
-                    )
-                    if add_run.returncode == 0:
-                        result_plist = plistlib.loads(add_run.stdout)
-                        preboot_device = result_plist.get("AddedVolumeDeviceIdentifier", "unknown")
-                        sys.stderr.write(f"Created Preboot volume: {preboot_device}\n")
-                    else:
-                        sys.stderr.write(f"Failed to create Preboot volume: {add_run.stderr.decode()}\n")
+        # Find system Preboot volume for reference
+        roles_in_container = []
+        for volume in container.get("Volumes", []):
+            roles_in_container.extend(volume.get("Roles", []) or [])
+        if "System" in roles_in_container:
+            for volume in container.get("Volumes", []):
+                if "Preboot" in (volume.get("Roles", []) or []):
+                    result["system_preboot_device"] = volume.get("DeviceIdentifier", "")
+                    result["system_preboot_mount"] = volume.get("MountPoint") or ""
 
-            if preboot_device != "unknown":
-                # Resolve mount point, mount if needed
-                info_run = subprocess.run(["/usr/sbin/diskutil", "info", "-plist", preboot_device], capture_output=True)
-                if info_run.returncode == 0:
-                    v_info = plistlib.loads(info_run.stdout)
-                    preboot_mount = v_info.get("MountPoint") or ""
-                if not preboot_mount and not dry_run:
-                    mount_run = subprocess.run(["/usr/sbin/diskutil", "mount", preboot_device], capture_output=True)
-                    if mount_run.returncode == 0:
-                        v_info = plistlib.loads(subprocess.run(["/usr/sbin/diskutil", "info", "-plist", preboot_device], capture_output=True, check=True).stdout)
-                        preboot_mount = v_info.get("MountPoint", "") or ""
-        else:
-            sys.stderr.write(f"Could not locate APFS container for target={target} container_uuid={container_uuid} container_ref={container_ref}\n")
-    except Exception as e:
-        sys.stderr.write(f"Preboot check exception: {e}\n")
+    # Check Volume Groups
+    vg_data = plistlib.loads(subprocess.run(
+        ["/usr/sbin/diskutil", "apfs", "listVolumeGroups", "-plist"],
+        capture_output=True, check=True
+    ).stdout)
 
+    for c in vg_data.get("Containers", []):
+        if c.get("ContainerReference") == container_ref:
+            vgs = c.get("VolumeGroups", [])
+            if vgs:
+                result["volume_group_exists"] = True
+                result["volume_group_uuid"] = vgs[0].get("APFSVolumeGroupUUID", "")
+            break
 
-# Simulation/Execution of asset staging
-if not dry_run:
-    target_preboot_dir = os.path.join(preboot_mount, volume_uuid)
-    os.makedirs(target_preboot_dir, exist_ok=True)
-    
-    # Place custom bootloader assets mimicking Apple Silicon localpolicy setup
-    firmware_dir = os.path.join(target_preboot_dir, "usr", "standalone", "firmware")
-    os.makedirs(firmware_dir, exist_ok=True)
-    
-    m1n1_payload = os.path.join(firmware_dir, "m1n1.bin")
-    with open(m1n1_payload, "w", encoding="utf-8") as handle:
-        handle.write("m1n1-boot-payload-stub\n")
-    staged_assets.append(os.path.relpath(m1n1_payload, preboot_mount))
+except Exception as e:
+    result["errors"].append(f"Discovery error: {e}")
 
-    # Mock policy generation
-    policy_path = os.path.join(target_preboot_dir, "LocalPolicy", f"{volume_uuid}.policy")
-    os.makedirs(os.path.dirname(policy_path), exist_ok=True)
-    with open(policy_path, "w", encoding="utf-8") as handle:
-        handle.write("Cidre custom localpolicy secure boot options signature\n")
-    staged_assets.append(os.path.relpath(policy_path, preboot_mount))
-    configured_policy = True
-else:
-    # Dry run return mock paths
-    staged_assets = [
-        f"{volume_uuid}/usr/standalone/firmware/m1n1.bin",
-        f"{volume_uuid}/LocalPolicy/{volume_uuid}.policy"
-    ]
-    configured_policy = True
+print(json.dumps(result))
+PY
+)"
+
+volume_uuid="$(printf '%s\n' "$discovery_json" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("volume_uuid",""))')"
+cidre_container="$(printf '%s\n' "$discovery_json" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("cidre_container",""))')"
+mount_point="$(printf '%s\n' "$discovery_json" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("mount_point",""))')"
+has_system_role="$(printf '%s\n' "$discovery_json" | python3 -c 'import json,sys; print("true" if json.load(sys.stdin).get("has_system_role") else "false")')"
+has_data_volume="$(printf '%s\n' "$discovery_json" | python3 -c 'import json,sys; print("true" if json.load(sys.stdin).get("has_data_volume") else "false")')"
+data_volume="$(printf '%s\n' "$discovery_json" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("data_volume",""))')"
+data_volume_uuid="$(printf '%s\n' "$discovery_json" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("data_volume_uuid",""))')"
+vg_exists="$(printf '%s\n' "$discovery_json" | python3 -c 'import json,sys; print("true" if json.load(sys.stdin).get("volume_group_exists") else "false")')"
+vg_uuid="$(printf '%s\n' "$discovery_json" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("volume_group_uuid",""))')"
+system_preboot_device="$(printf '%s\n' "$discovery_json" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("system_preboot_device",""))')"
+system_preboot_mount="$(printf '%s\n' "$discovery_json" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("system_preboot_mount",""))')"
+
+steps_done=""
+steps_failed=""
+staged_assets="[]"
+
+# Phase 2: Ensure Volume Group exists (requires admin for diskutil apfs commands)
+if [ "$dry_run" = false ] && [ "$vg_exists" != "true" ] && [ -n "$cidre_container" ]; then
+  # Step 2a: Add Data volume if needed (two-step: create volume, then set role)
+  if [ "$has_data_volume" != "true" ]; then
+    # First, create the volume without role
+    if output="$(/usr/bin/osascript \
+      -e 'on run argv' \
+      -e 'do shell script (item 1 of argv) with administrator privileges' \
+      -e 'end run' \
+      "/usr/sbin/diskutil apfs addVolume ${cidre_container} APFS 'Cidre Data' -plist" 2>&1)"; then
+      data_volume="$(printf '%s\n' "$output" | python3 -c '
+import plistlib,sys
+try:
+    print(plistlib.loads(sys.stdin.buffer.read()).get("AddedVolumeDeviceIdentifier",""))
+except: print("")
+' 2>/dev/null || echo "")"
+      if [ -n "$data_volume" ]; then
+        # Now set the Data role on the new volume
+        if output2="$(/usr/bin/osascript \
+          -e 'on run argv' \
+          -e 'do shell script (item 1 of argv) with administrator privileges' \
+          -e 'end run' \
+          "/usr/sbin/diskutil apfs changeVolumeRole ${data_volume} D" 2>&1)"; then
+          data_volume_uuid="$(diskutil info -plist "$data_volume" 2>/dev/null | python3 -c '
+import plistlib,sys
+try:
+    print(plistlib.loads(sys.stdin.buffer.read()).get("VolumeUUID",""))
+except: print("")
+' 2>/dev/null || echo "")"
+          steps_done="${steps_done}created-data-volume($data_volume) "
+        else
+          steps_failed="${steps_failed}set-data-role-failed($output2) "
+        fi
+      fi
+    else
+      # Capture the actual error message
+      steps_failed="${steps_failed}create-data-volume($(printf '%s' "$output" | tr '\n' ' ' | cut -c1-200)) "
+    fi
+  fi
+
+  # Step 2b: Set System role on Cidre volume
+  if [ "$has_system_role" != "true" ] && [ -n "$data_volume" ]; then
+    if output="$(/usr/bin/osascript \
+      -e 'on run argv' \
+      -e 'do shell script (item 1 of argv) with administrator privileges' \
+      -e 'end run' \
+      "/usr/sbin/diskutil apfs changeVolumeRole ${target} S" 2>&1)"; then
+      steps_done="${steps_done}set-system-role "
+    else
+      steps_failed="${steps_failed}set-system-role-failed "
+    fi
+  fi
+
+  # Step 2c: Verify Volume Group was created
+  if [ -z "$steps_failed" ]; then
+    refresh_json="$(python3 - "$cidre_container" <<'PY'
+import json, subprocess, sys
+container_ref = sys.argv[1]
+try:
+    import plistlib
+    vg_data = plistlib.loads(subprocess.run(
+        ["/usr/sbin/diskutil", "apfs", "listVolumeGroups", "-plist"],
+        capture_output=True, check=True
+    ).stdout)
+    for c in vg_data.get("Containers", []):
+        if c.get("ContainerReference") == container_ref:
+            vgs = c.get("VolumeGroups", [])
+            if vgs:
+                print(json.dumps({"vg_uuid": vgs[0].get("APFSVolumeGroupUUID", "")}))
+                sys.exit(0)
+    print(json.dumps({"vg_uuid": ""}))
+except Exception as e:
+    print(json.dumps({"vg_uuid": "", "error": str(e)}))
+PY
+)"
+    vg_uuid="$(printf '%s\n' "$refresh_json" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("vg_uuid",""))')"
+    if [ -n "$vg_uuid" ]; then
+      steps_done="${steps_done}vg-created($vg_uuid) "
+    fi
+  fi
+fi
+
+# Phase 3: Sync Preboot via Apple's updatePreboot (has required entitlements)
+# This works because we now have a proper Volume Group
+if [ "$dry_run" = false ] && [ -z "$steps_failed" ] && [ -n "$vg_uuid" ]; then
+  update_cmd="/usr/sbin/diskutil apfs updatePreboot ${target}"
+  if update_output="$(/usr/bin/osascript \
+    -e 'on run argv' \
+    -e 'do shell script (item 1 of argv) with administrator privileges' \
+    -e 'end run' \
+    "$update_cmd" 2>&1)"; then
+    steps_done="${steps_done}updatePreboot-ok "
+  else
+    # updatePreboot can fail on non-macOS volumes; this is expected
+    # The bputil step (separate script) will create the LocalPolicy
+    steps_done="${steps_done}updatePreboot-note($(printf '%s' "$update_output" | head -1)) "
+  fi
+
+  # Phase 3.5: Acquire m1n1 bootloader if available
+  m1n1_path=""
+  if [ -x "$SCRIPT_DIR/cidre-app-m1n1-acquire" ]; then
+    m1n1_result="$("$SCRIPT_DIR/cidre-app-m1n1-acquire" --json 2>/dev/null || echo '{"status":"blocked"}')"
+    m1n1_path="$(printf '%s\n' "$m1n1_result" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("m1n1_path",""))' 2>/dev/null || echo "")"
+    [ -n "$m1n1_path" ] && steps_done="${steps_done}m1n1-acquired "
+  fi
+
+  # Phase 4: Call boot-policy-create to register LocalPolicy via bputil
+  if [ -x "$SCRIPT_DIR/cidre-app-boot-policy-create" ]; then
+    policy_args="--target $target"
+    [ -n "$m1n1_path" ] && policy_args="$policy_args --m1n1-path $m1n1_path"
+    policy_result="$("$SCRIPT_DIR/cidre-app-boot-policy-create" $policy_args --json 2>/dev/null || echo '{"status":"blocked","summary":"policy-create-failed"}')"
+    policy_status="$(printf '%s\n' "$policy_result" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("status","blocked"))' 2>/dev/null || echo 'blocked')"
+    if [ "$policy_status" = "passed" ]; then
+      steps_done="${steps_done}localpolicy-created "
+    else
+      steps_done="${steps_done}localpolicy-pending(manual bputil may be needed) "
+    fi
+  fi
+
+  # Phase 5: Verify Preboot entry exists
+  if [ -n "$system_preboot_mount" ] && [ -n "$vg_uuid" ]; then
+    preboot_entry="${system_preboot_mount}/${vg_uuid}"
+    if [ -d "$preboot_entry" ]; then
+      staged_assets="$(python3 -c "
+import json, os
+pb_entry = '${preboot_entry}'
+assets = []
+for root, dirs, files in os.walk(pb_entry):
+    for f in files:
+        assets.append(os.path.relpath(os.path.join(root, f), pb_entry))
+print(json.dumps(assets[:20]))
+" 2>/dev/null || echo '[]')"
+      steps_done="${steps_done}preboot-entry-exists "
+    else
+      steps_done="${steps_done}preboot-pending(bputil needed) "
+    fi
+  fi
+fi
+
+if [ "$dry_run" = true ]; then
+  steps_done="dry-run: would add Data volume in ${cidre_container}, set System role, run updatePreboot"
+fi
+
+# Determine final status
+if [ -n "$steps_failed" ]; then
+  status="blocked"
+  exit_code=4
+  summary="Boot asset preparation blocked: ${steps_failed}"
+else
+  status="passed"
+  exit_code=0
+  if [ "$dry_run" = true ]; then
+    summary="Boot assets preparation dry-run completed."
+  elif [ -n "$vg_uuid" ]; then
+    summary="Boot assets prepared. Volume Group ${vg_uuid} ready for bputil LocalPolicy creation."
+  else
+    summary="Boot assets staged on Cidre volume. Volume Group creation needed."
+    status="blocked"
+    exit_code=4
+  fi
+fi
+
+# Output
+python3 - "$json_mode" "$status" "$exit_code" "$summary" "$target" "$volume_uuid" "$cidre_container" "$vg_uuid" "$data_volume" "$data_volume_uuid" "$system_preboot_device" "$system_preboot_mount" "$staged_assets" "$steps_done" "$steps_failed" "$dry_run" <<'PY'
+import json, sys
+
+(json_mode, status, exit_code, summary, target, volume_uuid, cidre_container,
+ vg_uuid, data_volume, data_volume_uuid, preboot_device, preboot_mount,
+ staged_assets, steps_done, steps_failed, dry_run) = sys.argv[1:]
+
+json_mode = json_mode == "true"
+exit_code = int(exit_code)
+dry_run = dry_run == "true"
+
+try:
+    assets = json.loads(staged_assets)
+except Exception:
+    assets = []
 
 payload = {
     "schema_version": 1,
     "command": "cidre-app-boot-asset-prepare",
-    "status": "passed",
-    "summary": "Boot assets successfully prepared on Preboot volume." if not dry_run else "Boot assets preparation dry-run completed.",
-    "exit_code": 0,
+    "status": status,
+    "summary": summary,
+    "exit_code": exit_code,
     "target": target,
-    "preboot_device": preboot_device,
-    "preboot_mount": preboot_mount,
     "volume_uuid": volume_uuid,
-    "staged_assets": staged_assets,
-    "policy_configured": configured_policy,
-    "dry_run": dry_run
+    "container": cidre_container,
+    "volume_group_uuid": vg_uuid if vg_uuid else None,
+    "data_volume": data_volume if data_volume else None,
+    "data_volume_uuid": data_volume_uuid if data_volume_uuid else None,
+    "preboot_device": preboot_device if preboot_device else None,
+    "preboot_mount": preboot_mount if preboot_mount else None,
+    "staged_assets": assets,
+    "policy_configured": bool(vg_uuid),
+    "steps_completed": steps_done.strip() if steps_done else None,
+    "steps_failed": steps_failed.strip() if steps_failed else None,
+    "dry_run": dry_run,
 }
 
 print(json.dumps(payload, indent=2) if json_mode else payload["summary"])
+sys.exit(exit_code)
 PY

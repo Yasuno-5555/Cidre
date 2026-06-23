@@ -2,27 +2,85 @@ import SwiftUI
 
 struct ManualBootGuideView: View {
     let guide: ManualBootGuide?
+    let reducedSecurityNeeded: Bool
+
+    init(guide: ManualBootGuide?, reducedSecurityNeeded: Bool = true) {
+        self.guide = guide
+        self.reducedSecurityNeeded = reducedSecurityNeeded
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Manual Boot Instructions")
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Booting Cidre")
                 .font(.headline)
-            if let g = guide {
-                Text(g.guide)
-                    .font(.body)
-                    .padding()
-                    .background(Color.black.opacity(0.05))
-                    .cornerRadius(8)
-            } else {
-                Text("Cidre is installed in manual boot mode.\n\nTo boot Cidre, shut down your Mac, hold the power button, and choose Cidre from Startup Options.\n\nYour default startup disk was not changed.")
-                    .font(.body)
-                    .padding()
-                    .background(Color.black.opacity(0.05))
-                    .cornerRadius(8)
+
+            // Step 1: First boot with Reduced Security setup
+            FlowSection(
+                title: "First Boot — One-Time Setup",
+                steps: [
+                    "Shut down your Mac",
+                    "Hold power button until Startup Options appears",
+                    "Click Options → Startup Security Utility",
+                    "Select Cidre → Reduced Security → Restart"
+                ]
+            )
+
+            // Step 2: Boot Cidre
+            FlowSection(
+                title: "Boot Cidre",
+                steps: [
+                    "Hold power button at restart",
+                    "Select Cidre in Startup Options",
+                    "Linux boots — auto-setup runs (first boot only)",
+                    "Restart when prompted"
+                ]
+            )
+
+            // Step 3: Done
+            FlowSection(
+                title: "Done",
+                steps: [
+                    "Hold power button → Cidre → login",
+                    "Cidre desktop environment is ready"
+                ]
+            )
+
+            // Reduced Security explicit guide
+            if reducedSecurityNeeded {
+                ReducedSecurityGuidanceView()
             }
+
+            // Policy reminder
+            Text("Your default startup disk (macOS) was not changed.")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+                .padding(.top, 4)
         }
         .padding()
         .background(Color(.controlBackgroundColor))
         .cornerRadius(10)
+    }
+}
+
+fileprivate struct FlowSection: View {
+    let title: String
+    let steps: [String]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.subheadline.bold())
+
+            ForEach(steps.indices, id: \.self) { i in
+                HStack(alignment: .top, spacing: 6) {
+                    Text("\(i + 1).")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .frame(width: 14, alignment: .trailing)
+                    Text(steps[i])
+                        .font(.caption)
+                }
+            }
+        }
     }
 }

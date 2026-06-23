@@ -1,0 +1,14 @@
+[Unit]
+Description=Cidre Appliance Bootstrap (non-interactive)
+After=cidre-firstboot-root.service network.target NetworkManager.service
+Wants=network.target NetworkManager.service
+ConditionPathExists=!/var/lib/cidre/bootstrap/complete
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/cidre/cidre-bootstrap-auto
+StandardOutput=journal+console
+StandardError=journal+console
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,98 @@
+#!/bin/sh
+set -eu
+# cidre-app-reduced-security-check
+# Checks whether Reduced Security is enabled for a given Volume Group UUID.
+# On Apple Silicon, Reduced Security is required to boot unsigned bootloaders (m1n1).
+
+vg_uuid=""
+json_mode=false
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --vgid|--vg-uuid) vg_uuid="$2"; shift 2 ;;
+    --json) json_mode=true; shift ;;
+    --help|-h) echo "Usage: cidre-app-reduced-security-check --vgid <uuid> [--json]"; exit 0 ;;
+    *) echo "ERROR: unknown option: $1" >&2; exit 2 ;;
+  esac
+done
+
+[ -n "$vg_uuid" ] || { echo "ERROR: --vgid is required" >&2; exit 2; }
+
+# Run bputil -e via osascript and parse the security mode
+bputil_output="$(/usr/bin/osascript \
+  -e 'on run argv' \
+  -e 'do shell script (item 1 of argv) with administrator privileges' \
+  -e 'end run' \
+  "/usr/bin/bputil -e" 2>/dev/null || echo "")"
+
+python3 - "$vg_uuid" "$bputil_output" "$json_mode" <<'PY'
+import json, re, sys
+
+vg_uuid, bputil_output, json_mode = sys.argv[1:]
+json_mode = json_mode == "true"
+
+status = "unknown"
+security_mode = "unknown"
+summary = ""
+guide = ""
+
+# Parse bputil -e output for the given VG UUID
+# The output contains sections like:
+#   Local policy for volume group <UUID>:
+#   ...
+#   Security Mode:               Full       (smb0): absent
+#   Security Mode:               Reduced    (smb0): present
+
+if vg_uuid in bputil_output:
+    # Extract the section for this VG
+    sections = bputil_output.split("Local policy for volume group")
+    for section in sections:
+        if vg_uuid in section:
+            # Check for Reduced Security marker
+            if "reduced" in section.lower() and "Security Mode" in section:
+                # Look for "Reduced" specifically
+                for line in section.split("\n"):
+                    if "Security Mode" in line and "Reduced" in line:
+                        security_mode = "reduced"
+                        status = "passed"
+                        summary = f"Reduced Security is enabled for {vg_uuid}. m1n1 can boot."
+                        break
+                    elif "Security Mode" in line and "Full" in line:
+                        security_mode = "full"
+                        status = "blocked"
+                        summary = f"Full Security is enabled for {vg_uuid}. Reduced Security required for m1n1."
+                        guide = (
+                            "To enable Reduced Security:\n"
+                            "1. Shut down your Mac\n"
+                            "2. Press and hold the power button until Startup Options appears\n"
+                            "3. Select Options → Startup Security Utility\n"
+                            "4. Select the Cidre volume\n"
+                            "5. Choose Reduced Security"
+                        )
+                        break
+                    elif "Security Mode" in line and "Permissive" in line:
+                        security_mode = "permissive"
+                        status = "passed"
+                        summary = f"Permissive Security is enabled for {vg_uuid}."
+                        break
+            break
+
+if security_mode == "unknown":
+    status = "blocked"
+    summary = f"No LocalPolicy found for Volume Group {vg_uuid}. Run boot-policy-create first."
+    guide = "Boot policy has not been created yet. Complete the install execution step."
+
+payload = {
+    "schema_version": 1,
+    "command": "cidre-app-reduced-security-check",
+    "status": status,
+    "summary": summary,
+    "exit_code": 0 if status == "passed" else 4,
+    "volume_group_uuid": vg_uuid,
+    "security_mode": security_mode,
+    "reduced_security_guide": guide if guide else None,
+}
+
+print(json.dumps(payload, indent=2) if json_mode else payload["summary"])
+sys.exit(payload["exit_code"])
+PY

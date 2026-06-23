@@ -8,6 +8,15 @@ final class SetupWizardViewModel: ObservableObject {
     @Published var isRunning = false
     @Published var gateDecision: WizardGateState?
 
+    /// Owner credentials for bless/bputil operations. Held in memory only.
+    @Published var ownerCredentials: OwnerCredentials?
+
+    /// Boot policy state tracking
+    @Published var bootPolicyVM = BootPolicyViewModel()
+
+    /// Install target device (e.g. disk3s1), set during disk planning
+    @Published var installTarget: String?
+
     func load(repositoryPath: String) {
         state = WizardStateStore.shared.load(repositoryPath: repositoryPath, mode: .install)
         if let found = stages.firstIndex(of: state.stage) {
@@ -56,7 +65,40 @@ final class SetupWizardViewModel: ObservableObject {
     }
 
     func runCurrent(repositoryPath: String, isMockMode: Bool, logStore: ExecutionLogStore) {
-        guard let operation = operationForCurrentStage() else { return }
+        guard var operation = operationForCurrentStage() else { return }
+
+        // Append owner credentials and target for boot-policy-create operation
+        if operation.id == "boot-policy-create" {
+            var cmd = operation.command
+            if let installTarget = installTarget, !installTarget.isEmpty {
+                cmd += " --target \(installTarget)"
+            }
+            if let creds = ownerCredentials {
+                cmd += " --owner-user \(creds.username) --owner-password \(creds.password)"
+            }
+            cmd += " --json"
+            operation = WizardOperation(
+                id: operation.id, title: operation.title, category: operation.category,
+                stage: operation.stage, privilegeLevel: operation.privilegeLevel,
+                destructive: operation.destructive, requiresConfirmation: operation.requiresConfirmation,
+                requiresHelper: operation.requiresHelper, dryRunAvailable: operation.dryRunAvailable,
+                command: cmd, rollbackHint: operation.rollbackHint
+            )
+        }
+
+        // m1n1-build builds from source - just ensure --json
+        if operation.id == "m1n1-build" {
+            var cmd = operation.command
+            cmd += " --json"
+            operation = WizardOperation(
+                id: operation.id, title: operation.title, category: operation.category,
+                stage: operation.stage, privilegeLevel: operation.privilegeLevel,
+                destructive: operation.destructive, requiresConfirmation: operation.requiresConfirmation,
+                requiresHelper: operation.requiresHelper, dryRunAvailable: operation.dryRunAvailable,
+                command: cmd, rollbackHint: operation.rollbackHint
+            )
+        }
+
         isRunning = true
         state.status = "running"
         state.lastOperation = operation.id
@@ -68,6 +110,14 @@ final class SetupWizardViewModel: ObservableObject {
         state.helperRequired = operation.requiresHelper
         WizardStateStore.shared.save(state, repositoryPath: repositoryPath)
         logStore.append(command: execution.command, arguments: execution.arguments, exitCode: execution.exitCode ?? 0, status: execution.status, summary: execution.parsedResult?.summary ?? execution.stdout, duration: Date().timeIntervalSince(start))
+
+        // Update boot policy view model from result
+        if operation.id == "boot-policy-create" {
+            bootPolicyVM.updateFromResult(execution.parsedResult.map { _ in
+                (try? JSONSerialization.jsonObject(with: execution.stdout.data(using: .utf8) ?? Data())) as? [String: Any]
+            } ?? nil)
+        }
+
         isRunning = false
     }
 }

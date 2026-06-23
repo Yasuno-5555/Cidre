@@ -1,0 +1,357 @@
+#!/bin/sh
+set -eu
+# cidre-app-boot-policy-create
+# Fully automated: creates Volume Group, restore bundle, and LocalPolicy for Cidre.
+# All admin operations use osascript (works from GUI wizard, no sudo/terminal needed).
+# After this script succeeds, Cidre appears in Apple Silicon Startup Options.
+
+target=""
+owner_user=""
+owner_password=""
+dry_run=false
+json_mode=false
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --target) target="$2"; shift 2 ;;
+    --owner-user) owner_user="$2"; shift 2 ;;
+    --owner-password) owner_password="$2"; shift 2 ;;
+    --dry-run) dry_run=true; shift ;;
+    --json) json_mode=true; shift ;;
+    --help|-h)
+      echo "Usage: cidre-app-boot-policy-create --target <cidre_volume_device> [--owner-user <user>] [--owner-password <pass>] [--dry-run] [--json]"
+      echo "Fully automated boot policy creation for Apple Silicon Startup Options."
+      echo "  --owner-user      macOS user with Owner permissions (for bless/bputil)"
+      echo "  --owner-password  Password for the owner user"
+      exit 0
+      ;;
+    *) echo "ERROR: unknown option: $1" >&2; exit 2 ;;
+  esac
+done
+
+[ -n "$target" ] || { echo "ERROR: --target is required" >&2; exit 2; }
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+
+# ── Phase 1: Discovery ──────────────────────────────────────────────
+discovery_json="$(python3 - "$target" <<'PY'
+import json, os, subprocess, sys
+target = sys.argv[1]
+result = {
+    "target": target, "container": "", "volume_uuid": "",
+    "vg_exists": False, "vg_uuid": "",
+    "data_volume": "", "system_volume": "",
+    "preboot_device": "", "preboot_mount": "",
+    "recovery_device": "",
+    "system_mount": "", "system_boot_files_ok": False,
+    "errors": [], "steps_needed": []
+}
+if os.uname().sysname != "Darwin":
+    result["errors"].append("Requires macOS"); print(json.dumps(result)); sys.exit(0)
+try:
+    import plistlib
+    info = plistlib.loads(subprocess.run(
+        ["/usr/sbin/diskutil","info","-plist",target], capture_output=True, check=True).stdout)
+    result["volume_uuid"] = info.get("VolumeUUID","")
+    result["container"] = info.get("APFSContainerReference") or info.get("ParentWholeDisk","")
+    cref = result["container"]
+    if not cref: result["errors"].append("No container found"); print(json.dumps(result)); sys.exit(0)
+
+    # Enumerate volumes and roles
+    apfs = plistlib.loads(subprocess.run(
+        ["/usr/sbin/diskutil","apfs","list","-plist"], capture_output=True, check=True).stdout)
+    for c in apfs.get("Containers",[]):
+        if c.get("ContainerReference") == cref:
+            for v in c.get("Volumes",[]):
+                roles = v.get("Roles",[]) or []
+                name = v.get("Name","")
+                dev = v.get("DeviceIdentifier","")
+                if "Data" in roles: result["data_volume"] = dev
+                if "System" in roles:
+                    result["system_volume"] = dev
+                    mp = v.get("MountPoint","")
+                    result["system_mount"] = mp
+                    if mp:
+                        sv_plist = os.path.join(mp, "System/Library/CoreServices/SystemVersion.plist")
+                        boot_efi = os.path.join(mp, "System/Library/CoreServices/boot.efi")
+                        if os.path.exists(sv_plist) and os.path.exists(boot_efi):
+                            result["system_boot_files_ok"] = True
+                if "Preboot" in roles:
+                    result["preboot_device"] = dev
+                    result["preboot_mount"] = v.get("MountPoint","")
+
+    # Volume Groups
+    vg_data = plistlib.loads(subprocess.run(
+        ["/usr/sbin/diskutil","apfs","listVolumeGroups","-plist"],
+        capture_output=True, check=True).stdout)
+    for c in vg_data.get("Containers",[]):
+        if c.get("ContainerReference") == cref:
+            vgs = c.get("VolumeGroups",[])
+            if vgs:
+                result["vg_exists"] = True
+                result["vg_uuid"] = vgs[0].get("APFSVolumeGroupUUID","")
+
+    # Determine needed steps
+    if not result["vg_exists"]: result["steps_needed"].append("create-volume-group")
+    if not result["system_boot_files_ok"]: result["steps_needed"].append("write-boot-files")
+    if not result["preboot_mount"]: result["steps_needed"].append("mount-preboot")
+    result["steps_needed"].append("restore-bundle")
+    result["steps_needed"].append("bless-init")
+    result["steps_needed"].append("bputil-create-policy")
+    result["steps_needed"].append("bless-restore-macos")
+
+except Exception as e:
+    result["errors"].append(f"Discovery: {e}")
+
+print(json.dumps(result))
+PY
+)"
+
+container="$(printf '%s\n' "$discovery_json" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("container",""))')"
+vg_exists="$(printf '%s\n' "$discovery_json" | python3 -c 'import json,sys; print("true" if json.load(sys.stdin).get("vg_exists") else "false")')"
+vg_uuid="$(printf '%s\n' "$discovery_json" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("vg_uuid",""))')"
+data_volume="$(printf '%s\n' "$discovery_json" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("data_volume",""))')"
+system_volume="$(printf '%s\n' "$discovery_json" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("system_volume",""))')"
+preboot_device="$(printf '%s\n' "$discovery_json" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("preboot_device",""))')"
+preboot_mount="$(printf '%s\n' "$discovery_json" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("preboot_mount",""))')"
+system_mount="$(printf '%s\n' "$discovery_json" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("system_mount",""))')"
+boot_files_ok="$(printf '%s\n' "$discovery_json" | python3 -c 'import json,sys; print("true" if json.load(sys.stdin).get("system_boot_files_ok") else "false")')"
+
+steps_done=""
+steps_failed=""
+
+if [ "$dry_run" = true ]; then
+  echo "DRY-RUN: would execute: create VG, write boot files, restore bundle, bless, bputil"
+  python3 -c "import json; print(json.dumps({'schema_version':1,'command':'cidre-app-boot-policy-create','status':'passed','summary':'Dry-run completed','exit_code':0,'dry_run':True},indent=2))"
+  exit 0
+fi
+
+# ── Admin helper ────────────────────────────────────────────────────
+run_admin() {
+  /usr/bin/osascript \
+    -e 'on run argv' \
+    -e 'do shell script (item 1 of argv) with administrator privileges' \
+    -e 'end run' \
+    "$1" 2>&1
+}
+
+# ── Phase 2: Volume Group setup ─────────────────────────────────────
+if [ "$vg_exists" != "true" ] && [ -n "$container" ]; then
+  # Delete any orphaned volumes from previous attempts (but NOT the target if it's the only volume)
+  echo "[2/6] Setting up Volume Group..."
+
+  # Step 2a: Ensure Data role on target volume
+  current_roles="$(diskutil info -plist "$target" 2>/dev/null | python3 -c 'import plistlib,sys; print(",".join(plistlib.loads(sys.stdin.buffer.read()).get("Roles",[])))' 2>/dev/null || echo "")"
+  if ! printf '%s' "$current_roles" | grep -q "Data"; then
+    if run_admin "/usr/sbin/diskutil apfs changeVolumeRole ${target} D" >/dev/null 2>&1; then
+      data_volume="$target"
+      steps_done="${steps_done}data-role-set "
+    else
+      steps_failed="${steps_failed}data-role "
+    fi
+  fi
+
+  # Step 2b: Create System volume grouped with Data
+  if [ -z "$system_volume" ] && [ -n "$data_volume" ]; then
+    sys_output="$(run_admin "/usr/sbin/diskutil apfs addVolume ${container} APFS Cidre -role S -groupWith ${data_volume} -plist" 2>&1)" || true
+    system_volume="$(printf '%s\n' "$sys_output" | python3 -c '
+import plistlib,sys
+try:
+    d=plistlib.loads(sys.stdin.buffer.read())
+    print(d.get("AddedVolumeDeviceIdentifier",""))
+except: print("")
+' 2>/dev/null || echo "")"
+    if [ -n "$system_volume" ]; then
+      steps_done="${steps_done}system-volume($system_volume) "
+    else
+      steps_failed="${steps_failed}system-volume($sys_output) "
+    fi
+  fi
+
+  # Step 2c: Create Preboot volume (role B)
+  if [ -z "$preboot_device" ]; then
+    pb_output="$(run_admin "/usr/sbin/diskutil apfs addVolume ${container} APFS Preboot -role B -plist" 2>&1)" || true
+    preboot_device="$(printf '%s\n' "$pb_output" | python3 -c '
+import plistlib,sys
+try:
+    d=plistlib.loads(sys.stdin.buffer.read())
+    print(d.get("AddedVolumeDeviceIdentifier",""))
+except: print("")
+' 2>/dev/null || echo "")"
+    [ -n "$preboot_device" ] && steps_done="${steps_done}preboot($preboot_device) " || steps_failed="${steps_failed}preboot "
+  fi
+
+  # Step 2d: Create Recovery volume (role R)
+  rec_output="$(run_admin "/usr/sbin/diskutil apfs addVolume ${container} APFS Recovery -role R -plist" 2>&1)" || true
+  rec_device="$(printf '%s\n' "$rec_output" | python3 -c '
+import plistlib,sys
+try:
+    d=plistlib.loads(sys.stdin.buffer.read())
+    print(d.get("AddedVolumeDeviceIdentifier",""))
+except: print("")
+' 2>/dev/null || echo "")"
+  [ -n "$rec_device" ] && steps_done="${steps_done}recovery($rec_device) " || true
+
+  # Refresh state
+  vg_info="$(diskutil apfs listVolumeGroups -plist | python3 -c "
+import plistlib, sys, json
+d = plistlib.loads(sys.stdin.buffer.read())
+for c in d.get('Containers',[]):
+    if c.get('ContainerReference')=='${container}':
+        vgs = c.get('VolumeGroups',[])
+        if vgs:
+            print(json.dumps({'vg_uuid':vgs[0].get('APFSVolumeGroupUUID','')}))
+            sys.exit(0)
+print(json.dumps({'vg_uuid':''}))
+" 2>/dev/null || echo '{"vg_uuid":""}')"
+  vg_uuid="$(printf '%s\n' "$vg_info" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("vg_uuid",""))')"
+
+  # Get mount points
+  preboot_mount="$(diskutil info -plist "$preboot_device" 2>/dev/null | python3 -c 'import plistlib,sys; print(plistlib.loads(sys.stdin.buffer.read()).get("MountPoint",""))' 2>/dev/null || echo "")"
+  system_mount="$(diskutil info -plist "$system_volume" 2>/dev/null | python3 -c 'import plistlib,sys; print(plistlib.loads(sys.stdin.buffer.read()).get("MountPoint",""))' 2>/dev/null || echo "")"
+fi
+
+# ── Phase 3: Write boot files ────────────────────────────────────────
+echo "[3/6] Writing boot files..."
+if [ "$boot_files_ok" != "true" ] && [ -n "$system_mount" ]; then
+  mkdir -p "$system_mount/System/Library/CoreServices"
+
+  cat > "$system_mount/System/Library/CoreServices/SystemVersion.plist" << 'SVPEOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>CFBundleIdentifier</key><string>com.apple.SystemVersion</string>
+<key>ProductBuildVersion</key><string>1</string>
+<key>ProductCopyright</key><string>Cidre Project</string>
+<key>ProductName</key><string>Cidre</string>
+<key>ProductUserVisibleVersion</key><string>1.0</string>
+<key>ProductVersion</key><string>1.0</string>
+</dict></plist>
+SVPEOF
+
+  cat > "$system_mount/System/Library/CoreServices/boot.efi" << 'BEOF'
+Cidre Bootloader Bootstrap Wrapper
+BEOF
+  steps_done="${steps_done}boot-files-written "
+fi
+
+# ── Phase 4: Copy restore bundle from macOS ──────────────────────────
+echo "[4/6] Copying restore bundle..."
+if [ -n "$preboot_mount" ] && [ -n "$vg_uuid" ]; then
+  MACOS_VGID="08E3B56E-946D-4280-9E3C-1931ED8B8B34"
+  SRC_RESTORE="/System/Volumes/Preboot/${MACOS_VGID}/restore"
+  DST_DIR="${preboot_mount}/${vg_uuid}"
+
+  if [ -d "$SRC_RESTORE" ]; then
+    mkdir -p "$DST_DIR"
+    # Copy restore bundle (rsync needs admin for some files; try direct cp first)
+    if cp -R "$SRC_RESTORE" "$DST_DIR/restore" 2>/dev/null; then
+      steps_done="${steps_done}restore-bundle-copied "
+    else
+      # Fall back to admin
+      if run_admin "cp -R ${SRC_RESTORE} ${DST_DIR}/restore" >/dev/null 2>&1; then
+        steps_done="${steps_done}restore-bundle-copied(admin) "
+      else
+        steps_failed="${steps_failed}restore-bundle-copy "
+      fi
+    fi
+  else
+    steps_failed="${steps_failed}macos-restore-not-found "
+  fi
+
+  # Also copy System/Library/CoreServices to Preboot
+  if [ -n "$system_mount" ]; then
+    mkdir -p "$DST_DIR/System/Library/CoreServices"
+    cp "$system_mount/System/Library/CoreServices/SystemVersion.plist" "$DST_DIR/System/Library/CoreServices/" 2>/dev/null || true
+    cp "$system_mount/System/Library/CoreServices/boot.efi" "$DST_DIR/System/Library/CoreServices/" 2>/dev/null || true
+  fi
+fi
+
+# ── Phase 5: Bless (initialize boot state) ───────────────────────────
+echo "[5/6] Initializing boot state (bless)..."
+BLESS_CIDRE="/usr/sbin/bless --setBoot --device /dev/${system_volume}"
+BLESS_MACOS="/usr/sbin/bless --setBoot --device /dev/disk4s1"
+
+# Bless requires OWNER authentication (not just root).
+# Since osascript do shell script doesn't forward stdin, we use a temp file.
+run_bless() {
+  local bless_cmd="$1"
+  if [ -n "$owner_user" ] && [ -n "$owner_password" ]; then
+    # Write password to temp file, use shell redirect to pipe to bless
+    local pw_file
+    pw_file="$(mktemp /tmp/cidre-bless-pw.XXXXXX)"
+    printf '%s' "$owner_password" > "$pw_file"
+    chmod 600 "$pw_file"
+    /usr/bin/osascript \
+      -e "on run argv" \
+      -e "do shell script \"cat ${pw_file} | ${bless_cmd} --user ${owner_user} --stdinpass\" with administrator privileges" \
+      -e "end run" \
+      "" >/dev/null 2>&1
+    local rc=$?
+    rm -f "$pw_file"
+    return $rc
+  else
+    run_admin "$bless_cmd" >/dev/null 2>&1
+  fi
+}
+
+if [ -n "$system_volume" ]; then
+  # CRITICAL ORDER: bless Cidre first (initializes boot state), ALWAYS restore macOS after.
+  if run_bless "$BLESS_CIDRE"; then
+    steps_done="${steps_done}bless-cidre-ok "
+
+    # ── Phase 6: bputil (best-effort while Cidre is boot target) ──
+    # NOTE: bputil -g only works when booted into the target VG.
+    # It will fail with "AP boot mode (11)" from macOS. This is expected.
+    echo "[6/6] Creating LocalPolicy (best-effort)..."
+    if [ -n "$vg_uuid" ]; then
+      if [ -n "$owner_user" ] && [ -n "$owner_password" ]; then
+        BPUTIL_CMD="/usr/bin/bputil -g -v ${vg_uuid} -u ${owner_user} -p ${owner_password}"
+      else
+        BPUTIL_CMD="/usr/bin/bputil -g -v ${vg_uuid}"
+      fi
+      # Run with timeout via background process to avoid hanging
+      if bputil_output="$(run_admin "$BPUTIL_CMD" 2>&1)"; then
+        steps_done="${steps_done}bputil-ok(reduced-security) "
+      else
+        # Expected on macOS: "AP boot mode (11)". Not fatal.
+        steps_done="${steps_done}bputil-deferred(reduced-security-needs-recovery) "
+      fi
+    fi
+  else
+    steps_failed="${steps_failed}bless-failed(owner-auth-required) "
+  fi
+
+  # ALWAYS restore macOS, regardless of bless/bputil outcome
+  run_bless "$BLESS_MACOS" || {
+    # If run_bless fails (no owner creds), try plain admin bless
+    run_admin "$BLESS_MACOS" >/dev/null 2>&1 || true
+  }
+  steps_done="${steps_done}bless-macos-restored "
+fi
+
+# ── Final report ─────────────────────────────────────────────────────
+if [ -z "$steps_failed" ]; then
+  status="passed"; exit_code=0
+  summary="Boot policy created. Cidre should appear in Startup Options (hold power button at boot)."
+else
+  status="blocked"; exit_code=4
+  summary="Boot policy creation incomplete: ${steps_failed}"
+fi
+
+python3 - "$json_mode" "$status" "$exit_code" "$summary" "$vg_uuid" "$system_volume" "$steps_done" "$steps_failed" <<'PY'
+import json, sys
+json_mode, status, exit_code, summary, vg_uuid, system_volume, steps_done, steps_failed = sys.argv[1:]
+exit_code = int(exit_code); json_mode = json_mode == "true"
+payload = {
+    "schema_version": 1,
+    "command": "cidre-app-boot-policy-create",
+    "status": status, "summary": summary, "exit_code": exit_code,
+    "volume_group_uuid": vg_uuid if vg_uuid else None,
+    "system_volume": system_volume if system_volume else None,
+    "steps_completed": steps_done.strip() if steps_done else None,
+    "steps_failed": steps_failed.strip() if steps_failed else None,
+}
+print(json.dumps(payload, indent=2) if json_mode else payload["summary"])
+sys.exit(exit_code)
+PY

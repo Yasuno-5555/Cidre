@@ -58,15 +58,15 @@ struct SetupWizardRootView: View {
         case .installPlan:
             InstallPlanStepView()
         case .privilegedPreparation:
-            PrivilegedHelperStepView()
+            PrivilegedHelperStepView(wizardVM: viewModel)
         case .seedGeneration:
             SeedGenerationStepView()
         case .artifactPreparation:
             ArtifactPreparationStepView()
         case .installExecution:
-            InstallExecutionStepView()
+            InstallExecutionStepView(wizardVM: viewModel)
         case .postInstallVerification:
-            PostInstallVerificationStepView()
+            PostInstallVerificationStepView(wizardVM: viewModel)
         case .finish:
             FinishStepView()
         default:
