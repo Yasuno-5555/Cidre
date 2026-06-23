@@ -124,6 +124,7 @@ else:
     summary = "Controlled mutation test mode is enabled." if state.get("enabled") else "Controlled mutation test mode is disabled."
 
 payload = dict(state)
+effective_environment_enabled = os.environ.get("CIDRE_MUTATION_TEST_MODE") == "1" or bool(state.get("enabled"))
 payload.update({
     "schema_version": 1,
     "command": "cidre-app-mutation-test-mode",
@@ -132,7 +133,7 @@ payload.update({
     "mode": state.get("mode", "disabled"),
     "enabled": bool(state.get("enabled")),
     "required_phrase": required_phrase,
-    "environment_enabled": os.environ.get("CIDRE_MUTATION_TEST_MODE") == "1",
+    "environment_enabled": effective_environment_enabled,
     "prerequisites": {name: {"path": path, "present": os.path.exists(path)} for name, path in prerequisites.items()},
     "warnings": [] if state.get("enabled") else ["Disk mutation remains blocked until both test mode and installer test override are enabled."],
     "errors": errors,
