@@ -26,12 +26,12 @@ struct DiskPlanningGuidedActionsView: View {
                 Button(mutationTestModeEnabled ? "Test Mode Enabled" : "Enable Test Mode") {
                     enableMutationTestMode()
                 }
-                .disabled(isRunning || mutationTestModeEnabled)
+                .disabled(isRunning)
 
                 Button(installerOverrideEnabled ? "Installer Override Enabled" : "Enable Installer Override") {
                     enableInstallerTestOverride()
                 }
-                .disabled(isRunning || installerOverrideEnabled)
+                .disabled(isRunning)
             }
 
             HStack(spacing: 8) {
