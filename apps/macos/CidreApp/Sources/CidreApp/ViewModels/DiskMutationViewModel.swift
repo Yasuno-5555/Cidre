@@ -94,9 +94,10 @@ final class DiskMutationViewModel: ObservableObject {
     var canExecute: Bool {
         let isSafeVolume = installTarget?.classification == "cidre-volume"
         let killSwitchPassed = isSafeVolume || killSwitchState.destructiveInstallAllowed
+        let testModePassed = isSafeVolume || mutationTestMode?.enabled == true
         return killSwitchPassed
+            && testModePassed
             && canPreview
-            && helperGateDecision?.status == "passed"
             && requiredConfirmation?.trimmingCharacters(in: .whitespacesAndNewlines) == confirmation.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
@@ -168,11 +169,11 @@ final class DiskMutationViewModel: ObservableObject {
         if !isSafeVolume && !killSwitchState.destructiveInstallAllowed {
             blockers.append("Installer test override is still disabled by DFU containment.")
         }
+        if !isSafeVolume && mutationTestMode?.enabled != true {
+            blockers.append("Enable Mutation Test Mode before executing the disk change.")
+        }
         if !canPreview {
             blockers.append("Validate the current preview before running the authenticated disk change.")
-        }
-        if helperGateDecision?.status != "passed" {
-            blockers.append(helperGateDecision?.summary ?? "The helper gate has not approved disk execution yet.")
         }
         if let requiredConfirmation,
            requiredConfirmation.trimmingCharacters(in: .whitespacesAndNewlines) != confirmation.trimmingCharacters(in: .whitespacesAndNewlines) {
