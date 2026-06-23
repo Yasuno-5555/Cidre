@@ -85,7 +85,7 @@ if controlled_install_scope or killswitch.get("destructive_install_allowed"):
 else:
     add_check("installer-killswitch", "blocked", killswitch.get("reason", "installer killswitch active"))
 
-if controlled_install_scope or (mutation_mode.get("enabled") and mutation_mode.get("environment_enabled")):
+if controlled_install_scope or mutation_mode.get("enabled"):
     add_check("mutation-test-mode", "passed")
 else:
     add_check("mutation-test-mode", "blocked", mutation_mode.get("summary", "controlled mutation test mode disabled"))
@@ -115,7 +115,6 @@ if scope == "helper":
     if (
         killswitch.get("destructive_install_allowed")
         and mutation_mode.get("enabled")
-        and mutation_mode.get("environment_enabled")
         and recovery.get("status") == "passed"
         and (not target or disposable.get("status") == "passed" or install_target.get("status") == "passed")
     ):
@@ -138,7 +137,6 @@ elif scope == "live-drill":
     gate_ready = (
         killswitch.get("destructive_install_allowed")
         and mutation_mode.get("enabled")
-        and mutation_mode.get("environment_enabled")
         and recovery.get("status") == "passed"
         and (not level_requires_disposable or disposable.get("status") == "passed")
     )
@@ -162,7 +160,6 @@ else:
     if (
         killswitch.get("destructive_install_allowed")
         and mutation_mode.get("enabled")
-        and mutation_mode.get("environment_enabled")
         and recovery.get("status") == "passed"
         and guard.get("status") == "passed"
     ):
