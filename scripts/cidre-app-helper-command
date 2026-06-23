@@ -103,7 +103,9 @@ PY
 
   if [ "$operation" != "controlled-install" ]; then
     mutation_mode_json="$("$SCRIPT_DIR/cidre-app-mutation-test-mode" --status --json)"
-    mutation_enabled="$(printf '%s\n' "$mutation_mode_json" | python3 -c 'import json,sys; data=json.load(sys.stdin); print("true" if data.get("enabled") and data.get("environment_enabled") else "false")' 2>/dev/null || printf false)"
+    # Check file-based enabled flag only; the CIDRE_MUTATION_TEST_MODE env var
+    # is not reliably set when invoked from the GUI .app bundle.
+    mutation_enabled="$(printf '%s\n' "$mutation_mode_json" | python3 -c 'import json,sys; data=json.load(sys.stdin); print("true" if data.get("enabled") else "false")' 2>/dev/null || printf false)"
     if [ "$mutation_enabled" != "true" ]; then
       python3 - "$json_mode" <<'PY'
 import json
@@ -112,12 +114,12 @@ payload = {
     "schema_version": 1,
     "command": "cidre-app-helper-command",
     "status": "blocked",
-    "summary": "Controlled mutation test mode is not fully enabled.",
+    "summary": "Controlled mutation test mode is not enabled.",
     "phase": "disk",
     "stage": "execute",
     "exit_code": 4,
     "warnings": [],
-    "errors": [{"code": "mutation-test-mode-disabled", "message": "Enable CIDRE_MUTATION_TEST_MODE=1 and cidre-app-mutation-test-mode before helper mutation."}],
+    "errors": [{"code": "mutation-test-mode-disabled", "message": "Enable mutation test mode via the Disk Plan step before proceeding."}],
 }
 print(json.dumps(payload, indent=2) if sys.argv[1] == "true" else payload["summary"])
 sys.exit(4)

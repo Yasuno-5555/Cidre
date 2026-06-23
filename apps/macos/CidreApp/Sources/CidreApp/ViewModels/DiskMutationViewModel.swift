@@ -226,13 +226,14 @@ final class DiskMutationViewModel: ObservableObject {
         if installTarget?.status != "passed" {
             return .selectTarget
         }
-        if mutationTestMode?.enabled != true {
+        let isSafeVolume = installTarget?.classification == "cidre-volume"
+        if !isSafeVolume && mutationTestMode?.enabled != true {
             return .enableMutationTestMode
         }
-        if !killSwitchState.destructiveInstallAllowed {
+        if !isSafeVolume && !killSwitchState.destructiveInstallAllowed {
             return .enableInstallerOverride
         }
-        if !snapshotAvailability.beforeAvailable {
+        if snapshotAvailability.beforeAvailable == false {
             return .capturePreSnapshot
         }
         if recoverySurvivalState?.status != "passed" {
@@ -626,6 +627,7 @@ final class DiskMutationViewModel: ObservableObject {
     func preview(repositoryPath: String) {
         guard let planID else { return }
         run(repositoryPath: repositoryPath, command: "scripts/cidre-app-helper-command", arguments: helperArguments(planID: planID, dryRun: true))
+        refreshSafetyStatus(repositoryPath: repositoryPath)
     }
 
     func execute(repositoryPath: String) {

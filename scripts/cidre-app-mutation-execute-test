@@ -156,7 +156,6 @@ def add_check(identifier, passed, reason):
     if not passed:
         errors.append({"code": identifier, "message": reason})
 
-add_check("mutation-test-mode-env", os.environ.get("CIDRE_MUTATION_TEST_MODE") == "1", "CIDRE_MUTATION_TEST_MODE=1 is required.")
 add_check("mutation-test-mode-enabled", mutation_mode.get("enabled") is True, mutation_mode.get("summary") or "Mutation test mode is disabled.")
 add_check("installer-killswitch-enabled", killswitch.get("destructive_install_allowed") is True, killswitch.get("summary") or "Installer test override is disabled.")
 add_check("disposable-target-check", disposable.get("status") == "passed", disposable.get("summary") or "Disposable target check failed.")
