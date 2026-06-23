@@ -46,14 +46,7 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-if [ -z "$target" ]; then
-  if [ "$json_mode" = "true" ]; then
-    printf '{\n  "schema_version": 1,\n  "command": "cidre-uninstall-execute",\n  "status": "fail",\n  "exit_code": 2,\n  "errors": [{"code": "missing-target", "message": "--target is required"}]\n}\n'
-  else
-    printf 'ERROR: --target is required\n' >&2
-  fi
-  exit 2
-fi
+
 
 if [ "$uninstall" = "false" ] || [ "$confirm" = "false" ]; then
   if [ "$json_mode" = "true" ]; then
@@ -73,16 +66,10 @@ res = {
       "message": "Explicit confirmation phrase is required."
     }
   ],
-  "required_confirmation": "I UNDERSTAND THIS DELETES CIDRE",
-  "next_actions": [
-    {
-      "label": "Review uninstall dry-run",
-      "command": "scripts/cidre-uninstall-dry-run --target " + sys.argv[1] + " --json"
-    }
-  ]
+  "required_confirmation": "I UNDERSTAND THIS DELETES CIDRE"
 }
 print(json.dumps(res, indent=2))
-' "$target"
+'
   else
     printf "BLOCKED:\n  missing explicit confirmation\n" >&2
   fi
@@ -114,6 +101,21 @@ resized_container = None
 try:
     if os.uname().sysname != "Darwin":
         raise Exception("Active partition resizing is only supported on macOS Darwin hosts.")
+
+    # Auto-detect target APFS volume named 'Cidre' if not explicitly provided
+    if not target or target == "cidre-candidate":
+        apfs_list = run_plist("apfs", "list", "-plist")
+        for container in apfs_list.get("Containers", []):
+            for volume in container.get("Volumes", []):
+                name = volume.get("Name") or volume.get("VolumeName") or ""
+                if name.lower() == "cidre":
+                    target = volume.get("DeviceIdentifier")
+                    break
+            if target:
+                break
+
+    if not target:
+         raise Exception("Could not find any existing APFS volume named 'Cidre' to delete.")
 
     # 1. Inspect target to find its APFS container
     target_info = run_plist("info", "-plist", target)
