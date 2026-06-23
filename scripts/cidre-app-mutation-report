@@ -50,8 +50,12 @@ if execution_status in {"blocked", "failed", "passed"}:
     final_status = execution_status
 elif verification_status in {"failed", "passed"}:
     final_status = verification_status
-elif disposable_status:
+elif disposable_status == "passed":
     final_status = disposable_status
+elif disposable_status:
+    # A legacy disposable-target failure should not poison the current
+    # startup-store install flow or finish/shutdown gate by itself.
+    final_status = "blocked"
 payload = {
     "schema_version": 1,
     "command": "cidre-app-mutation-report",
