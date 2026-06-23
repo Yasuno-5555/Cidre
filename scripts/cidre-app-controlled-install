@@ -91,6 +91,7 @@ fi
 # Manual boot guide
 guide_output="$("$SCRIPT_DIR/cidre-app-manual-boot-guide" --json 2>/dev/null || true)"
 
+set +e
 python3 - "$CURRENT_DIR" "$plan_dir" "$plan" "$json_mode" "$dry_run" "$gate_json" "$plan_verify_json" "$helper_gate_json" "$disposable_json" "$before_result" "$after_result" "$stage_output" "$verify_output" "$boot_check_output" "$guide_output" <<'PY'
 import json, os, sys
 current_dir, plan_dir, plan_path, json_mode, dry_run, gate_raw, plan_verify_raw, helper_gate_raw, disposable_raw, before_raw, after_raw, stage_raw, verify_raw, boot_raw, guide_raw = sys.argv[1:]
@@ -176,9 +177,13 @@ for base in (current_dir, plan_dir):
 print(json.dumps(payload, indent=2) if json_mode else payload["summary"])
 sys.exit(payload["exit_code"])
 PY
+install_exit_code=$?
+set -e
 
 # Always produce reports
 "$SCRIPT_DIR/cidre-app-install-report" --json > "$plan_dir/report.json" 2>/dev/null || true
 "$SCRIPT_DIR/cidre-app-install-report" --markdown > "$plan_dir/report.md" 2>/dev/null || true
 "$SCRIPT_DIR/cidre-app-install-report" --json > "$CURRENT_DIR/report.json" 2>/dev/null || true
 "$SCRIPT_DIR/cidre-app-install-report" --markdown > "$CURRENT_DIR/report.md" 2>/dev/null || true
+
+exit "$install_exit_code"

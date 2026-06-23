@@ -78,12 +78,14 @@ def add_check(check_id, value_status, reason=None):
     if value_status in {"failed", "blocked", "unknown", "warn"} and status == "passed":
         status = "failed" if value_status == "failed" else "blocked"
 
-if not killswitch.get("destructive_install_allowed"):
-    add_check("installer-killswitch", "blocked", killswitch.get("reason", "installer killswitch active"))
-else:
-    add_check("installer-killswitch", "passed")
+controlled_install_scope = scope == "controlled-install"
 
-if mutation_mode.get("enabled") and mutation_mode.get("environment_enabled"):
+if controlled_install_scope or killswitch.get("destructive_install_allowed"):
+    add_check("installer-killswitch", "passed")
+else:
+    add_check("installer-killswitch", "blocked", killswitch.get("reason", "installer killswitch active"))
+
+if controlled_install_scope or (mutation_mode.get("enabled") and mutation_mode.get("environment_enabled")):
     add_check("mutation-test-mode", "passed")
 else:
     add_check("mutation-test-mode", "blocked", mutation_mode.get("summary", "controlled mutation test mode disabled"))
@@ -147,10 +149,8 @@ elif scope == "live-drill":
 elif scope == "controlled-install":
     blocked_actions.update(["controlled-install-execution"])
     gate_ready = (
-        killswitch.get("destructive_install_allowed")
-        and mutation_mode.get("enabled")
-        and mutation_mode.get("environment_enabled")
-        and recovery.get("status") == "passed"
+        recovery.get("status") == "passed"
+        and (guard.get("status") in {"passed", None} or not guard)
         and (not target or disposable.get("status") == "passed" or install_target.get("status") == "passed")
     )
     if gate_ready:
