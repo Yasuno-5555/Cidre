@@ -329,6 +329,20 @@ final class DiskMutationViewModel: ObservableObject {
         let currentTarget = target
         let hasExecution = execution != nil
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let killSwitchExecution = LiveCommandRunner.shared.run(
+                "scripts/cidre-app-installer-killswitch",
+                arguments: ["--status", "--json"],
+                repositoryPath: repositoryPath,
+                isMockMode: false
+            )
+            let killSwitchState: InstallerKillSwitchState
+            if let data = killSwitchExecution.stdout.data(using: .utf8),
+               let decoded = try? JSONDecoder().decode(InstallerKillSwitchState.self, from: data) {
+                killSwitchState = decoded
+            } else {
+                killSwitchState = .containmentDefault
+            }
+            let mutationTestMode = MutationTestModeService.shared.status(repositoryPath: repositoryPath)
             let diskScanResult = DiskScanService.shared.scan(repositoryPath: repositoryPath)
             let snapshotAvailability = DiskSnapshotService.shared.availability(repositoryPath: repositoryPath)
             let protectedPartitionState = ProtectedPartitionGuardService.shared.evaluate(repositoryPath: repositoryPath, snapshots: snapshotAvailability)
@@ -350,6 +364,8 @@ final class DiskMutationViewModel: ObservableObject {
 
             DispatchQueue.main.async {
                 guard let self, generation == self.refreshGeneration else { return }
+                self.killSwitchState = killSwitchState
+                self.mutationTestMode = mutationTestMode
                 self.diskScanResult = diskScanResult
                 self.snapshotAvailability = snapshotAvailability
                 self.protectedPartitionState = protectedPartitionState
