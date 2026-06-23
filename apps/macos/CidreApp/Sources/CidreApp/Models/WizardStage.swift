@@ -10,6 +10,8 @@ enum WizardStage: String, Codable, CaseIterable, Identifiable {
     case seedGeneration = "seed-generation"
     case artifactPreparation = "artifact-preparation"
     case installExecution = "install-execution"
+    case bootChain = "boot-chain"
+    case bootPolicy = "boot-policy"
     case postInstallVerification = "post-install-verification"
     case finish
     case uninstallWelcome = "uninstall-welcome"
@@ -50,6 +52,10 @@ enum WizardStage: String, Codable, CaseIterable, Identifiable {
             return "Artifact Preparation"
         case .installExecution:
             return "Install Execution"
+        case .bootChain:
+            return "Boot Chain"
+        case .bootPolicy:
+            return "Boot Policy"
         case .postInstallVerification:
             return "Post-install Verification"
         case .finish:

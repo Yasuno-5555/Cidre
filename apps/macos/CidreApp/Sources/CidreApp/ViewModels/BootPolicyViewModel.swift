@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import SwiftUI
 
 /// State of m1n1 bootloader acquisition
 enum M1n1State: Equatable {
@@ -25,6 +26,41 @@ enum ReducedSecurityState: Equatable {
     case manualRecoveryRequired
 }
 
+/// Component status for boot chain display
+enum ComponentStatus {
+    case ready
+    case pending
+    case missing
+    case failed(String)
+
+    var icon: String {
+        switch self {
+        case .ready: return "checkmark.circle.fill"
+        case .pending: return "hourglass"
+        case .missing: return "circle"
+        case .failed: return "xmark.circle.fill"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .ready: return .green
+        case .pending: return .orange
+        case .missing: return .secondary
+        case .failed: return .red
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .ready: return "Ready"
+        case .pending: return "Pending"
+        case .missing: return "Not found"
+        case .failed(let reason): return "Failed: \(reason)"
+        }
+    }
+}
+
 /// Manages boot policy state: m1n1 acquisition, boot policy creation, security mode verification.
 final class BootPolicyViewModel: ObservableObject {
     @Published var m1n1State: M1n1State = .notAcquired
@@ -35,6 +71,18 @@ final class BootPolicyViewModel: ObservableObject {
     @Published var lastResult: [String: Any]?
     @Published var summaryText: String = ""
     @Published var guidanceText: String = ""
+
+    /// Boot chain component status
+    @Published var m1n1Status: ComponentStatus = .missing
+    @Published var kernelStatus: ComponentStatus = .missing
+    @Published var initramfsStatus: ComponentStatus = .missing
+
+    var allComponentsReady: Bool {
+        if case .ready = m1n1Status, case .ready = kernelStatus, case .ready = initramfsStatus {
+            return true
+        }
+        return false
+    }
 
     private var cancellables = Set<AnyCancellable>()
 
@@ -81,5 +129,20 @@ final class BootPolicyViewModel: ObservableObject {
 
         summaryText = result["summary"] as? String ?? ""
         guidanceText = result["reduced_security_guide"] as? String ?? ""
+
+        // Update boot chain component status from staged_files
+        if let staged = result["staged_files"] as? [String] {
+            for file in staged {
+                if file.contains("m1n1.macho") || file.contains("boot.efi") {
+                    m1n1Status = .ready
+                }
+                if file.contains("Image") {
+                    kernelStatus = .ready
+                }
+                if file.contains("initramfs") {
+                    initramfsStatus = .ready
+                }
+            }
+        }
     }
 }

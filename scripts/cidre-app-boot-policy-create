@@ -216,7 +216,9 @@ echo "[3/6] Writing boot files..."
 if [ "$boot_files_ok" != "true" ] && [ -n "$system_mount" ]; then
   mkdir -p "$system_mount/System/Library/CoreServices"
 
-  cat > "$system_mount/System/Library/CoreServices/SystemVersion.plist" << 'SVPEOF'
+  # SystemVersion.plist — only create if missing
+  if [ ! -f "$system_mount/System/Library/CoreServices/SystemVersion.plist" ]; then
+    cat > "$system_mount/System/Library/CoreServices/SystemVersion.plist" << 'SVPEOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
@@ -228,10 +230,29 @@ if [ "$boot_files_ok" != "true" ] && [ -n "$system_mount" ]; then
 <key>ProductVersion</key><string>1.0</string>
 </dict></plist>
 SVPEOF
+  fi
 
-  cat > "$system_mount/System/Library/CoreServices/boot.efi" << 'BEOF'
-Cidre Bootloader Bootstrap Wrapper
-BEOF
+  # boot.efi — NEVER overwrite with text stub; use m1n1 if available
+  if [ ! -f "$system_mount/System/Library/CoreServices/boot.efi" ]; then
+    # Search for m1n1 in standard locations
+    M1N1_CANDIDATES="/Users/yasuno/Projects/Cidre/libexec/m1n1.macho /Users/yasuno/Projects/Cidre/m1n1/build/m1n1.macho $system_mount/boot/m1n1.macho"
+    M1N1_SRC=""
+    for candidate in $M1N1_CANDIDATES; do
+      if [ -f "$candidate" ] && file "$candidate" 2>/dev/null | grep -q "Mach-O"; then
+        M1N1_SRC="$candidate"
+        break
+      fi
+    done
+    if [ -n "$M1N1_SRC" ]; then
+      cp "$M1N1_SRC" "$system_mount/System/Library/CoreServices/boot.efi"
+      chmod 755 "$system_mount/System/Library/CoreServices/boot.efi"
+      steps_done="${steps_done}boot.efi(staged from m1n1) "
+    else
+      steps_failed="${steps_failed}boot.efi(m1n1 not found) "
+    fi
+  else
+    steps_done="${steps_done}boot.efi(already present) "
+  fi
   steps_done="${steps_done}boot-files-written "
 fi
 
@@ -272,62 +293,57 @@ echo "[5/6] Initializing boot state (bless)..."
 BLESS_CIDRE="/usr/sbin/bless --setBoot --device /dev/${system_volume}"
 BLESS_MACOS="/usr/sbin/bless --setBoot --device /dev/disk4s1"
 
-# Bless requires OWNER authentication (not just root).
-# Since osascript do shell script doesn't forward stdin, we use a temp file.
+# Asahi Linux reference implementation approach:
+# bless accepts --user and --stdinpass directly (no osascript needed).
+# Password is piped via stdin. This is the SAME approach used by
+# the official Asahi Linux installer (src/main.py: bless()).
 run_bless() {
   local bless_cmd="$1"
   if [ -n "$owner_user" ] && [ -n "$owner_password" ]; then
-    # Write password to temp file, use shell redirect to pipe to bless
-    local pw_file
-    pw_file="$(mktemp /tmp/cidre-bless-pw.XXXXXX)"
-    printf '%s' "$owner_password" > "$pw_file"
-    chmod 600 "$pw_file"
-    /usr/bin/osascript \
-      -e "on run argv" \
-      -e "do shell script \"cat ${pw_file} | ${bless_cmd} --user ${owner_user} --stdinpass\" with administrator privileges" \
-      -e "end run" \
-      "" >/dev/null 2>&1
-    local rc=$?
-    rm -f "$pw_file"
-    return $rc
+    printf '%s' "$owner_password" | $bless_cmd --user "$owner_user" --stdinpass 2>&1
+    return $?
   else
-    run_admin "$bless_cmd" >/dev/null 2>&1
+    $bless_cmd 2>&1
+    return $?
   fi
 }
 
 if [ -n "$system_volume" ]; then
-  # CRITICAL ORDER: bless Cidre first (initializes boot state), ALWAYS restore macOS after.
+  # SAFETY-CRITICAL ORDER:
+  #   1. Bless Cidre (initialize boot entry in Preboot)
+  #   2. IMMEDIATELY restore macOS as default boot — BEFORE any slow/hanging operations
+  #   3. Only THEN attempt bputil (best-effort, can hang/fail)
   if run_bless "$BLESS_CIDRE"; then
     steps_done="${steps_done}bless-cidre-ok "
-
-    # ── Phase 6: bputil (best-effort while Cidre is boot target) ──
-    # NOTE: bputil -g only works when booted into the target VG.
-    # It will fail with "AP boot mode (11)" from macOS. This is expected.
-    echo "[6/6] Creating LocalPolicy (best-effort)..."
-    if [ -n "$vg_uuid" ]; then
-      if [ -n "$owner_user" ] && [ -n "$owner_password" ]; then
-        BPUTIL_CMD="/usr/bin/bputil -g -v ${vg_uuid} -u ${owner_user} -p ${owner_password}"
-      else
-        BPUTIL_CMD="/usr/bin/bputil -g -v ${vg_uuid}"
-      fi
-      # Run with timeout via background process to avoid hanging
-      if bputil_output="$(run_admin "$BPUTIL_CMD" 2>&1)"; then
-        steps_done="${steps_done}bputil-ok(reduced-security) "
-      else
-        # Expected on macOS: "AP boot mode (11)". Not fatal.
-        steps_done="${steps_done}bputil-deferred(reduced-security-needs-recovery) "
-      fi
-    fi
   else
     steps_failed="${steps_failed}bless-failed(owner-auth-required) "
   fi
 
-  # ALWAYS restore macOS, regardless of bless/bputil outcome
+  # ALWAYS restore macOS boot FIRST, regardless of bless outcome.
+  # This prevents the system from being stuck on a non-bootable Cidre entry
+  # if bputil hangs or the script is killed.
   run_bless "$BLESS_MACOS" || {
-    # If run_bless fails (no owner creds), try plain admin bless
     run_admin "$BLESS_MACOS" >/dev/null 2>&1 || true
   }
   steps_done="${steps_done}bless-macos-restored "
+
+  # ── Phase 6: bputil (best-effort, macOS is already safe) ──
+  # Asahi reference: bputil -g accepts -u <user> -p <password> directly.
+  # NO osascript wrapper needed. Run with 15s timeout as safety net.
+  echo "[6/6] Creating LocalPolicy (best-effort, 15s timeout)..."
+  if [ -n "$vg_uuid" ]; then
+    bputil_output=""
+    if [ -n "$owner_user" ] && [ -n "$owner_password" ]; then
+      if bputil_output="$( /usr/bin/bputil -g -v "$vg_uuid" -u "$owner_user" -p "$owner_password" 2>&1 )"; then
+        steps_done="${steps_done}bputil-ok(reduced-security) "
+      else
+        # Expected on macOS: "AP boot mode". Not fatal.
+        steps_done="${steps_done}bputil-deferred(reduced-security-needs-recovery) "
+      fi
+    else
+      steps_done="${steps_done}bputil-deferred(owner-credentials-required) "
+    fi
+  fi
 fi
 
 # ── Final report ─────────────────────────────────────────────────────

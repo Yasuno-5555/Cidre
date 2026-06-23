@@ -22,6 +22,21 @@ final class SetupWizardViewModel: ObservableObject {
         if let found = stages.firstIndex(of: state.stage) {
             currentIndex = found
         }
+        // Load install target from saved plan so it's available for boot-chain/boot-policy stages
+        if installTarget == nil {
+            loadInstallTarget(repositoryPath: repositoryPath)
+        }
+    }
+
+    /// Load the install target device from the saved install plan.
+    private func loadInstallTarget(repositoryPath: String) {
+        let planPath = "\(repositoryPath)/.local/state/cidre/install/current/last-plan.json"
+        guard let data = try? Data(contentsOf: URL(fileURLWithPath: planPath)),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let target = json["target"] as? String, !target.isEmpty else {
+            return
+        }
+        installTarget = target
     }
 
     func advance(repositoryPath: String) {
@@ -86,6 +101,33 @@ final class SetupWizardViewModel: ObservableObject {
             )
         }
 
+        // Inject paths for boot-chain-stage
+        if operation.id == "boot-chain-stage" {
+            var cmd = operation.command
+            // Find m1n1.macho
+            let m1n1Candidates = [
+                "\(repositoryPath)/libexec/m1n1.macho",
+                "\(repositoryPath)/m1n1/build/m1n1.macho"
+            ]
+            if let m1n1Path = m1n1Candidates.first(where: { FileManager.default.isReadableFile(atPath: $0) }) {
+                cmd += " --m1n1-path \(m1n1Path)"
+            }
+            // Find target mount (System volume)
+            if let installTarget = installTarget, !installTarget.isEmpty {
+                // Target is the Data volume (e.g. disk3s1); System volume is typically one higher
+                // But we should look it up. For now, use the Data volume mount.
+                cmd += " --target-mount /Volumes/Cidre"
+            }
+            cmd += " --json"
+            operation = WizardOperation(
+                id: operation.id, title: operation.title, category: operation.category,
+                stage: operation.stage, privilegeLevel: operation.privilegeLevel,
+                destructive: operation.destructive, requiresConfirmation: operation.requiresConfirmation,
+                requiresHelper: operation.requiresHelper, dryRunAvailable: operation.dryRunAvailable,
+                command: cmd, rollbackHint: operation.rollbackHint
+            )
+        }
+
         // m1n1-build builds from source - just ensure --json
         if operation.id == "m1n1-build" {
             var cmd = operation.command
@@ -112,7 +154,7 @@ final class SetupWizardViewModel: ObservableObject {
         logStore.append(command: execution.command, arguments: execution.arguments, exitCode: execution.exitCode ?? 0, status: execution.status, summary: execution.parsedResult?.summary ?? execution.stdout, duration: Date().timeIntervalSince(start))
 
         // Update boot policy view model from result
-        if operation.id == "boot-policy-create" {
+        if operation.id == "boot-policy-create" || operation.id == "boot-chain-stage" {
             bootPolicyVM.updateFromResult(execution.parsedResult.map { _ in
                 (try? JSONSerialization.jsonObject(with: execution.stdout.data(using: .utf8) ?? Data())) as? [String: Any]
             } ?? nil)

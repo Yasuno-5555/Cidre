@@ -65,6 +65,10 @@ struct SetupWizardRootView: View {
             ArtifactPreparationStepView()
         case .installExecution:
             InstallExecutionStepView(wizardVM: viewModel)
+        case .bootChain:
+            BootChainStepView(wizardVM: viewModel)
+        case .bootPolicy:
+            BootPolicyStepView(wizardVM: viewModel)
         case .postInstallVerification:
             PostInstallVerificationStepView(wizardVM: viewModel)
         case .finish:
