@@ -12,6 +12,7 @@ enum WizardStage: String, Codable, CaseIterable, Identifiable {
     case installExecution = "install-execution"
     case bootChain = "boot-chain"
     case bootPolicy = "boot-policy"
+    case postRecoveryRestore = "post-recovery-restore"
     case postInstallVerification = "post-install-verification"
     case finish
     case uninstallWelcome = "uninstall-welcome"
@@ -56,6 +57,8 @@ enum WizardStage: String, Codable, CaseIterable, Identifiable {
             return "Boot Chain"
         case .bootPolicy:
             return "Boot Policy"
+        case .postRecoveryRestore:
+            return "Verify Boot Policy"
         case .postInstallVerification:
             return "Post-install Verification"
         case .finish:

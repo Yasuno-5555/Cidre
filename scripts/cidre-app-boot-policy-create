@@ -121,8 +121,20 @@ steps_done=""
 steps_failed=""
 
 if [ "$dry_run" = true ]; then
-  echo "DRY-RUN: would execute: create VG, write boot files, restore bundle, bless, bputil"
-  python3 -c "import json; print(json.dumps({'schema_version':1,'command':'cidre-app-boot-policy-create','status':'passed','summary':'Dry-run completed','exit_code':0,'dry_run':True},indent=2))"
+  python3 -c "
+import json
+print(json.dumps({
+    'schema_version': 1,
+    'command': 'cidre-app-boot-policy-create',
+    'status': 'passed',
+    'summary': 'Dry-run completed',
+    'exit_code': 0,
+    'dry_run': True,
+    'ssu_required': True,
+    'security_mode': 'full',
+    'reduced_security_status': 'manual-recovery-required',
+    'reduced_security_guide': 'To enable Reduced Security:\n1. Shut down your Mac\n2. Press and hold the power button until \'Loading startup options\' appears\n3. Click Options (gear icon)\n4. Menu bar → Utilities → Startup Security Utility\n5. Select the Cidre volume\n6. Choose Reduced Security\n7. Restart back to macOS\n8. Reopen Cidre and continue the wizard',
+}, indent=2))"
   exit 0
 fi
 
@@ -346,18 +358,179 @@ if [ -n "$system_volume" ]; then
   fi
 fi
 
+# ── Phase 7: Set up Auto-Run via IAPhysicalMedia ───────────────────
+echo "[7/7] Setting up auto-run step2 (Asahi-style 1TR flow)..."
+step2_ready="false"
+
+if [ -n "$system_mount" ] && [ -n "$system_volume" ]; then
+  # Step 7a: Write .IAPhysicalMedia + Finish Installation.app to System volume
+  # System role volumes are read-only; temporarily remove role, write, restore
+
+  SYS_VOL="$system_volume"
+  SYS_MOUNT="$system_mount"
+  FINISH_APP_SRC="$REPO_ROOT/resources/Finish Installation.app"
+  IAPHYSICAL_MEDIA_PLIST="$SYS_MOUNT/.IAPhysicalMedia"
+
+  # Unmount System volume first
+  diskutil unmount "$SYS_VOL" 2>/dev/null || true
+  sleep 1
+
+  # Remove System role temporarily (makes volume writable)
+  role_removed="false"
+  if run_admin "/usr/sbin/diskutil apfs changeVolumeRole ${SYS_VOL}" 2>&1; then
+    role_removed="true"
+  fi
+
+  # Remount (now read-write since System role is removed)
+  diskutil mount "$SYS_VOL" 2>/dev/null || true
+  sleep 1
+
+  # Refresh mount point
+  SYS_MOUNT="$(diskutil info -plist "$SYS_VOL" 2>/dev/null | python3 -c 'import plistlib,sys; print(plistlib.loads(sys.stdin.buffer.read()).get("MountPoint",""))' 2>/dev/null || echo "")"
+
+  if [ -n "$SYS_MOUNT" ] && [ -d "$SYS_MOUNT" ]; then
+    # Write .IAPhysicalMedia marker plist
+    cat > "$SYS_MOUNT/.IAPhysicalMedia" << 'IAPEOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>FinishInstallPhase</key>
+    <string>Install</string>
+</dict>
+</plist>
+IAPEOF
+    chmod 644 "$SYS_MOUNT/.IAPhysicalMedia" 2>/dev/null || true
+
+    # Copy Finish Installation.app
+    if [ -d "$FINISH_APP_SRC" ]; then
+      rm -rf "$SYS_MOUNT/Finish Installation.app" 2>/dev/null || true
+      cp -R "$FINISH_APP_SRC" "$SYS_MOUNT/Finish Installation.app" 2>/dev/null && {
+        chmod -R 755 "$SYS_MOUNT/Finish Installation.app" 2>/dev/null || true
+        steps_done="${steps_done}finish-app-staged "
+      } || steps_done="${steps_done}finish-app-copy-failed "
+    fi
+
+    # Copy step2 script to System volume directly
+    STEP2_SRC="$SCRIPT_DIR/cidre-app-recovery-step2"
+    if [ -f "$STEP2_SRC" ]; then
+      cp "$STEP2_SRC" "$SYS_MOUNT/cidre-step2.sh" 2>/dev/null && {
+        chmod +x "$SYS_MOUNT/cidre-step2.sh" 2>/dev/null || true
+      }
+    fi
+
+    step2_ready="true"
+  fi
+
+  # Restore System role
+  if [ "$role_removed" = "true" ]; then
+    diskutil unmount "$SYS_VOL" 2>/dev/null || true
+    sleep 1
+    run_admin "/usr/sbin/diskutil apfs changeVolumeRole ${SYS_VOL} S" 2>&1 || true
+    diskutil mount "$SYS_VOL" 2>/dev/null || true
+    # Refresh system_mount
+    system_mount="$(diskutil info -plist "$SYS_VOL" 2>/dev/null | python3 -c 'import plistlib,sys; print(plistlib.loads(sys.stdin.buffer.read()).get("MountPoint",""))' 2>/dev/null || echo "$system_mount")"
+  fi
+fi
+
+# Step 7b: Set up Recovery volume with recoveryOS
+REC_DEVICE=""
+for dev in disk3s3; do
+  if diskutil info "$dev" >/dev/null 2>&1; then
+    REC_DEVICE="$dev"
+    break
+  fi
+done
+
+if [ -n "$REC_DEVICE" ]; then
+  diskutil unmount /Volumes/Recovery 2>/dev/null || true
+  sleep 1
+  REC_MOUNT=""
+  if diskutil mount "$REC_DEVICE" 2>/dev/null; then
+    REC_MOUNT="/Volumes/Recovery"
+  fi
+
+  if [ -n "$REC_MOUNT" ] && [ -d "$REC_MOUNT" ]; then
+    mkdir -p "$REC_MOUNT/$vg_uuid/usr/standalone/firmware"
+    mkdir -p "$REC_MOUNT/$vg_uuid/boot"
+
+    # Copy arm64eBaseSystem.dmg from macOS Recovery
+    MACOS_REC_DMG="/System/Volumes/Recovery/08E3B56E-946D-4280-9E3C-1931ED8B8B34/usr/standalone/firmware/arm64eBaseSystem.dmg"
+    if [ -f "$MACOS_REC_DMG" ]; then
+      cp "$MACOS_REC_DMG" "$REC_MOUNT/$vg_uuid/usr/standalone/firmware/arm64eBaseSystem.dmg" 2>/dev/null && {
+        steps_done="${steps_done}recovery-os-copied "
+      } || steps_done="${steps_done}recovery-os-copy-failed "
+    fi
+
+    # Copy boot structure from Cidre Preboot
+    if [ -d "$preboot_mount/$vg_uuid/boot" ]; then
+      cp -R "$preboot_mount/$vg_uuid/boot/" "$REC_MOUNT/$vg_uuid/boot/" 2>/dev/null || true
+    fi
+  fi
+fi
+
+# Step 7c: Also copy step2 script to Cidre Data volume (fallback access)
+STEP2_SRC="$SCRIPT_DIR/cidre-app-recovery-step2"
+if [ -f "$STEP2_SRC" ] && [ -d "/Volumes/Cidre/cidre" ]; then
+  cp "$STEP2_SRC" "/Volumes/Cidre/cidre/step2.sh" 2>/dev/null && {
+    chmod +x "/Volumes/Cidre/cidre/step2.sh" 2>/dev/null || true
+  } || true
+fi
+
 # ── Final report ─────────────────────────────────────────────────────
+# Determine SSU/recovery guidance
+ssu_required="false"
+security_mode="unknown"
+reduced_security_status="unknown"
+reduced_security_guide=""
+
+case "$steps_done" in
+  *bputil-ok*)
+    security_mode="reduced"
+    reduced_security_status="set-via-bputil"
+    ;;
+  *bputil-deferred*)
+    ssu_required="true"
+    security_mode="full"
+    if [ "$step2_ready" = "true" ]; then
+      reduced_security_status="recovery-step2-ready"
+      reduced_security_guide="Cidre will auto-complete setup on first boot. To boot Cidre:
+1. Shut down your Mac
+2. Hold the power button until 'Loading startup options' appears
+3. Select Cidre — it will auto-run setup and restart
+4. After restart: hold power button → select Cidre again → Linux boots!"
+    else
+      reduced_security_status="manual-recovery-required"
+      reduced_security_guide="To enable Reduced Security:
+1. Shut down your Mac
+2. Hold the power button until 'Loading startup options' appears
+3. Click Options (gear icon) → Utilities → Startup Security Utility
+4. Select Cidre → Reduced Security → Restart"
+    fi
+    ;;
+esac
+
 if [ -z "$steps_failed" ]; then
   status="passed"; exit_code=0
-  summary="Boot policy created. Cidre should appear in Startup Options (hold power button at boot)."
+  if [ "$ssu_required" = "true" ]; then
+    if [ "$step2_ready" = "true" ]; then
+      summary="Boot policy created with auto-run setup. Select Cidre from Startup Options (hold power button at boot) — it will auto-complete setup on first boot."
+    else
+      summary="Boot policy created. Reduced Security must be enabled from Startup Security Utility in macOS Recovery before Cidre can boot."
+    fi
+  else
+    summary="Boot policy created. Cidre should appear in Startup Options (hold power button at boot)."
+  fi
 else
   status="blocked"; exit_code=4
   summary="Boot policy creation incomplete: ${steps_failed}"
 fi
 
-python3 - "$json_mode" "$status" "$exit_code" "$summary" "$vg_uuid" "$system_volume" "$steps_done" "$steps_failed" <<'PY'
+python3 - "$json_mode" "$status" "$exit_code" "$summary" "$vg_uuid" "$system_volume" "$steps_done" "$steps_failed" "$ssu_required" "$security_mode" "$reduced_security_status" "$reduced_security_guide" "$step2_ready" <<'PY'
 import json, sys
-json_mode, status, exit_code, summary, vg_uuid, system_volume, steps_done, steps_failed = sys.argv[1:]
+(json_mode, status, exit_code, summary, vg_uuid, system_volume,
+ steps_done, steps_failed, ssu_required, security_mode,
+ reduced_security_status, reduced_security_guide, step2_ready) = sys.argv[1:]
 exit_code = int(exit_code); json_mode = json_mode == "true"
 payload = {
     "schema_version": 1,
@@ -367,6 +540,12 @@ payload = {
     "system_volume": system_volume if system_volume else None,
     "steps_completed": steps_done.strip() if steps_done else None,
     "steps_failed": steps_failed.strip() if steps_failed else None,
+    "ssu_required": ssu_required == "true",
+    "security_mode": security_mode if security_mode else "unknown",
+    "reduced_security_status": reduced_security_status if reduced_security_status else "unknown",
+    "reduced_security_guide": reduced_security_guide if reduced_security_guide else None,
+    "step2_ready": step2_ready == "true",
+    "step2_command": "/Volumes/Cidre/cidre/step2.sh" if step2_ready == "true" else None,
 }
 print(json.dumps(payload, indent=2) if json_mode else payload["summary"])
 sys.exit(exit_code)

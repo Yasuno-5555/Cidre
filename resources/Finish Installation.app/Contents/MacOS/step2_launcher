@@ -1,0 +1,30 @@
+#!/bin/sh
+# Cidre step2 auto-launcher
+# Runs when macOS boots the Cidre stub and finds .IAPhysicalMedia
+
+LOG="/var/log/cidre-step2.log"
+exec >> "$LOG" 2>&1
+
+echo "=== Cidre Step2 Auto-Launcher ==="
+echo "Started: $(date)"
+
+# Find the step2 script on the Cidre Data volume
+STEP2="/Volumes/Cidre/cidre/step2.sh"
+
+if [ -x "$STEP2" ]; then
+    echo "Running: $STEP2"
+    exec "$STEP2"
+else
+    echo "ERROR: step2.sh not found at $STEP2"
+    # Fallback: try to find and run it
+    for candidate in \
+        "/Volumes/Cidre/cidre/step2.sh" \
+        "/Volumes/Cidre 1/cidre/step2.sh"; do
+        if [ -x "$candidate" ]; then
+            echo "Found: $candidate"
+            exec "$candidate"
+        fi
+    done
+    echo "FATAL: Cannot find step2 script"
+    exit 1
+fi

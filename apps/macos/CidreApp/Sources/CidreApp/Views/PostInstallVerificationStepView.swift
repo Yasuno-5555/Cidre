@@ -24,8 +24,14 @@ struct PostInstallVerificationStepView: View {
             }
         }
         .onAppear {
+            // Load boot-policy-create result
             if let lastResult = loadLastBootPolicyResult(repositoryPath: appVM.repositoryPath) {
                 wizardVM.bootPolicyVM.updateFromResult(lastResult)
+            }
+            // Also load persisted boot-policy state (SSU completion, etc.)
+            if let bpState = BootPolicyStateStore.shared.load(repositoryPath: appVM.repositoryPath) {
+                wizardVM.bootPolicyVM.ssuRequired = bpState.ssuRequired
+                wizardVM.bootPolicyVM.ssuCompleted = bpState.ssuCompleted
             }
         }
     }

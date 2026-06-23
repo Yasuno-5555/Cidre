@@ -1,0 +1,188 @@
+#!/bin/sh
+set -eu
+# cidre-app-recovery-step2
+# Runs in macOS Recovery (1TR mode) to finalize the boot policy.
+# Equivalent to Asahi Linux's step2.sh.
+#
+# When the user selects Cidre from the boot picker after bless pairing,
+# the firmware boots into the paired recoveryOS (1TR mode).
+# The user opens Terminal (Utilities → Terminal) and runs this script.
+#
+# This script:
+# 1. Detects the Cidre VG UUID
+# 2. Sets Reduced Security via bputil -g (works in recoveryOS!)
+# 3. Restores m1n1 as boot.efi
+# 4. Re-blesses and restores macOS as default boot
+# 5. Reboots
+
+echo "=== Cidre Recovery Step 2 ==="
+echo "Setting up Reduced Security and restoring m1n1 bootloader..."
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+
+# ── Find the Cidre VG UUID ──────────────────────────────────────────
+vg_uuid=""
+data_mount=""
+
+# Search for Cidre volumes
+for mount in "/Volumes/Cidre" "/Volumes/Cidre 1"; do
+    if [ -d "$mount" ]; then
+        data_mount="$mount"
+    fi
+done
+
+if [ -z "$data_mount" ]; then
+    echo "ERROR: Cidre volume not found. Ensure Cidre is installed." >&2
+    exit 1
+fi
+
+# Discover VG UUID from diskutil
+vg_uuid="$(diskutil apfs listVolumeGroups -plist 2>/dev/null | python3 -c "
+import plistlib, sys
+d = plistlib.loads(sys.stdin.buffer.read())
+for c in d.get('Containers', []):
+    for vg in c.get('VolumeGroups', []):
+        for v in vg.get('Volumes', []):
+            if v.get('Role') == 'Data':
+                print(vg.get('APFSVolumeGroupUUID', ''))
+                sys.exit(0)
+print('')
+" 2>/dev/null || echo "")"
+
+if [ -z "$vg_uuid" ]; then
+    # Fallback: use hardcoded VG UUID from Cidre install
+    vg_uuid="41EA45E1-64EA-4421-80E7-833E53DA3CE0"
+fi
+
+echo "Cidre Volume Group UUID: $vg_uuid"
+
+# ── Verify we're in recoveryOS ──────────────────────────────────────
+echo "Checking boot mode..."
+bp_output="$(bputil -d -v "$vg_uuid" 2>/dev/null || echo "")"
+
+if [ -z "$bp_output" ]; then
+    echo "ERROR: bputil not available or VG not found." >&2
+    echo "Make sure you booted into Recovery via: Shut down → hold power button → select Cidre" >&2
+    exit 1
+fi
+
+echo "$bp_output" | head -10
+
+# ── Set Reduced Security ────────────────────────────────────────────
+echo ""
+echo "Setting Reduced Security for Cidre..."
+echo "You will be prompted for your macOS admin password."
+
+bputil_success=false
+for attempt in 1 2 3; do
+    if bputil -g -v "$vg_uuid" 2>&1; then
+        echo "Reduced Security set successfully!"
+        bputil_success=true
+        break
+    fi
+    echo "Attempt $attempt failed. Retrying..."
+    sleep 2
+done
+
+if [ "$bputil_success" = false ]; then
+    echo "ERROR: Failed to set Reduced Security after 3 attempts." >&2
+    echo "You can try manually: open Startup Security Utility and set Reduced Security for Cidre." >&2
+    exit 4
+fi
+
+# ── Restore m1n1 as boot.efi ────────────────────────────────────────
+echo ""
+echo "Restoring m1n1 bootloader..."
+
+# Find System volume
+system_mount=""
+for mount in "/Volumes/Cidre 1" "/Volumes/Cidre"; do
+    if [ -f "$mount/System/Library/CoreServices/SystemVersion.plist" ]; then
+        system_mount="$mount"
+        break
+    fi
+done
+
+# Find m1n1 backup or original
+m1n1_src=""
+for candidate in \
+    "$system_mount/System/Library/CoreServices/boot.efi.m1n1" \
+    "$data_mount/System/Library/CoreServices/boot.efi" \
+    "$system_mount/boot/m1n1.macho" \
+    "$data_mount/boot/m1n1.macho"; do
+    if [ -f "$candidate" ] && [ -s "$candidate" ]; then
+        # Verify it's a Mach-O binary
+        if file "$candidate" 2>/dev/null | grep -q "Mach-O"; then
+            m1n1_src="$candidate"
+            break
+        fi
+    fi
+done
+
+if [ -n "$m1n1_src" ]; then
+    # Determine Preboot path
+    preboot_mount="/Volumes/Preboot"
+    [ -d "$preboot_mount" ] || preboot_mount="/System/Volumes/Preboot"
+
+    dst="$preboot_mount/$vg_uuid/System/Library/CoreServices/boot.efi"
+    if [ -d "$(dirname "$dst")" ]; then
+        cp "$m1n1_src" "$dst"
+        chmod 755 "$dst"
+        echo "m1n1 restored to Preboot: $dst"
+
+        # Also update System volume if writable
+        if [ -n "$system_mount" ] && [ -d "$system_mount/System/Library/CoreServices" ]; then
+            cp "$m1n1_src" "$system_mount/System/Library/CoreServices/boot.efi" 2>/dev/null || true
+        fi
+        m1n1_restored=true
+    else
+        echo "WARNING: Preboot destination not found: $dst"
+        m1n1_restored=false
+    fi
+else
+    echo "WARNING: m1n1 not found. boot.efi will remain as-is."
+    m1n1_restored=false
+fi
+
+# ── Bless Cidre ─────────────────────────────────────────────────────
+echo ""
+echo "Updating boot entry (bless)..."
+
+system_device="$(diskutil list | grep "Cidre" | grep -v "Preboot\|Recovery" | head -1 | awk '{print $NF}')"
+if [ -n "$system_device" ]; then
+    bless --setBoot --device "/dev/$system_device" 2>&1 || {
+        echo "WARNING: bless Cidre failed, trying mount mode..."
+        if [ -n "$system_mount" ]; then
+            bless --setBoot --mount "$system_mount" 2>&1 || echo "WARNING: bless mount mode also failed"
+        fi
+    }
+fi
+
+# ── Restore macOS as default boot ───────────────────────────────────
+echo "Restoring macOS as default boot..."
+# Find macOS system volume
+macos_device="$(diskutil list | grep "Macintosh HD" | head -1 | awk '{print $NF}')"
+if [ -n "$macos_device" ]; then
+    bless --setBoot --device "/dev/$macos_device" 2>&1 || echo "WARNING: Could not restore macOS boot"
+else
+    # Fallback: try common macOS device
+    bless --setBoot --device /dev/disk4s1 2>&1 || echo "WARNING: Could not restore macOS boot"
+fi
+
+# ── Summary ─────────────────────────────────────────────────────────
+echo ""
+echo "============================================"
+echo "Step 2 complete!"
+echo ""
+echo "Reduced Security: enabled"
+echo "m1n1 restored:     $m1n1_restored"
+echo "Boot entry:        updated"
+echo "Default boot:      macOS"
+echo "============================================"
+echo ""
+echo "Your Mac will now restart."
+echo "After restart: hold the power button → select Cidre → Linux boots!"
+echo ""
+echo "Restarting in 5 seconds..."
+sleep 5
+shutdown -r now

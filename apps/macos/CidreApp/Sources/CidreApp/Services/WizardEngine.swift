@@ -8,7 +8,7 @@ final class WizardEngine {
     func stages(for mode: WizardMode) -> [WizardStage] {
         switch mode {
         case .install:
-            return [.welcome, .compatibility, .backupSafety, .diskPlanning, .installPlan, .privilegedPreparation, .seedGeneration, .artifactPreparation, .installExecution, .bootChain, .bootPolicy, .postInstallVerification, .finish]
+            return [.welcome, .compatibility, .backupSafety, .diskPlanning, .installPlan, .privilegedPreparation, .seedGeneration, .artifactPreparation, .installExecution, .bootChain, .bootPolicy, .postRecoveryRestore, .postInstallVerification, .finish]
         case .uninstall:
             return [.uninstallWelcome, .uninstallExport, .uninstallDiskScan, .uninstallTargetReview, .uninstallPlan, .uninstallConfirmation, .uninstallExecution, .uninstallVerification, .uninstallFinish]
         case .repair:
@@ -32,6 +32,7 @@ final class WizardEngine {
                 WizardOperation(id: "install-execute", title: "Run prepared install stage", category: "setup", stage: .installExecution, privilegeLevel: .external, destructive: false, requiresConfirmation: false, requiresHelper: false, dryRunAvailable: false, command: "scripts/cidre-app-install-wizard --json", rollbackHint: "Review generated artifacts and the restore report in the app."),
                 WizardOperation(id: "boot-chain-stage", title: "Deploy boot chain (m1n1 + kernel + initramfs)", category: "boot", stage: .bootChain, privilegeLevel: .none, destructive: false, requiresConfirmation: false, requiresHelper: false, dryRunAvailable: false, command: "scripts/cidre-app-boot-chain-stage", rollbackHint: "Boot chain can be re-deployed after kernel updates"),
                 WizardOperation(id: "boot-policy-create", title: "Create boot policy (register in Startup Options)", category: "boot", stage: .bootPolicy, privilegeLevel: .admin, destructive: false, requiresConfirmation: false, requiresHelper: false, dryRunAvailable: false, command: "scripts/cidre-app-boot-policy-create", rollbackHint: "Restore default macOS boot from System Settings if needed"),
+                WizardOperation(id: "boot-policy-verify", title: "Verify Reduced Security is enabled", category: "verify", stage: .postRecoveryRestore, privilegeLevel: .admin, destructive: false, requiresConfirmation: false, requiresHelper: false, dryRunAvailable: false, command: "scripts/cidre-app-reduced-security-check", rollbackHint: nil),
                 WizardOperation(id: "post-install-verify", title: "Verify post-install readiness", category: "verify", stage: .postInstallVerification, privilegeLevel: .none, destructive: false, requiresConfirmation: false, requiresHelper: false, dryRunAvailable: false, command: "scripts/cidre-app-wizard-run --operation post-install-verify --json", rollbackHint: nil),
                 WizardOperation(id: "setup-report", title: "Write setup report", category: "report", stage: .finish, privilegeLevel: .none, destructive: false, requiresConfirmation: false, requiresHelper: false, dryRunAvailable: false, command: "scripts/cidre-app-wizard-report --mode install --json", rollbackHint: nil)
             ]

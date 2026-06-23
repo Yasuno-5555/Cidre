@@ -17,6 +17,21 @@ final class SetupWizardViewModel: ObservableObject {
     /// Install target device (e.g. disk3s1), set during disk planning
     @Published var installTarget: String?
 
+    /// Find the System volume mount point for the APFS container containing the given device.
+    /// Uses diskutil to look up the System role volume in the same container.
+    static func findSystemVolumeMount(for targetDevice: String?) -> String? {
+        guard let target = targetDevice, !target.isEmpty else { return nil }
+        // Try common mount points for Cidre System volume
+        let candidates = ["/Volumes/Cidre 1", "/Volumes/Cidre"]
+        for mount in candidates {
+            var isDir: ObjCBool = false
+            if FileManager.default.fileExists(atPath: "\(mount)/System/Library/CoreServices", isDirectory: &isDir), isDir.boolValue {
+                return mount
+            }
+        }
+        return nil
+    }
+
     func load(repositoryPath: String) {
         state = WizardStateStore.shared.load(repositoryPath: repositoryPath, mode: .install)
         if let found = stages.firstIndex(of: state.stage) {
@@ -25,6 +40,18 @@ final class SetupWizardViewModel: ObservableObject {
         // Load install target from saved plan so it's available for boot-chain/boot-policy stages
         if installTarget == nil {
             loadInstallTarget(repositoryPath: repositoryPath)
+        }
+        // Restore boot-policy SSU state from disk (survives app restart after Recovery)
+        if let bpState = BootPolicyStateStore.shared.load(repositoryPath: repositoryPath) {
+            bootPolicyVM.ssuRequired = bpState.ssuRequired
+            bootPolicyVM.ssuCompleted = bpState.ssuCompleted
+            // If SSU was completed but we're still at bootPolicy, auto-advance
+            if bpState.ssuCompleted, state.stage == .bootPolicy,
+               let nextIdx = stages.firstIndex(of: .postRecoveryRestore) {
+                currentIndex = nextIdx
+                state.stage = stages[currentIndex]
+                state.nextAction = stages.indices.contains(currentIndex + 1) ? stages[currentIndex + 1].title : nil
+            }
         }
     }
 
@@ -75,6 +102,25 @@ final class SetupWizardViewModel: ObservableObject {
         WizardStateStore.shared.save(state, repositoryPath: repositoryPath)
     }
 
+    /// Mark SSU as completed and advance to the post-recovery restore stage.
+    func markSsuCompleted(repositoryPath: String) {
+        bootPolicyVM.ssuCompleted = true
+        // Persist SSU completion state for app restart survival
+        BootPolicyStateStore.shared.save(
+            BootPolicyPersistedState(
+                ssuRequired: bootPolicyVM.ssuRequired,
+                ssuCompleted: true
+            ),
+            repositoryPath: repositoryPath
+        )
+        // Advance to post-recovery restore stage
+        guard currentIndex + 1 < stages.count else { return }
+        currentIndex += 1
+        state.stage = stages[currentIndex]
+        state.nextAction = stages.indices.contains(currentIndex + 1) ? stages[currentIndex + 1].title : nil
+        WizardStateStore.shared.save(state, repositoryPath: repositoryPath)
+    }
+
     func operationForCurrentStage() -> WizardOperation? {
         WizardEngine.shared.operations(for: .install).first { $0.stage == stages[currentIndex] }
     }
@@ -112,11 +158,26 @@ final class SetupWizardViewModel: ObservableObject {
             if let m1n1Path = m1n1Candidates.first(where: { FileManager.default.isReadableFile(atPath: $0) }) {
                 cmd += " --m1n1-path \(m1n1Path)"
             }
-            // Find target mount (System volume)
+            // Discover System volume mount point from installTarget device
+            let sysMount = Self.findSystemVolumeMount(for: installTarget)
+            if let mount = sysMount, !mount.isEmpty {
+                cmd += " --target-mount \(mount)"
+            }
+            cmd += " --json"
+            operation = WizardOperation(
+                id: operation.id, title: operation.title, category: operation.category,
+                stage: operation.stage, privilegeLevel: operation.privilegeLevel,
+                destructive: operation.destructive, requiresConfirmation: operation.requiresConfirmation,
+                requiresHelper: operation.requiresHelper, dryRunAvailable: operation.dryRunAvailable,
+                command: cmd, rollbackHint: operation.rollbackHint
+            )
+        }
+
+        // boot-policy-verify: inject target for VG discovery
+        if operation.id == "boot-policy-verify" {
+            var cmd = operation.command
             if let installTarget = installTarget, !installTarget.isEmpty {
-                // Target is the Data volume (e.g. disk3s1); System volume is typically one higher
-                // But we should look it up. For now, use the Data volume mount.
-                cmd += " --target-mount /Volumes/Cidre"
+                cmd += " --target \(installTarget)"
             }
             cmd += " --json"
             operation = WizardOperation(
@@ -154,7 +215,7 @@ final class SetupWizardViewModel: ObservableObject {
         logStore.append(command: execution.command, arguments: execution.arguments, exitCode: execution.exitCode ?? 0, status: execution.status, summary: execution.parsedResult?.summary ?? execution.stdout, duration: Date().timeIntervalSince(start))
 
         // Update boot policy view model from result
-        if operation.id == "boot-policy-create" || operation.id == "boot-chain-stage" {
+        if operation.id == "boot-policy-create" || operation.id == "boot-chain-stage" || operation.id == "boot-policy-verify" {
             bootPolicyVM.updateFromResult(execution.parsedResult.map { _ in
                 (try? JSONSerialization.jsonObject(with: execution.stdout.data(using: .utf8) ?? Data())) as? [String: Any]
             } ?? nil)

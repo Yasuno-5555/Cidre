@@ -69,6 +69,8 @@ struct SetupWizardRootView: View {
             BootChainStepView(wizardVM: viewModel)
         case .bootPolicy:
             BootPolicyStepView(wizardVM: viewModel)
+        case .postRecoveryRestore:
+            PostRecoveryRestoreStepView(wizardVM: viewModel)
         case .postInstallVerification:
             PostInstallVerificationStepView(wizardVM: viewModel)
         case .finish:

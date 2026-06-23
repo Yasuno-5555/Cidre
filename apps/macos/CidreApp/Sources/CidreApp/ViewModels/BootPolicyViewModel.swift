@@ -77,6 +77,19 @@ final class BootPolicyViewModel: ObservableObject {
     @Published var kernelStatus: ComponentStatus = .missing
     @Published var initramfsStatus: ComponentStatus = .missing
 
+    /// Whether SSU (Startup Security Utility) interaction is required
+    @Published var ssuRequired: Bool = false
+    /// Whether the user has confirmed completing SSU Reduced Security setup
+    @Published var ssuCompleted: Bool = false
+    /// Post-SSU restore state tracking
+    @Published var restoreCompleted: Bool = false
+    /// Whether Reduced Security was verified via bputil -e
+    @Published var reducedSecurityVerified: Bool = false
+    /// Whether the automated step2 script is staged on the Cidre volume
+    @Published var step2Ready: Bool = false
+    /// Path to the step2 script for Recovery Terminal
+    @Published var step2Command: String?
+
     var allComponentsReady: Bool {
         if case .ready = m1n1Status, case .ready = kernelStatus, case .ready = initramfsStatus {
             return true
@@ -122,9 +135,27 @@ final class BootPolicyViewModel: ObservableObject {
         if let reducedStatus = result["reduced_security_status"] as? String {
             switch reducedStatus {
             case "set-via-bputil", "set-via-fork": reducedSecurityState = .setViaBputil
-            case "set-via-recovery": reducedSecurityState = .setViaRecovery
+            case "set-via-recovery", "recovery-step2-ready": reducedSecurityState = .setViaRecovery
             default: reducedSecurityState = .manualRecoveryRequired
             }
+        }
+
+        // Parse step2 automation fields
+        if let step2cmd = result["step2_command"] as? String {
+            step2Command = step2cmd
+        }
+        if let step2rdy = result["step2_ready"] as? Bool {
+            step2Ready = step2rdy
+        }
+
+        // Parse new SSU/recovery fields
+        if let ssuReq = result["ssu_required"] as? Bool {
+            ssuRequired = ssuReq
+        }
+        if let verified = result["reduced_security_verified"] as? Bool, verified {
+            reducedSecurityVerified = true
+            securityMode = .reducedSecurity
+            reducedSecurityState = .setViaRecovery
         }
 
         summaryText = result["summary"] as? String ?? ""

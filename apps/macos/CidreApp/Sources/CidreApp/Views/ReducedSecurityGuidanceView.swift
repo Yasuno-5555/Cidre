@@ -19,13 +19,13 @@ struct ReducedSecurityGuidanceView: View {
                 StepView(number: 4, icon: "lock.shield", title: "Open Startup Security Utility", detail: "Menu bar → Utilities → Startup Security Utility")
                 StepView(number: 5, icon: "square.grid.3x3", title: "Select Cidre", detail: "Click the Cidre volume in the list")
                 StepView(number: 6, icon: "shield.lefthalf.filled", title: "Choose Reduced Security", detail: "Click the radio button for \"Reduced Security\"")
-                StepView(number: 7, icon: "arrow.counterclockwise", title: "Restart", detail: "Apple menu → Restart, then hold power button again")
-                StepView(number: 8, icon: "cpu", title: "Select Cidre to boot Linux", detail: "Click Cidre in Startup Options. m1n1 loads → Linux boots → auto-setup runs")
+                StepView(number: 7, icon: "arrow.counterclockwise", title: "Restart back to macOS", detail: "Apple menu → Restart. Return to macOS (not Cidre).")
+                StepView(number: 8, icon: "apps.ipad", title: "Reopen Cidre app", detail: "Launch Cidre and click 'I have set Reduced Security' to continue the wizard.")
             }
 
             Divider()
 
-            Text("After first boot, Cidre auto-configures. Restart once more, select Cidre again, and you're done.")
+            Text("After completing these steps and returning to Cidre, the wizard will verify the security status and restore m1n1 as the active bootloader.")
                 .font(.caption2)
                 .foregroundColor(.secondary)
         }
@@ -41,7 +41,7 @@ struct ReducedSecurityGuidanceView: View {
     }
 }
 
-fileprivate struct StepView: View {
+struct StepView: View {
     let number: Int
     let icon: String
     let title: String

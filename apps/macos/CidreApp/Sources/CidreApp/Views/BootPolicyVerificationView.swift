@@ -52,6 +52,19 @@ struct BootPolicyVerificationView: View {
                 VerificationRow(label: "Reduced Security", status: .unknown)
             }
 
+            // Step2 / Recovery status
+            if viewModel.step2Ready {
+                VerificationRow(label: "Recovery Step2", status: viewModel.ssuCompleted ? .passed : .warning,
+                                detail: viewModel.ssuCompleted ? "Completed" : "Terminal: \(viewModel.step2Command ?? "step2.sh")")
+            } else if viewModel.ssuRequired {
+                VerificationRow(label: "SSU Recovery", status: viewModel.ssuCompleted ? .passed : .warning,
+                                detail: viewModel.ssuCompleted ? "Completed" : "Not yet done")
+            }
+
+            // Overall boot policy readiness
+            VerificationRow(label: "Boot Policy Ready", status: viewModel.reducedSecurityVerified ? .passed : .unknown,
+                            detail: viewModel.reducedSecurityVerified ? "Verified" : "Pending verification")
+
             Divider()
 
             // Guidance for Reduced Security
