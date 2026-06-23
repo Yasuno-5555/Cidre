@@ -89,25 +89,87 @@ print(json.dumps(res, indent=2))
   exit 8
 fi
 
-# Dry-run or execute (experimental / disabled by default)
-if [ "$json_mode" = "true" ]; then
-  python3 -c '
-import json, sys
-res = {
-  "schema_version": 1,
-  "command": "cidre-uninstall-execute",
-  "status": "pass",
-  "summary": "Dry-run only. No destructive disk operations were performed.",
-  "exit_code": 0,
-  "warnings": ["Dry-run execution only"],
-  "errors": []
+# Execute active APFS container deletion and macOS container resizing/merging
+python3 - "$target" "$dry_run" "$json_mode" <<'PY'
+import json
+import os
+import plistlib
+import subprocess
+import sys
+
+target, dry_run, json_mode = sys.argv[1:]
+dry_run = dry_run == "true"
+json_mode = json_mode == "true"
+
+def run_plist(*args):
+    completed = subprocess.run(["/usr/sbin/diskutil", *args], check=True, capture_output=True)
+    return plistlib.loads(completed.stdout)
+
+passed = True
+errors = []
+warnings = []
+deleted_container = None
+resized_container = None
+
+try:
+    if os.uname().sysname != "Darwin":
+        raise Exception("Active partition resizing is only supported on macOS Darwin hosts.")
+
+    # 1. Inspect target to find its APFS container
+    target_info = run_plist("info", "-plist", target)
+    target_container = target_info.get("APFSContainerReference")
+    if not target_container:
+        # Fallback to parent if target is already a subvolume or partition
+        parent_disk = target_info.get("ParentWholeDisk")
+        if parent_disk and parent_disk != target:
+            parent_info = run_plist("info", "-plist", parent_disk)
+            target_container = parent_info.get("APFSContainerReference")
+
+    # 2. Inspect root (/) to get the macOS startup container
+    root_info = run_plist("info", "-plist", "/")
+    startup_container = root_info.get("APFSContainerReference")
+
+    if not target_container:
+        raise Exception(f"Could not identify APFS container reference for target: {target}")
+    if not startup_container:
+        raise Exception("Could not identify primary macOS startup APFS container reference.")
+
+    # Safety Check: Never delete the active startup container
+    if target_container == startup_container:
+        raise Exception("Safety block: Target container is the active macOS startup APFS container. Deletion aborted.")
+
+    deleted_container = target_container
+    resized_container = startup_container
+
+    if not dry_run:
+        # 3. Active deletion of the target container
+        # This will remove the volumes within the container and destroy the container structure
+        subprocess.run(["/usr/sbin/diskutil", "apfs", "deleteContainer", target_container], check=True, capture_output=True)
+
+        # 4. Active resizing of primary macOS container to reclaim the freed space
+        # Using 0 as size parameter will automatically grow to use all contiguous free space
+        subprocess.run(["/usr/sbin/diskutil", "apfs", "resizeContainer", startup_container, "0"], check=True, capture_output=True)
+    else:
+        warnings.append("Dry-run execution. No destructive APFS operations were performed.")
+
+except Exception as e:
+    passed = False
+    errors.append({"code": "uninstall-execution-error", "message": str(e)})
+
+payload = {
+    "schema_version": 1,
+    "command": "cidre-uninstall-execute",
+    "status": "passed" if passed else "failed",
+    "summary": "Active APFS partition merging completed successfully." if passed and not dry_run else ("Dry-run uninstall completed." if passed else "APFS partition merging failed."),
+    "exit_code": 0 if passed else 8,
+    "dry_run": dry_run,
+    "deleted_container": deleted_container,
+    "resized_container": resized_container,
+    "warnings": warnings,
+    "errors": errors
 }
-print(json.dumps(res, indent=2))
-'
-else
-  echo "Cidre Guided Uninstaller Execution"
-  echo "==================================="
-  echo "Selected Target: $target"
-  echo "This operation is experimental in v0.30.0."
-  echo "No destructive disk operations were performed."
-fi
+
+print(json.dumps(payload, indent=2) if json_mode else payload["summary"])
+sys.exit(payload["exit_code"])
+PY
+
