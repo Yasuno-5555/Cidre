@@ -1,22 +1,30 @@
 #!/bin/sh
 set -eu
 # cidre-app-boot-chain-stage
-# Deploys the complete Apple Silicon boot chain to a Cidre volume:
-#   m1n1 → Linux kernel → initramfs → rootfs
+# Deploys the complete Apple Silicon boot chain to a Cidre volume.
+#
+# Asahi-alarm reference: stub.py / osinstall.py / step2.sh
+#   https://github.com/asahi-alarm/asahi-alarm-installer
+#
+# IMPORTANT (Asahi approach):
+# - boot.efi = Apple-signed kernelcache (IMG4) for initial 1TR boot
+# - boot.efi.m1n1 = m1n1 backup (for step2 restoration via kmutil configure-boot)
+# - kmutil configure-boot installs m1n1 AFTER bputil -nc sets Reduced Security
+# - m1n1 MUST NOT be written directly as boot.efi (can't boot with Full Security)
 #
 # The Cidre volume layout after staging:
 #   /boot/
-#     m1n1.macho          # stage-1 bootloader (also at System/Library/CoreServices/boot.efi)
+#     m1n1.macho          # stage-1 bootloader backup
 #     Image                # Linux kernel
 #     initramfs.img        # Initramfs
-#     dtb/                 # Device tree blobs (from m1n1 or kernel package)
+#     dtb/                 # Device tree blobs
 #   /cidre/
-#     rootfs/              # Root filesystem placeholder or tarball
+#     rootfs/              # Root filesystem
 #     install/
 #     state/
 #   /System/Library/CoreServices/
-#     boot.efi             # Copy of m1n1.macho
-#     SystemVersion.plist
+#     boot.efi             # Apple kernelcache (for 1TR boot — set by boot-policy-create)
+#     boot.efi.m1n1        # m1n1 backup (for step2 kmutil configure-boot)
 
 m1n1_path=""
 kernel_path=""
@@ -56,32 +64,35 @@ if [ "$dry_run" = true ]; then
 fi
 
 # ── Stage m1n1 ──────────────────────────────────────────────────────
+# Asahi-alarm: m1n1 is installed via kmutil configure-boot in step2.sh
+# (which runs from 1TR after bputil -nc sets Reduced Security).
+# Here we save m1n1 as a backup — step2 picks it up and installs it.
+# We do NOT overwrite boot.efi (which must remain Apple kernelcache).
 if [ -f "$m1n1_path" ]; then
-  # Verify it's a valid Mach-O binary (not a kernelcache/IMG4)
+  # Verify it's a Mach-O binary
   if ! file "$m1n1_path" 2>/dev/null | grep -q "Mach-O"; then
     errors="${errors}m1n1-not-mach-o($m1n1_path) "
   else
-    # Copy to both the boot directory and System/Library/CoreServices
     mkdir -p "$target_mount/boot"
     mkdir -p "$target_mount/System/Library/CoreServices"
 
+    # Primary m1n1 location (used by kmutil configure-boot in step2)
     cp "$m1n1_path" "$target_mount/boot/m1n1.macho"
     chmod 755 "$target_mount/boot/m1n1.macho"
 
-    cp "$m1n1_path" "$target_mount/System/Library/CoreServices/boot.efi"
-    chmod 755 "$target_mount/System/Library/CoreServices/boot.efi"
-
-    # Save backup as boot.efi.m1n1 (protection against accidental overwrite)
+    # m1n1 backup for step2 restoration (boot.efi stays as kernelcache)
     cp "$m1n1_path" "$target_mount/System/Library/CoreServices/boot.efi.m1n1"
     chmod 755 "$target_mount/System/Library/CoreServices/boot.efi.m1n1"
 
-    # Verify the copy
-    if file "$target_mount/System/Library/CoreServices/boot.efi" 2>/dev/null | grep -q "Mach-O"; then
-      staged_files="$staged_files boot/m1n1.macho System/Library/CoreServices/boot.efi System/Library/CoreServices/boot.efi.m1n1"
-      steps="${steps}m1n1-staged "
-    else
-      errors="${errors}boot.efi-verify-failed "
+    # Only copy to boot.efi if boot.efi doesn't already exist (first-time setup)
+    if [ ! -f "$target_mount/System/Library/CoreServices/boot.efi" ]; then
+      echo "NOTE: boot.efi not present — this volume needs boot-policy-create first"
+      cp "$m1n1_path" "$target_mount/System/Library/CoreServices/boot.efi"
+      chmod 755 "$target_mount/System/Library/CoreServices/boot.efi"
     fi
+
+    staged_files="$staged_files boot/m1n1.macho System/Library/CoreServices/boot.efi.m1n1"
+    steps="${steps}m1n1-staged "
   fi
 else
   errors="${errors}m1n1-not-found($m1n1_path) "

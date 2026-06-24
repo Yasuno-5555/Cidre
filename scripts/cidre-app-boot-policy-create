@@ -224,15 +224,23 @@ print(json.dumps({'vg_uuid':''}))
   system_mount="$(diskutil info -plist "$system_volume" 2>/dev/null | python3 -c 'import plistlib,sys; print(plistlib.loads(sys.stdin.buffer.read()).get("MountPoint",""))' 2>/dev/null || echo "")"
 fi
 
-# ── Phase 3: Write boot files ────────────────────────────────────────
-# NOTE: System volume is read-only (S role). Writing directly fails silently.
-# Instead, we locate m1n1 and stage it for Phase 7c (where System role is
-# temporarily removed to make the volume writable).
-echo "[3/6] Writing boot files..."
+# ── Phase 3: Locate boot files ───────────────────────────────────────
+# Asahi-alarm reference: stub.py install_files() uses Apple kernelcache (IMG4)
+# as boot.efi for the initial 1TR boot, NOT m1n1.
+#   https://github.com/asahi-alarm/asahi-alarm-installer
+#
+# REASONING: Apple Silicon firmware WILL load an Apple-signed IMG4 kernelcache
+# even with Full Security. This boots into 1TR recoveryOS where bputil -g works.
+# After Reduced Security is set (in step2), m1n1 replaces the kernelcache.
+#
+# m1n1 is saved as boot.efi.m1n1 for step2 restoration after bputil -g.
+echo "[3/6] Locating boot files..."
+
 M1N1_SRC=""
+KERNELCACHE_SRC=""
 M1N1_STAGING_DIR=""
 
-# Search for m1n1 in standard locations (including Cidre Data volume)
+# Search for m1n1 in standard locations
 M1N1_CANDIDATES="/Users/yasuno/Projects/Cidre/libexec/m1n1.macho /Users/yasuno/Projects/Cidre/m1n1/build/m1n1.macho /Volumes/Cidre/boot/m1n1.macho"
 for candidate in $M1N1_CANDIDATES; do
   if [ -f "$candidate" ] && file "$candidate" 2>/dev/null | grep -q "Mach-O"; then
@@ -241,26 +249,48 @@ for candidate in $M1N1_CANDIDATES; do
   fi
 done
 
-# Also check System volume (if it was made writable by a previous run)
+# Also check System volume
 if [ -z "$M1N1_SRC" ] && [ -n "$system_mount" ]; then
   if [ -f "$system_mount/boot/m1n1.macho" ] && file "$system_mount/boot/m1n1.macho" 2>/dev/null | grep -q "Mach-O"; then
     M1N1_SRC="$system_mount/boot/m1n1.macho"
   fi
 fi
 
-# Validate existing boot.efi (if any) — it MUST be a Mach-O, not an IMG4/kernelcache
-if [ -n "$system_mount" ] && [ -f "$system_mount/System/Library/CoreServices/boot.efi" ]; then
-  if file "$system_mount/System/Library/CoreServices/boot.efi" 2>/dev/null | grep -q "Mach-O"; then
-    steps_done="${steps_done}boot.efi(valid Mach-O present) "
-  else
-    # boot.efi exists but is NOT a Mach-O (likely kernelcache/IMG4) — mark for replacement
-    echo "WARNING: Existing boot.efi is not a valid Mach-O binary, will replace with m1n1 in Phase 7c"
-    steps_done="${steps_done}boot.efi(invalid — will replace in Phase 7c) "
-  fi
-elif [ -n "$M1N1_SRC" ]; then
-  steps_done="${steps_done}boot.efi(will stage in Phase 7c) "
+# Locate Apple kernelcache from macOS restore bundle (for 1TR boot)
+MACOS_VGID="08E3B56E-946D-4280-9E3C-1931ED8B8B34"
+KC_CANDIDATES="
+/System/Volumes/Preboot/${MACOS_VGID}/restore/kernelcache.release.mac13g
+/System/Volumes/Preboot/${MACOS_VGID}/boot/*/System/Library/Caches/com.apple.kernelcaches/kernelcache
+/Volumes/Preboot/${vg_uuid}/restore/kernelcache.release.mac13g
+/Volumes/Preboot/${vg_uuid}/boot/*/System/Library/Caches/com.apple.kernelcaches/kernelcache
+"
+for candidate in $KC_CANDIDATES; do
+  # Expand glob if any
+  for expanded in $candidate; do
+    if [ -f "$expanded" ] && [ -s "$expanded" ]; then
+      # Verify it's an IMG4 file (Apple-signed)
+      if xxd "$expanded" 2>/dev/null | head -1 | grep -q "IMG4\|IM4P"; then
+        KERNELCACHE_SRC="$expanded"
+        break 2
+      fi
+    fi
+  done
+done
+
+if [ -n "$KERNELCACHE_SRC" ]; then
+  echo "Apple kernelcache found: $KERNELCACHE_SRC ($(du -sh "$KERNELCACHE_SRC" | awk '{print $1}'))"
+  steps_done="${steps_done}kernelcache-found "
 else
-  steps_failed="${steps_failed}boot.efi(m1n1 not found) "
+  echo "WARNING: Apple kernelcache not found. 1TR boot may not work with Full Security."
+  steps_failed="${steps_failed}kernelcache(missing — 1TR boot requires Apple-signed IMG4) "
+fi
+
+if [ -n "$M1N1_SRC" ]; then
+  echo "m1n1 found: $M1N1_SRC ($(du -sh "$M1N1_SRC" | awk '{print $1}'))"
+  steps_done="${steps_done}m1n1-found "
+else
+  echo "WARNING: m1n1 not found. Linux boot will not be possible after step2."
+  steps_failed="${steps_failed}m1n1(missing — needed for Linux boot after Reduced Security) "
 fi
 steps_done="${steps_done}boot-files-scanned "
 
@@ -288,41 +318,42 @@ if [ -n "$preboot_mount" ] && [ -n "$vg_uuid" ]; then
     steps_failed="${steps_failed}macos-restore-not-found "
   fi
 
-  # Also copy System/Library/CoreServices to Preboot
-  # CRITICAL: Only copy boot.efi if it is a valid Mach-O binary (NOT a kernelcache/IMG4).
-  # If invalid, use m1n1 from the staging location instead.
-  if [ -n "$system_mount" ]; then
-    mkdir -p "$DST_DIR/System/Library/CoreServices"
+  # Asahi-alarm reference: stub.py install_files()
+  # Preboot root-level boot.efi MUST be the Apple-signed kernelcache (IMG4)
+  # for the firmware to boot into 1TR with Full Security.
+  # m1n1 is saved as boot.efi.m1n1 — step2 restores it after bputil -g.
+  mkdir -p "$DST_DIR/System/Library/CoreServices"
+
+  # Copy SystemVersion.plist from restore bundle (Apple's real one)
+  if [ -f "$DST_DIR/restore/SystemVersion.plist" ]; then
+    cp "$DST_DIR/restore/SystemVersion.plist" "$DST_DIR/System/Library/CoreServices/" 2>/dev/null || true
+  elif [ -f "$system_mount/System/Library/CoreServices/SystemVersion.plist" ]; then
     cp "$system_mount/System/Library/CoreServices/SystemVersion.plist" "$DST_DIR/System/Library/CoreServices/" 2>/dev/null || true
+  fi
 
-    # Decide which boot.efi to use for Preboot
-    BOOT_EFI_SRC=""
-    if [ -f "$system_mount/System/Library/CoreServices/boot.efi" ] && \
-       file "$system_mount/System/Library/CoreServices/boot.efi" 2>/dev/null | grep -q "Mach-O"; then
-      BOOT_EFI_SRC="$system_mount/System/Library/CoreServices/boot.efi"
-    elif [ -n "$M1N1_SRC" ]; then
-      echo "boot.efi is not a valid Mach-O; using m1n1 for Preboot instead"
-      BOOT_EFI_SRC="$M1N1_SRC"
-    fi
+  # Asahi-alarm: boot.efi = Apple kernelcache (IMG4) for 1TR boot
+  # This is the ONLY file the firmware will load with Full Security.
+  if [ -n "$KERNELCACHE_SRC" ] && [ -f "$KERNELCACHE_SRC" ]; then
+    cp "$KERNELCACHE_SRC" "$DST_DIR/System/Library/CoreServices/boot.efi" 2>/dev/null || \
+      run_admin "cp ${KERNELCACHE_SRC} ${DST_DIR}/System/Library/CoreServices/boot.efi" >/dev/null 2>&1 || true
+    run_admin "chmod 755 ${DST_DIR}/System/Library/CoreServices/boot.efi" >/dev/null 2>&1 || true
+    echo "Preboot boot.efi = Apple kernelcache (for 1TR boot)"
+    steps_done="${steps_done}preboot-boot.efi(kernelcache) "
+  elif [ -n "$M1N1_SRC" ]; then
+    echo "WARNING: No kernelcache; using m1n1 as boot.efi (requires Reduced Security already set)"
+    cp "$M1N1_SRC" "$DST_DIR/System/Library/CoreServices/boot.efi" 2>/dev/null || \
+      run_admin "cp ${M1N1_SRC} ${DST_DIR}/System/Library/CoreServices/boot.efi" >/dev/null 2>&1 || true
+    run_admin "chmod 755 ${DST_DIR}/System/Library/CoreServices/boot.efi" >/dev/null 2>&1 || true
+    steps_done="${steps_done}preboot-boot.efi(m1n1-fallback) "
+  else
+    steps_failed="${steps_failed}preboot-boot.efi-no-source "
+  fi
 
-    if [ -n "$BOOT_EFI_SRC" ]; then
-      cp "$BOOT_EFI_SRC" "$DST_DIR/System/Library/CoreServices/boot.efi" 2>/dev/null || \
-        run_admin "cp ${BOOT_EFI_SRC} ${DST_DIR}/System/Library/CoreServices/boot.efi" >/dev/null 2>&1 || true
-      run_admin "chmod 755 ${DST_DIR}/System/Library/CoreServices/boot.efi" >/dev/null 2>&1 || true
-
-      # Also save backup as boot.efi.m1n1
-      cp "$BOOT_EFI_SRC" "$DST_DIR/System/Library/CoreServices/boot.efi.m1n1" 2>/dev/null || \
-        run_admin "cp ${BOOT_EFI_SRC} ${DST_DIR}/System/Library/CoreServices/boot.efi.m1n1" >/dev/null 2>&1 || true
-
-      # Verify the copy is valid
-      if file "$DST_DIR/System/Library/CoreServices/boot.efi" 2>/dev/null | grep -q "Mach-O"; then
-        steps_done="${steps_done}preboot-boot.efi-ok "
-      else
-        steps_failed="${steps_failed}preboot-boot.efi-invalid "
-      fi
-    else
-      steps_failed="${steps_failed}preboot-boot.efi-no-source "
-    fi
+  # Save m1n1 backup for step2 restoration after bputil -g
+  if [ -n "$M1N1_SRC" ] && [ -f "$M1N1_SRC" ]; then
+    cp "$M1N1_SRC" "$DST_DIR/System/Library/CoreServices/boot.efi.m1n1" 2>/dev/null || \
+      run_admin "cp ${M1N1_SRC} ${DST_DIR}/System/Library/CoreServices/boot.efi.m1n1" >/dev/null 2>&1 || true
+    steps_done="${steps_done}preboot-m1n1-backup "
   fi
 fi
 
@@ -531,14 +562,19 @@ IAPEOF
       }
     fi
 
-    # ── Write boot.efi during this writable window ────────────────────
-    # CRITICAL: System volume is writable NOW (role removed). This is the
-    # ONLY opportunity to write boot.efi correctly. We MUST use a valid
-    # Mach-O binary (m1n1), never a kernelcache/IMG4.
+    # ── Write boot files during this writable window ────────────────────
+    # Asahi-alarm reference: stub.py install_files()
+    # System volume boot.efi MUST be Apple-signed kernelcache (IMG4) for
+    # the firmware to boot into 1TR with Full Security. m1n1 is saved as
+    # boot.efi.m1n1 — step2 restores it after bputil -g sets Reduced Security.
+    #   https://github.com/asahi-alarm/asahi-alarm-installer
     mkdir -p "$SYS_MOUNT/System/Library/CoreServices"
 
-    # SystemVersion.plist
-    if [ ! -f "$SYS_MOUNT/System/Library/CoreServices/SystemVersion.plist" ]; then
+    # Copy Apple SystemVersion.plist from Preboot restore bundle
+    DST_RESTORE="${preboot_mount}/${vg_uuid}/restore"
+    if [ -f "$DST_RESTORE/SystemVersion.plist" ]; then
+      cp "$DST_RESTORE/SystemVersion.plist" "$SYS_MOUNT/System/Library/CoreServices/SystemVersion.plist" 2>/dev/null || true
+    elif [ ! -f "$SYS_MOUNT/System/Library/CoreServices/SystemVersion.plist" ]; then
       cat > "$SYS_MOUNT/System/Library/CoreServices/SystemVersion.plist" << 'SVPEOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -553,31 +589,27 @@ IAPEOF
 SVPEOF
     fi
 
-    # Write boot.efi from m1n1 (skip if M1N1_SRC is not a valid Mach-O)
-    if [ -n "$M1N1_SRC" ] && [ -f "$M1N1_SRC" ] && file "$M1N1_SRC" 2>/dev/null | grep -q "Mach-O"; then
+    # Write Apple kernelcache as boot.efi (for 1TR boot with Full Security)
+    if [ -n "$KERNELCACHE_SRC" ] && [ -f "$KERNELCACHE_SRC" ]; then
+      cp "$KERNELCACHE_SRC" "$SYS_MOUNT/System/Library/CoreServices/boot.efi" 2>/dev/null || true
+      chmod 755 "$SYS_MOUNT/System/Library/CoreServices/boot.efi" 2>/dev/null || true
+      echo "System volume boot.efi = Apple kernelcache (for 1TR boot)"
+      steps_done="${steps_done}boot.efi(kernelcache) "
+    elif [ -n "$M1N1_SRC" ] && [ -f "$M1N1_SRC" ]; then
+      # Fallback to m1n1 (only works if Reduced Security already set)
+      echo "WARNING: No kernelcache; using m1n1 as boot.efi"
       cp "$M1N1_SRC" "$SYS_MOUNT/System/Library/CoreServices/boot.efi" 2>/dev/null || true
       chmod 755 "$SYS_MOUNT/System/Library/CoreServices/boot.efi" 2>/dev/null || true
-      # Also save backup
-      cp "$M1N1_SRC" "$SYS_MOUNT/System/Library/CoreServices/boot.efi.m1n1" 2>/dev/null || true
-
-      # Verify
-      if file "$SYS_MOUNT/System/Library/CoreServices/boot.efi" 2>/dev/null | grep -q "Mach-O"; then
-        steps_done="${steps_done}boot.efi-ok "
-      else
-        steps_failed="${steps_failed}boot.efi-write-failed "
-      fi
+      steps_done="${steps_done}boot.efi(m1n1-fallback) "
     else
-      # Fallback: copy boot.efi.m1n1 → boot.efi if m1n1 was previously staged
-      if [ -f "$SYS_MOUNT/System/Library/CoreServices/boot.efi.m1n1" ] && \
-         file "$SYS_MOUNT/System/Library/CoreServices/boot.efi.m1n1" 2>/dev/null | grep -q "Mach-O"; then
-        cp "$SYS_MOUNT/System/Library/CoreServices/boot.efi.m1n1" \
-           "$SYS_MOUNT/System/Library/CoreServices/boot.efi" 2>/dev/null || true
-      fi
-      if file "$SYS_MOUNT/System/Library/CoreServices/boot.efi" 2>/dev/null | grep -q "Mach-O"; then
-        steps_done="${steps_done}boot.efi-ok(from-backup) "
-      else
-        steps_failed="${steps_failed}boot.efi-no-valid-source "
-      fi
+      steps_failed="${steps_failed}boot.efi-no-valid-source "
+    fi
+
+    # Save m1n1 backup for step2 restoration after bputil -g
+    if [ -n "$M1N1_SRC" ] && [ -f "$M1N1_SRC" ]; then
+      cp "$M1N1_SRC" "$SYS_MOUNT/System/Library/CoreServices/boot.efi.m1n1" 2>/dev/null || true
+      chmod 755 "$SYS_MOUNT/System/Library/CoreServices/boot.efi.m1n1" 2>/dev/null || true
+      steps_done="${steps_done}m1n1-backup "
     fi
 
     step2_ready="true"
