@@ -140,6 +140,7 @@ for candidate in \
   "/Volumes/Cidre/boot/m1n1.macho" \
   "$SYSTEM_DIR/System/Library/CoreServices/boot.efi.m1n1" \
   "$SYSTEM_DIR/boot/m1n1.macho" \
+  "$SYSTEM_DIR/boot/m1n1.bin" \
   "/Volumes/Cidre/System/Library/CoreServices/boot.efi.m1n1"; do
   if [ -f "$candidate" ] && [ -s "$candidate" ]; then
     BOOT_OBJ="$candidate"
@@ -172,7 +173,7 @@ if [ "$BOOT_MAGIC" = "cffaedfe" ]; then
     "$MACHO_DIR/m1n1.bin" \
     "/Volumes/Cidre/cidre/m1n1.bin" \
     "/Volumes/Cidre/boot/m1n1.bin" \
-    "/Volumes/Cidre/boot/m1n1.bin"; do
+    "$SYSTEM_DIR/boot/m1n1.bin"; do
     if [ -f "$raw_candidate" ] && [ -s "$raw_candidate" ]; then
       RAW_MAGIC=$(xxd -l 4 -p "$raw_candidate" 2>/dev/null || echo "")
       if [ "$RAW_MAGIC" != "cffaedfe" ]; then

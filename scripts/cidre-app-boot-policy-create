@@ -32,6 +32,7 @@ done
 [ -n "$target" ] || { echo "ERROR: --target is required" >&2; exit 2; }
 
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+REPO_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
 
 # ── Phase 1: Discovery ──────────────────────────────────────────────
 discovery_json="$(python3 - "$target" <<'PY'
@@ -508,10 +509,10 @@ MACOS_REC_MOUNT=""
 REC_IMG_SRC=""
 
 # macOS Recovery might already be at /Volumes/Recovery
-if [ -f "/Volumes/Recovery/08E3B56E-946D-4280-9E3C-1931ED8B8B34/usr/standalone/firmware/arm64eBaseSystem.dmg" ]; then
-  REC_IMG_SRC="/Volumes/Recovery/08E3B56E-946D-4280-9E3C-1931ED8B8B34/usr/standalone/firmware/arm64eBaseSystem.dmg"
+if [ -f "/Volumes/Recovery/${MACOS_VGID}/usr/standalone/firmware/arm64eBaseSystem.dmg" ]; then
+  REC_IMG_SRC="/Volumes/Recovery/${MACOS_VGID}/usr/standalone/firmware/arm64eBaseSystem.dmg"
 elif diskutil mount disk4s3 2>/dev/null; then
-  REC_IMG_SRC="/Volumes/Recovery/08E3B56E-946D-4280-9E3C-1931ED8B8B34/usr/standalone/firmware/arm64eBaseSystem.dmg"
+  REC_IMG_SRC="/Volumes/Recovery/${MACOS_VGID}/usr/standalone/firmware/arm64eBaseSystem.dmg"
 fi
 
 # Copy arm64eBaseSystem.dmg to a staging location on Cidre Data volume (writable)
@@ -525,13 +526,38 @@ if [ -f "$REC_IMG_SRC" ] && [ -d "/Volumes/Cidre" ]; then
 fi
 
 # Step 7b: Set up Recovery volume with the recoveryOS image
+# Dynamically detect Cidre Recovery volume (role R) from the volume group container.
+# Priority: (1) rec_device from Phase 2 VG creation, (2) diskutil apfs list scan,
+# (3) fallback scan of common recovery device names.
 REC_DEVICE=""
-for dev in disk3s3; do
-  if diskutil info "$dev" >/dev/null 2>&1; then
-    REC_DEVICE="$dev"
-    break
-  fi
-done
+if [ -n "$rec_device" ] && diskutil info "$rec_device" >/dev/null 2>&1; then
+  REC_DEVICE="$rec_device"
+fi
+if [ -z "$REC_DEVICE" ] && [ -n "$container" ]; then
+  # Find Recovery role volume (role R) in this container
+  REC_DEVICE="$(diskutil apfs list -plist "$container" 2>/dev/null | python3 -c "
+import plistlib, sys
+d = plistlib.loads(sys.stdin.buffer.read())
+for c in d.get('Containers', []):
+    for v in c.get('Volumes', []):
+        if 'R' in (v.get('Roles', []) or []):
+            print(v.get('DeviceIdentifier', ''))
+            sys.exit(0)
+print('')
+" 2>/dev/null || echo "")"
+fi
+# Last resort: scan common recovery device names
+if [ -z "$REC_DEVICE" ]; then
+  for dev in disk3s3 disk4s3 disk5s3; do
+    if diskutil info "$dev" >/dev/null 2>&1; then
+      dev_info="$(diskutil info -plist "$dev" 2>/dev/null | python3 -c 'import plistlib,sys; d=plistlib.loads(sys.stdin.buffer.read()); print(d.get("APFSContainerReference",""))' 2>/dev/null || echo "")"
+      if [ "$dev_info" = "$container" ]; then
+        REC_DEVICE="$dev"
+        break
+      fi
+    fi
+  done
+fi
 
 if [ -n "$REC_DEVICE" ]; then
   diskutil unmount /Volumes/Recovery 2>/dev/null || true
@@ -567,6 +593,32 @@ if [ -f "$STEP2_SRC" ] && [ -d "/Volumes/Cidre/cidre" ]; then
   cp "$STEP2_SRC" "/Volumes/Cidre/cidre/step2.sh" 2>/dev/null && {
     chmod +x "/Volumes/Cidre/cidre/step2.sh" 2>/dev/null || true
   } || true
+fi
+
+# Stage m1n1.bin (raw ARM64 binary) to Cidre Data volume for step2.
+# step2 needs the raw binary for kmutil configure-boot --raw.
+# Search companion .bin alongside M1N1_SRC, then libexec/, then m1n1/build/.
+M1N1_BIN_SRC=""
+if [ -n "$M1N1_SRC" ]; then
+  M1N1_DIR_SRC="$(dirname "$M1N1_SRC")"
+  if [ -f "$M1N1_DIR_SRC/m1n1.bin" ]; then
+    M1N1_BIN_SRC="$M1N1_DIR_SRC/m1n1.bin"
+  fi
+fi
+if [ -z "$M1N1_BIN_SRC" ] && [ -f "$REPO_ROOT/libexec/m1n1.bin" ]; then
+  M1N1_BIN_SRC="$REPO_ROOT/libexec/m1n1.bin"
+fi
+if [ -z "$M1N1_BIN_SRC" ] && [ -f "$REPO_ROOT/m1n1/build/m1n1.bin" ]; then
+  M1N1_BIN_SRC="$REPO_ROOT/m1n1/build/m1n1.bin"
+fi
+if [ -z "$M1N1_BIN_SRC" ] && [ -f "/Volumes/Cidre/boot/m1n1.bin" ]; then
+  M1N1_BIN_SRC="/Volumes/Cidre/boot/m1n1.bin"
+fi
+if [ -n "$M1N1_BIN_SRC" ] && [ -d "/Volumes/Cidre/cidre" ]; then
+  if cp "$M1N1_BIN_SRC" "/Volumes/Cidre/cidre/m1n1.bin" 2>/dev/null; then
+    chmod 755 "/Volumes/Cidre/cidre/m1n1.bin" 2>/dev/null || true
+    steps_done="${steps_done}m1n1-bin-staged-to-data "
+  fi
 fi
 
 # Re-mount macOS Recovery for restore bundle access (if needed later)
