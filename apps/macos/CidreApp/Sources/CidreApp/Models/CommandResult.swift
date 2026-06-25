@@ -8,8 +8,8 @@ struct CommandResult: Codable {
     let phase: String?
     let stage: String?
     let exitCode: Int
-    let warnings: [String]
-    let errors: [CommandError]
+    let warnings: [String]?
+    let errors: [CommandError]?
     let artifacts: [String]?
     let nextActions: [NextAction]?
 

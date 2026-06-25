@@ -3,6 +3,7 @@ import SwiftUI
 struct PrivilegedHelperStepView: View {
     @EnvironmentObject var appVM: AppViewModel
     @ObservedObject var wizardVM: SetupWizardViewModel
+    @ObservedObject var bootPolicyVM: BootPolicyViewModel
 
     var body: some View {
         WizardStepContainerView(
@@ -32,13 +33,13 @@ struct PrivilegedHelperStepView: View {
             Text("m1n1 Bootloader")
                 .font(.headline)
 
-            switch wizardVM.bootPolicyVM.m1n1State {
+            switch bootPolicyVM.m1n1State {
             case .notAcquired:
                 HStack {
                     Image(systemName: "circle").foregroundColor(.secondary)
                     Text("Not yet built").foregroundColor(.secondary)
                 }
-                Text("Click Run Operation to build m1n1 from source.")
+                Text("Click \"Build m1n1 bootloader from source\" below to compile the bootloader.")
                     .font(.caption).foregroundColor(.secondary)
 
             case .downloading:

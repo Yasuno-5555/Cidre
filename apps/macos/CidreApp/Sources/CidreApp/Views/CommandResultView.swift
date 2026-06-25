@@ -23,13 +23,13 @@ struct CommandResultView: View {
             Text(result.summary)
                 .font(.body)
             
-            if !result.errors.isEmpty {
+            if let errors = result.errors, !errors.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Errors:")
                         .font(.caption)
                         .bold()
                         .foregroundColor(.red)
-                    ForEach(result.errors, id: \.code) { err in
+                    ForEach(errors, id: \.code) { err in
                         Text("• [\(err.code)] \(err.message)")
                             .font(.caption)
                             .foregroundColor(.red)

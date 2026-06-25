@@ -16,5 +16,6 @@ struct WizardOperationButton: View {
             }
         }
         .buttonStyle(.borderedProminent)
+        .disabled(running)
     }
 }

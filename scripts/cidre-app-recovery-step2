@@ -8,7 +8,7 @@ set -eu
 # Flow (matching Asahi Alarm step2.sh):
 # 1. Detect Cidre VG UUID and system volume
 # 2. Verify we're in 1TR recovery mode (paired to the correct VG)
-# 3. bputil -nc sets Reduced Security (works in 1TR!)
+# 3. bputil -g sets Reduced Security (works in 1TR!)
 # 4. kmutil configure-boot installs m1n1 as custom boot object
 # 5. Clean up .IAPhysicalMedia
 # 6. Reboot
@@ -110,7 +110,10 @@ echo "You will be prompted for your macOS admin credentials."
 echo "Press enter to continue."
 read dummy
 
-while ! bputil -nc -v "$VGID"; do
+# bputil -g: Set Reduced Security — allows custom bootloaders (m1n1).
+# This is the documented flag per project docs/apple-silicon-boot-integration.md.
+# Only works from recoveryOS (1TR mode), not from macOS (AP boot mode 11).
+while ! bputil -g -v "$VGID"; do
   echo ""
   echo "bputil failed. Did you mistype your password?"
   echo "Press enter to try again."
@@ -131,9 +134,12 @@ echo ""
 
 BOOT_OBJ=""
 for candidate in \
+  "/Volumes/Cidre/cidre/m1n1.bin" \
+  "/Volumes/Cidre/boot/m1n1.bin" \
+  "/Volumes/Cidre/cidre/m1n1.macho" \
+  "/Volumes/Cidre/boot/m1n1.macho" \
   "$SYSTEM_DIR/System/Library/CoreServices/boot.efi.m1n1" \
   "$SYSTEM_DIR/boot/m1n1.macho" \
-  "/Volumes/Cidre/boot/m1n1.macho" \
   "/Volumes/Cidre/System/Library/CoreServices/boot.efi.m1n1"; do
   if [ -f "$candidate" ] && [ -s "$candidate" ]; then
     BOOT_OBJ="$candidate"
@@ -143,20 +149,69 @@ done
 
 if [ -z "$BOOT_OBJ" ]; then
   echo "ERROR: m1n1 boot object not found." >&2
-  echo "Looking for boot.efi.m1n1 or m1n1.macho on Cidre volumes." >&2
+  echo "Looking for m1n1.bin or m1n1.macho on Cidre volumes." >&2
   exit 1
 fi
 
 echo "Installing custom boot object (m1n1)..."
 echo "Boot object: $BOOT_OBJ"
 
-# Asahi-alarm: kmutil configure-boot -c boot.bin --raw --entry-point 2048
+# Determine if the boot object is Mach-O or raw binary.
+# kmutil configure-boot --raw requires a raw ARM64 binary.
+# m1n1.bin = raw ARM64, code starts at offset 0 (entry point = 0).
+# m1n1.macho = Mach-O (magic 0xfeedfacf), has 0x4000-byte header.
+BOOT_MAGIC=$(xxd -l 4 -p "$BOOT_OBJ" 2>/dev/null || echo "")
+FOUND_RAW=false
+ENTRY_POINT=0
+
+if [ "$BOOT_MAGIC" = "cffaedfe" ]; then
+  echo "NOTE: Boot object is a Mach-O file. Looking for accompanying raw binary..."
+  # Search for m1n1.bin (raw binary) in common locations
+  MACHO_DIR="$(dirname "$BOOT_OBJ")"
+  for raw_candidate in \
+    "$MACHO_DIR/m1n1.bin" \
+    "/Volumes/Cidre/cidre/m1n1.bin" \
+    "/Volumes/Cidre/boot/m1n1.bin" \
+    "/Volumes/Cidre/boot/m1n1.bin"; do
+    if [ -f "$raw_candidate" ] && [ -s "$raw_candidate" ]; then
+      RAW_MAGIC=$(xxd -l 4 -p "$raw_candidate" 2>/dev/null || echo "")
+      if [ "$RAW_MAGIC" != "cffaedfe" ]; then
+        echo "Found raw binary: $raw_candidate"
+        BOOT_OBJ="$raw_candidate"
+        FOUND_RAW=true
+        break
+      fi
+    fi
+  done
+
+  if [ "$FOUND_RAW" != "true" ]; then
+    echo "ERROR: Could not find a raw m1n1 binary (m1n1.bin)."
+    echo "m1n1.bin is required for kmutil configure-boot --raw."
+    echo ""
+    echo "To build m1n1.bin: cd m1n1 && make RELEASE=1 CHAINLOADING=1"
+    echo "This produces both build/m1n1.macho and build/m1n1.bin."
+    echo "Both must be staged to the boot volume via cidre-app-boot-chain-stage."
+    exit 1
+  fi
+else
+  # Raw ARM64 binary (not Mach-O) — verify it's plausible
+  FOUND_RAW=true
+  echo "Boot object appears to be a raw ARM64 binary."
+fi
+
+# m1n1.bin from Cidre's build (m1n1-raw.ld) starts code at offset 0.
+# ARM64 instructions at offset 0: 09 06 80 d2 = MOVZ x9, #0x30.
+# Entry point (_start) is at the beginning of .init, offset 0.
+# The Asahi reference uses --entry-point 2048 for their m1n1.bin which
+# has an Image4/header prefix; Cidre's build does not.
+echo "Entry point: $ENTRY_POINT (code starts at offset 0 in m1n1.bin)"
+
+# Asahi-alarm: kmutil configure-boot -c boot.bin --raw --entry-point ...
 #   --lowest-virtual-address 0 -v "$system_dir"
-# m1n1 is a raw ARM64 binary with entry point at offset 2048.
 while ! kmutil configure-boot \
   -c "$BOOT_OBJ" \
   --raw \
-  --entry-point 2048 \
+  --entry-point "$ENTRY_POINT" \
   --lowest-virtual-address 0 \
   -v "$SYSTEM_DIR"; do
   echo ""

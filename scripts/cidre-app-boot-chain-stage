@@ -65,20 +65,37 @@ fi
 
 # ── Stage m1n1 ──────────────────────────────────────────────────────
 # Asahi-alarm: m1n1 is installed via kmutil configure-boot in step2.sh
-# (which runs from 1TR after bputil -nc sets Reduced Security).
+# (which runs from 1TR after bputil sets Reduced Security).
 # Here we save m1n1 as a backup — step2 picks it up and installs it.
 # We do NOT overwrite boot.efi (which must remain Apple kernelcache).
+#
+# IMPORTANT: Both m1n1.macho (Mach-O) and m1n1.bin (raw ARM64 binary)
+# are needed. kmutil configure-boot --raw requires the raw .bin;
+# the .macho is kept as backup for direct boot.efi placement.
 if [ -f "$m1n1_path" ]; then
-  # Verify it's a Mach-O binary
+  # Verify it's a Mach-O binary (m1n1_path always points to the .macho)
   if ! file "$m1n1_path" 2>/dev/null | grep -q "Mach-O"; then
     errors="${errors}m1n1-not-mach-o($m1n1_path) "
   else
+    m1n1_dir="$(dirname "$m1n1_path")"
     mkdir -p "$target_mount/boot"
     mkdir -p "$target_mount/System/Library/CoreServices"
 
-    # Primary m1n1 location (used by kmutil configure-boot in step2)
+    # Primary m1n1 Mach-O (backup for direct boot.efi placement)
     cp "$m1n1_path" "$target_mount/boot/m1n1.macho"
     chmod 755 "$target_mount/boot/m1n1.macho"
+
+    # Raw ARM64 binary for kmutil configure-boot --raw in step2
+    # Look alongside the .macho for m1n1.bin
+    if [ -f "$m1n1_dir/m1n1.bin" ]; then
+      cp "$m1n1_dir/m1n1.bin" "$target_mount/boot/m1n1.bin"
+      chmod 755 "$target_mount/boot/m1n1.bin"
+      staged_files="$staged_files boot/m1n1.bin"
+      steps="${steps}m1n1-bin-staged "
+    else
+      echo "WARNING: m1n1.bin not found alongside m1n1.macho. kmutil --raw will fail."
+      echo "Rebuild m1n1 with: make RELEASE=1 CHAINLOADING=1"
+    fi
 
     # m1n1 backup for step2 restoration (boot.efi stays as kernelcache)
     cp "$m1n1_path" "$target_mount/System/Library/CoreServices/boot.efi.m1n1"
@@ -147,7 +164,22 @@ fi
 # m1n1 uses a config file or default paths on the same volume
 # Default behavior: searches for /boot/Image, /boot/initramfs.img
 # Device tree is embedded in m1n1 for the detected machine
-cat > "$target_mount/boot/m1n1.conf" << 'M1N1EOF'
+
+# Dynamically detect root device. macOS device names (disk3s1) differ from
+# Linux names (nvme0n1p3), so prefer PARTUUID which is stable across OSes.
+ROOT_VOLUME_UUID="$(diskutil info -plist "$target_mount" 2>/dev/null | python3 -c 'import plistlib,sys; print(plistlib.loads(sys.stdin.buffer.read()).get("VolumeUUID",""))' 2>/dev/null || echo "")"
+ROOT_DEVICE="$(diskutil info -plist "$target_mount" 2>/dev/null | python3 -c 'import plistlib,sys; print(plistlib.loads(sys.stdin.buffer.read()).get("DeviceIdentifier",""))' 2>/dev/null || echo "")"
+
+if [ -n "$ROOT_VOLUME_UUID" ]; then
+  ROOT_SPEC="root=PARTUUID=$ROOT_VOLUME_UUID"
+  echo "Root device: PARTUUID=$ROOT_VOLUME_UUID (macOS: $ROOT_DEVICE)"
+else
+  # Fallback: use macOS device name (may differ in Linux, adjust at step2 time)
+  ROOT_SPEC="root=/dev/${ROOT_DEVICE:-disk0s3}"
+  echo "WARNING: No volume UUID found. Using device: $ROOT_SPEC"
+fi
+
+cat > "$target_mount/boot/m1n1.conf" << M1N1EOF
 # Cidre m1n1 boot configuration
 # m1n1 auto-detects the machine and loads the appropriate device tree.
 # Kernel and initramfs are loaded from /boot/ on this volume.
@@ -160,7 +192,7 @@ initramfs=boot/initramfs.img
 
 # Boot arguments for ALARM/Asahi
 # These will be appended to the device tree /chosen/bootargs
-cmdline=root=/dev/disk0s3 rw loglevel=3
+cmdline=${ROOT_SPEC} rw loglevel=3
 M1N1EOF
 staged_files="$staged_files boot/m1n1.conf"
 steps="${steps}m1n1-conf-created "

@@ -154,26 +154,51 @@ PY
   exit 4
 fi
 
-# Copy output
+# Copy output — both m1n1.macho (Mach-O) and m1n1.bin (raw binary).
+# kmutil configure-boot --raw requires the raw .bin; the Mach-O is kept
+# as a backup and for direct file-based boot.efi placement.
+M1N1_BIN_OUTPUT="$LIBEXEC_DIR/m1n1.bin"
+copied_macho=false
+copied_bin=false
+
 if [ -f build/m1n1.macho ]; then
   cp build/m1n1.macho "$OUTPUT"
   chmod 755 "$OUTPUT"
+  steps="${steps}macho "
+  copied_macho=true
+fi
+
+if [ -f build/m1n1.bin ]; then
+  cp build/m1n1.bin "$M1N1_BIN_OUTPUT"
+  chmod 755 "$M1N1_BIN_OUTPUT"
+  steps="${steps}bin "
+  copied_bin=true
+fi
+
+if [ "$copied_macho" = true ] || [ "$copied_bin" = true ]; then
   steps="${steps}copied "
 
   # Get version info
   m1n1_version="$(git describe --tags 2>/dev/null || git rev-parse --short HEAD)"
 
-  python3 - "$json_mode" "$OUTPUT" "$m1n1_version" <<'PY'
-import json, os, sys
-json_mode, output, version = sys.argv[1:]
-size = os.path.getsize(output) if os.path.exists(output) else 0
-payload = {"schema_version":1,"command":"cidre-app-m1n1-build","status":"passed","summary":f"m1n1 {version} built successfully ({size} bytes)","exit_code":0,"m1n1_path":output,"m1n1_version":version,"m1n1_size":size}
+  macho_size=0; bin_size=0
+  [ -f "$OUTPUT" ] && macho_size="$(stat -f%z "$OUTPUT" 2>/dev/null || echo 0)"
+  [ -f "$M1N1_BIN_OUTPUT" ] && bin_size="$(stat -f%z "$M1N1_BIN_OUTPUT" 2>/dev/null || echo 0)"
+
+  python3 - "$json_mode" "$OUTPUT" "$M1N1_BIN_OUTPUT" "$m1n1_version" "$macho_size" "$bin_size" "$copied_macho" "$copied_bin" <<'PY'
+import json, sys
+json_mode, macho_path, bin_path, version, macho_size, bin_size, copied_macho, copied_bin = sys.argv[1:]
+size = int(macho_size) + int(bin_size)
+copied = []
+if copied_macho == "true": copied.append("m1n1.macho")
+if copied_bin == "true": copied.append("m1n1.bin")
+payload = {"schema_version":1,"command":"cidre-app-m1n1-build","status":"passed","summary":f"m1n1 {version} built successfully ({size} bytes)","exit_code":0,"m1n1_path":macho_path,"m1n1_bin_path":bin_path,"m1n1_version":version,"m1n1_size":macho_size,"m1n1_bin_size":bin_size,"copied_files":copied}
 print(json.dumps(payload, indent=2) if json_mode == "true" else payload["summary"])
 PY
 else
   python3 - "$json_mode" <<'PY'
 import json, sys
-payload = {"schema_version":1,"command":"cidre-app-m1n1-build","status":"blocked","summary":"Build completed but m1n1.macho not found in build/","exit_code":4,"m1n1_path":None}
+payload = {"schema_version":1,"command":"cidre-app-m1n1-build","status":"blocked","summary":"Build completed but neither m1n1.macho nor m1n1.bin found in build/","exit_code":4,"m1n1_path":None,"m1n1_bin_path":None}
 print(json.dumps(payload, indent=2) if sys.argv[1] == "true" else payload["summary"])
 PY
   exit 4

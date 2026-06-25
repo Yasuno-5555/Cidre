@@ -11,7 +11,7 @@ struct SetupWizardRootView: View {
 
             VStack(alignment: .leading, spacing: 16) {
                 stepView
-                if let blockedReason = viewModel.lastExecution?.parsedResult?.errors.first?.message,
+                if let blockedReason = viewModel.lastExecution?.parsedResult?.errors?.first?.message,
                    viewModel.lastExecution?.status == "blocked" {
                     WizardBlockedView(reason: blockedReason)
                 }
@@ -29,9 +29,18 @@ struct SetupWizardRootView: View {
 
                     Spacer()
 
-                    if let operation = viewModel.operationForCurrentStage() {
+                    let stageOperations = viewModel.operationsForCurrentStage()
+                    if stageOperations.count > 1 {
+                        // Multiple operations for this stage — show each with its own button
+                        ForEach(stageOperations) { operation in
+                            WizardOperationButton(title: operation.title, running: viewModel.isRunning) {
+                                viewModel.runOperation(operation, repositoryPath: appVM.repositoryPath, isMockMode: appVM.mockMode, logStore: appVM.logStore)
+                            }
+                            .frame(width: 260)
+                        }
+                    } else if let operation = stageOperations.first {
                         WizardOperationButton(title: operation.title, running: viewModel.isRunning) {
-                            viewModel.runCurrent(repositoryPath: appVM.repositoryPath, isMockMode: appVM.mockMode, logStore: appVM.logStore)
+                            viewModel.runOperation(operation, repositoryPath: appVM.repositoryPath, isMockMode: appVM.mockMode, logStore: appVM.logStore)
                         }
                         .frame(width: 260)
                     }
@@ -58,7 +67,7 @@ struct SetupWizardRootView: View {
         case .installPlan:
             InstallPlanStepView()
         case .privilegedPreparation:
-            PrivilegedHelperStepView(wizardVM: viewModel)
+            PrivilegedHelperStepView(wizardVM: viewModel, bootPolicyVM: viewModel.bootPolicyVM)
         case .seedGeneration:
             SeedGenerationStepView()
         case .artifactPreparation:

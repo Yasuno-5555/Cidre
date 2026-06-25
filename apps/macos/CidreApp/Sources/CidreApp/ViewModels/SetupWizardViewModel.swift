@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 final class SetupWizardViewModel: ObservableObject {
     @Published var stages: [WizardStage] = WizardEngine.shared.stages(for: .install)
@@ -7,6 +8,16 @@ final class SetupWizardViewModel: ObservableObject {
     @Published var lastExecution: CommandExecution?
     @Published var isRunning = false
     @Published var gateDecision: WizardGateState?
+
+    private var cancellables = Set<AnyCancellable>()
+
+    init() {
+        // Forward bootPolicyVM changes so views observing wizardVM re-render
+        // when nested @Published properties on bootPolicyVM change.
+        bootPolicyVM.objectWillChange.sink { [weak self] _ in
+            self?.objectWillChange.send()
+        }.store(in: &cancellables)
+    }
 
     /// Owner credentials for bless/bputil operations. Held in memory only.
     @Published var ownerCredentials: OwnerCredentials?
@@ -125,8 +136,17 @@ final class SetupWizardViewModel: ObservableObject {
         WizardEngine.shared.operations(for: .install).first { $0.stage == stages[currentIndex] }
     }
 
+    func operationsForCurrentStage() -> [WizardOperation] {
+        WizardEngine.shared.operations(for: .install).filter { $0.stage == stages[currentIndex] }
+    }
+
     func runCurrent(repositoryPath: String, isMockMode: Bool, logStore: ExecutionLogStore) {
-        guard var operation = operationForCurrentStage() else { return }
+        guard let op = operationForCurrentStage() else { return }
+        runOperation(op, repositoryPath: repositoryPath, isMockMode: isMockMode, logStore: logStore)
+    }
+
+    func runOperation(_ operation: WizardOperation, repositoryPath: String, isMockMode: Bool, logStore: ExecutionLogStore) {
+        var operation = operation
 
         // Require owner credentials for boot-policy-create (bless/bputil needs them)
         if operation.id == "boot-policy-create", ownerCredentials == nil {
@@ -208,6 +228,7 @@ final class SetupWizardViewModel: ObservableObject {
 
         // m1n1-build builds from source - just ensure --json
         if operation.id == "m1n1-build" {
+            bootPolicyVM.m1n1State = .downloading
             var cmd = operation.command
             cmd += " --json"
             operation = WizardOperation(
@@ -232,10 +253,9 @@ final class SetupWizardViewModel: ObservableObject {
         logStore.append(command: execution.command, arguments: execution.arguments, exitCode: execution.exitCode ?? 0, status: execution.status, summary: execution.parsedResult?.summary ?? execution.stdout, duration: Date().timeIntervalSince(start))
 
         // Update boot policy view model from result
-        if operation.id == "boot-policy-create" || operation.id == "boot-chain-stage" || operation.id == "boot-policy-verify" {
-            bootPolicyVM.updateFromResult(execution.parsedResult.map { _ in
-                (try? JSONSerialization.jsonObject(with: execution.stdout.data(using: .utf8) ?? Data())) as? [String: Any]
-            } ?? nil)
+        if operation.id == "boot-policy-create" || operation.id == "boot-chain-stage" || operation.id == "boot-policy-verify" || operation.id == "m1n1-build" {
+            let dict = (try? JSONSerialization.jsonObject(with: execution.stdout.data(using: .utf8) ?? Data())) as? [String: Any]
+            bootPolicyVM.updateFromResult(dict)
         }
 
         isRunning = false

@@ -125,6 +125,19 @@ final class BootPolicyViewModel: ObservableObject {
             m1n1State = .acquired(version: version, path: result["m1n1_path"] as? String ?? "")
         }
 
+        // Also handle m1n1-build direct output (status=passed + m1n1_path present)
+        if let status = result["status"] as? String, status == "passed",
+           let m1n1Path = result["m1n1_path"] as? String, !m1n1Path.isEmpty {
+            let version = result["m1n1_version"] as? String ?? "unknown"
+            m1n1State = .acquired(version: version, path: m1n1Path)
+        }
+
+        // Handle m1n1 build failure
+        if let status = result["status"] as? String, status == "blocked",
+           let command = result["command"] as? String, command == "cidre-app-m1n1-build" {
+            m1n1State = .failed(reason: result["summary"] as? String ?? "Build failed")
+        }
+
         if let mode = result["security_mode"] as? String {
             switch mode {
             case "full": securityMode = .fullSecurity

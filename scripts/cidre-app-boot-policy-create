@@ -256,11 +256,47 @@ if [ -z "$M1N1_SRC" ] && [ -n "$system_mount" ]; then
   fi
 fi
 
-# Locate Apple kernelcache from macOS restore bundle (for 1TR boot)
-MACOS_VGID="08E3B56E-946D-4280-9E3C-1931ED8B8B34"
-KC_CANDIDATES="
+# Locate Apple kernelcache from macOS restore bundle (for 1TR boot).
+# Dynamically detect macOS VG UUID instead of hardcoding.
+# Priority: (1) current boot VG from diskutil, (2) system Preboot scan, (3) fallback list.
+MACOS_VGID=""
+# Method 1: Get macOS VG UUID from the system volume
+if [ -z "$MACOS_VGID" ]; then
+  MACOS_VGID="$(diskutil info / 2>/dev/null | grep "APFS Volume Group" | awk -F': ' '{print $2}' | head -1 || echo "")"
+fi
+# Method 2: Scan system Preboot for any VG UUID with a restore bundle
+if [ -z "$MACOS_VGID" ]; then
+  MACOS_VGID="$(ls -d /System/Volumes/Preboot/*/restore 2>/dev/null | head -1 | xargs dirname 2>/dev/null | xargs basename 2>/dev/null || echo "")"
+fi
+# Method 3: Fallback to known common macOS VG UUIDs
+if [ -z "$MACOS_VGID" ]; then
+  for try_vgid in \
+    "08E3B56E-946D-4280-9E3C-1931ED8B8B34" \
+    "ECF56469-CD0D-43FF-94F9-B44B0D5E1E5B"; do
+    if [ -d "/System/Volumes/Preboot/${try_vgid}/restore" ]; then
+      MACOS_VGID="$try_vgid"
+      break
+    fi
+  done
+fi
+
+if [ -z "$MACOS_VGID" ]; then
+  echo "WARNING: Could not detect macOS Volume Group UUID."
+  echo "Kernelcache-based 1TR boot may not work."
+  steps_failed="${steps_failed}macos-vgid(undetected) "
+else
+  echo "macOS VG UUID: $MACOS_VGID"
+  steps_done="${steps_done}macos-vgid($MACOS_VGID) "
+fi
+
+KC_CANDIDATES=""
+if [ -n "$MACOS_VGID" ]; then
+  KC_CANDIDATES="
 /System/Volumes/Preboot/${MACOS_VGID}/restore/kernelcache.release.mac13g
 /System/Volumes/Preboot/${MACOS_VGID}/boot/*/System/Library/Caches/com.apple.kernelcaches/kernelcache
+"
+fi
+KC_CANDIDATES="${KC_CANDIDATES}
 /Volumes/Preboot/${vg_uuid}/restore/kernelcache.release.mac13g
 /Volumes/Preboot/${vg_uuid}/boot/*/System/Library/Caches/com.apple.kernelcaches/kernelcache
 "
@@ -297,7 +333,11 @@ steps_done="${steps_done}boot-files-scanned "
 # ── Phase 4: Copy restore bundle from macOS ──────────────────────────
 echo "[4/6] Copying restore bundle..."
 if [ -n "$preboot_mount" ] && [ -n "$vg_uuid" ]; then
-  MACOS_VGID="08E3B56E-946D-4280-9E3C-1931ED8B8B34"
+  # MACOS_VGID was dynamically detected in Phase 3. Fall back to
+  # scanning if detection failed.
+  if [ -z "$MACOS_VGID" ]; then
+    MACOS_VGID="$(ls -d /System/Volumes/Preboot/*/restore 2>/dev/null | head -1 | xargs dirname 2>/dev/null | xargs basename 2>/dev/null || echo "")"
+  fi
   SRC_RESTORE="/System/Volumes/Preboot/${MACOS_VGID}/restore"
   DST_DIR="${preboot_mount}/${vg_uuid}"
 
