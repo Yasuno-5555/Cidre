@@ -552,7 +552,7 @@ if [ "${RESUME_MODE}" = true ]; then
   "${SCRIPT_DIR}/cidre-user-phase-state" set-stage "desktop-setup" >/dev/null || true
 fi
 
-if XDG_SESSION_TYPE=wayland "${SCRIPT_DIR}/cidre-doctor"; then
+if XDG_SESSION_TYPE=wayland "${SCRIPT_DIR}/cidre-doctor" --daily; then
   if [ "${RESUME_MODE}" = true ]; then
     "${SCRIPT_DIR}/cidre-user-phase-state" set-stage "complete" >/dev/null || true
     "${SCRIPT_DIR}/cidre-user-phase-state" mark-completed >/dev/null || true

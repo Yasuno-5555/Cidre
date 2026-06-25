@@ -233,7 +233,48 @@ run_install() {
   echo "  Locale:   $LOCALE"
   echo ""
 
-  # --- Keyboard ---
+  # ===================================================================
+  # Step 1: Initialize pacman trust chain (canonical order from Asahi ALARM)
+  # ===================================================================
+  run_cmd "Initializing pacman keyring" pacman-key --init
+  run_cmd "Populating archlinuxarm keyring" pacman-key --populate archlinuxarm || true
+
+  # ===================================================================
+  # Step 2: Sync pacman DB (now with trusted archlinuxarm keys)
+  # ===================================================================
+  run_cmd "Syncing pacman database" pacman -Sy --noconfirm
+
+  # ===================================================================
+  # Step 3: Install & trust Asahi keyring
+  # ===================================================================
+  local keyring_name
+  keyring_name=$(detect_keyring)
+  if [ "$keyring_name" = "none" ]; then
+    run_cmd "Installing asahi-alarm-keyring" pacman -S --noconfirm --needed asahi-alarm-keyring || {
+      echo "[INFO] asahi-alarm-keyring not available, trying asahilinux-keyring..."
+      run_cmd "Installing asahilinux-keyring" pacman -S --noconfirm --needed asahilinux-keyring || true
+    }
+    keyring_name=$(detect_keyring)
+  fi
+
+  case "$keyring_name" in
+    asahi-alarm)
+      run_cmd "Populating asahi-alarm keyring" pacman-key --populate asahi-alarm || true
+      ;;
+    asahilinux)
+      run_cmd "Populating asahilinux keyring" pacman-key --populate asahilinux || true
+      ;;
+    *)
+      echo "[INFO] No Asahi keyring installed — Asahi packages may not be verifiable."
+      ;;
+  esac
+
+  # Re-sync after keyring changes
+  run_cmd "Re-syncing pacman database" pacman -Sy --noconfirm
+
+  # ===================================================================
+  # Step 4: System configuration (keyboard, timezone, locale)
+  # ===================================================================
   run_cmd "Setting keyboard layout to $KEYMAP" sh -c "echo 'KEYMAP=$KEYMAP' > /etc/vconsole.conf"
   if command -v localectl >/dev/null 2>&1; then
     run_cmd "Registering keymap via localectl" localectl set-keymap "$KEYMAP" || true
@@ -268,32 +309,6 @@ run_install() {
     run_cmd "Enabling NetworkManager service" systemctl enable NetworkManager || true
     run_cmd "Starting NetworkManager service" systemctl start NetworkManager || true
   fi
-
-  # --- Keyring ---
-  local keyring_name
-  keyring_name=$(detect_keyring)
-  if [ "$keyring_name" = "none" ]; then
-    run_cmd "Installing asahi-alarm-keyring" pacman -S --noconfirm --needed asahi-alarm-keyring || {
-      echo "[INFO] asahi-alarm-keyring not available, trying asahilinux-keyring..."
-      run_cmd "Installing asahilinux-keyring" pacman -S --noconfirm --needed asahilinux-keyring || true
-    }
-    keyring_name=$(detect_keyring)
-  fi
-
-  # Populate keyring
-  run_cmd "Initializing pacman keyring" pacman-key --init
-  case "$keyring_name" in
-    asahi-alarm)
-      run_cmd "Populating keyrings" pacman-key --populate archlinuxarm asahi-alarm || true
-      ;;
-    asahilinux)
-      run_cmd "Populating keyrings" pacman-key --populate archlinuxarm asahilinux || true
-      ;;
-    *)
-      run_cmd "Populating keyrings (archlinuxarm only)" pacman-key --populate archlinuxarm || true
-      ;;
-  esac
-  run_cmd "Syncing pacman database" pacman -Sy --noconfirm
 
   # --- User creation ---
   ask_username
