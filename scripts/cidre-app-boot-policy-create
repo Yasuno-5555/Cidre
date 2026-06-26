@@ -520,6 +520,38 @@ if [ -n "$preboot_mount" ] && [ -n "$vg_uuid" ]; then
   # m1n1 is saved as boot.efi.m1n1 — step2 restores it after bputil -g.
   mkdir -p "$DST_DIR/System/Library/CoreServices"
 
+  # Asahi-alarm reference: stub.py copies RestoreVersion.plist to the
+  # restore bundle. This file is REQUIRED for recoveryOS to identify the
+  # restore bundle version and properly pair with the System volume.
+  # Without it, recoveryOS may fail to initialize → freeze on boot.
+  if [ -f "$SRC_RESTORE/RestoreVersion.plist" ]; then
+    cp "$SRC_RESTORE/RestoreVersion.plist" "$DST_DIR/restore/" 2>/dev/null || true
+    steps_done="${steps_done}restore-version-plist "
+    echo "RestoreVersion.plist: copied to restore bundle"
+  else
+    # Generate a minimal RestoreVersion.plist if not in macOS restore bundle.
+    # This is needed for recoveryOS to recognize the restore bundle.
+    echo "NOTE: RestoreVersion.plist not in macOS restore bundle — generating minimal version"
+    cat > "$DST_DIR/restore/RestoreVersion.plist" << 'RVEOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>BuildVersion</key>
+	<string>1</string>
+	<key>ProductName</key>
+	<string>Cidre</string>
+	<key>ProductVersion</key>
+	<string>1.0</string>
+	<key>RestoreVersion</key>
+	<integer>1</integer>
+</dict>
+</plist>
+RVEOF
+    steps_done="${steps_done}restore-version-plist(generated) "
+    echo "RestoreVersion.plist: generated (minimal)"
+  fi
+
   # Copy SystemVersion.plist from restore bundle (Apple's real one)
   if [ -f "$DST_DIR/restore/SystemVersion.plist" ]; then
     cp "$DST_DIR/restore/SystemVersion.plist" "$DST_DIR/System/Library/CoreServices/" 2>/dev/null || true
@@ -650,6 +682,51 @@ else
   steps_failed="${steps_failed}admin-users(missing) "
 fi
 
+# ── Preflight: Verify recoveryOS deployment before blessing ──────────
+# CRITICAL: If arm64eBaseSystem.dmg wasn't deployed to the Cidre Recovery
+# volume, blessing Cidre as default boot WILL cause a freeze or black screen
+# because iBoot can't find a recoveryOS to boot into 1TR mode.
+#
+# This is the #1 cause of "freeze after selecting boot disk" — the boot
+# picker works (because boot.efi/kernelcache exists on System volume),
+# but 1TR boot fails because the Recovery volume has no recoveryOS.
+echo "[preflight] Verifying recoveryOS deployment..."
+RECOVERY_OS_DEPLOYED="false"
+if [ -f "$REC_IMG_STAGING" ]; then
+  RECOVERY_OS_DEPLOYED="true"
+  echo "  recoveryOS: staged ($(du -sh "$REC_IMG_STAGING" 2>/dev/null | awk '{print $1}'))"
+else
+  # Check if recoveryOS was already copied to the Recovery volume
+  if [ -n "$REC_DEVICE" ]; then
+    REC_CHECK_MOUNT=""
+    diskutil mount "$REC_DEVICE" 2>/dev/null && REC_CHECK_MOUNT="/Volumes/Recovery" || true
+    if [ -n "$REC_CHECK_MOUNT" ] && [ -f "$REC_CHECK_MOUNT/$vg_uuid/usr/standalone/firmware/arm64eBaseSystem.dmg" ]; then
+      RECOVERY_OS_DEPLOYED="true"
+      echo "  recoveryOS: found on Recovery volume"
+    fi
+  fi
+fi
+
+if [ "$RECOVERY_OS_DEPLOYED" != "true" ]; then
+  echo ""
+  echo "============================================"
+  echo "  WARNING: recoveryOS NOT deployed!"
+  echo "============================================"
+  echo ""
+  echo "The arm64eBaseSystem.dmg (recoveryOS image) could not be found"
+  echo "or copied. If you continue, selecting Cidre from the boot picker"
+  echo "WILL cause a freeze or black screen."
+  echo ""
+  echo "This can happen if:"
+  echo "  - The macOS Recovery volume is not accessible"
+  echo "  - The recoveryOS image is on a different device path"
+  echo "  - SIP or other security prevents mounting Recovery"
+  echo ""
+  echo "Cidre will still be set up, but the 1TR auto-setup flow"
+  echo "will NOT work. You'll need to manually set Reduced Security"
+  echo "via Startup Security Utility in Recovery."
+fi
+
 # ── Phase 5: Bless (set Cidre as default boot for 1TR flow) ──────────
 # Asahi-alarm reference: src/main.py bless() and step2()
 #   https://github.com/asahi-alarm/asahi-alarm-installer
@@ -723,16 +800,112 @@ fi
 echo "[7/7] Setting up auto-run step2 (Asahi-style 1TR flow)..."
 step2_ready="false"
 
-# Step 7a: FIRST copy recoveryOS from macOS Recovery while it's accessible
-# Mount macOS Recovery to get arm64eBaseSystem.dmg
+# Step 7a: FIRST copy recoveryOS from macOS Recovery while it's accessible.
+# Asahi-alarm reference: stub.py extracts arm64eBaseSystem.dmg from IPSW and
+# copies it to <recovery_mount>/<vgid>/usr/standalone/firmware/.
+#
+# CRITICAL: Without arm64eBaseSystem.dmg on the Cidre Recovery volume,
+# the 1TR boot WILL freeze or black-screen because iBoot can't find
+# a recoveryOS to boot. The freeze symptom is EXACTLY what the user
+# described: "select Cidre → screen goes black → nothing happens."
+#
+# Recovery detection strategy (multi-path, robust):
+# 1. Already mounted macOS Recovery at /Volumes/Recovery
+# 2. Find macOS Recovery APFS volume (role R) via diskutil apfs list
+# 3. Mount found Recovery volume and verify arm64eBaseSystem.dmg
+# 4. Try /System/Volumes/Recovery (Sealed System Volume path, macOS 24+)
+# 5. Fallback: scan all mounted Recovery volumes for the file
 MACOS_REC_MOUNT=""
 REC_IMG_SRC=""
 
-# macOS Recovery might already be at /Volumes/Recovery
+# Strategy 1: Already mounted?
 if [ -f "/Volumes/Recovery/${MACOS_VGID}/usr/standalone/firmware/arm64eBaseSystem.dmg" ]; then
   REC_IMG_SRC="/Volumes/Recovery/${MACOS_VGID}/usr/standalone/firmware/arm64eBaseSystem.dmg"
-elif diskutil mount disk4s3 2>/dev/null; then
-  REC_IMG_SRC="/Volumes/Recovery/${MACOS_VGID}/usr/standalone/firmware/arm64eBaseSystem.dmg"
+  echo "recoveryOS: found at already-mounted /Volumes/Recovery"
+fi
+
+# Strategy 2: Find macOS Recovery volume via apfs list
+if [ -z "$REC_IMG_SRC" ]; then
+  echo "Searching for macOS Recovery volume..."
+  MACOS_REC_DEVICE="$(diskutil apfs list -plist 2>/dev/null | python3 -c "
+import plistlib, sys
+d = plistlib.loads(sys.stdin.buffer.read())
+# macOS container is typically the first one with 'macOS' or the system volume
+for c in d.get('Containers', []):
+    for v in c.get('Volumes', []):
+        roles = v.get('Roles', []) or []
+        name = v.get('Name', '')
+        # Recovery role = 'R' or 'Recovery'
+        if 'R' in roles or 'Recovery' in roles:
+            # Prefer macOS Recovery (not Cidre's own Recovery)
+            dev = v.get('DeviceIdentifier', '')
+            mp = v.get('MountPoint', '')
+            print(f'{dev}|{mp}')
+" 2>/dev/null | head -5)"
+
+  for entry in $MACOS_REC_DEVICE; do
+    dev="${entry%%|*}"
+    mp="${entry##*|}"
+    [ -z "$dev" ] && continue
+
+    # Already mounted? Check for arm64eBaseSystem.dmg
+    if [ -n "$mp" ] && [ "$mp" != "None" ] && [ -d "$mp" ]; then
+      for vgpath in "$mp"/*/; do
+        if [ -f "${vgpath}usr/standalone/firmware/arm64eBaseSystem.dmg" ]; then
+          REC_IMG_SRC="${vgpath}usr/standalone/firmware/arm64eBaseSystem.dmg"
+          echo "recoveryOS: found at $REC_IMG_SRC"
+          break 2
+        fi
+      done
+    fi
+
+    # Not mounted — try mounting
+    diskutil unmount /Volumes/Recovery 2>/dev/null || true
+    sleep 1
+    if diskutil mount "$dev" 2>/dev/null; then
+      sleep 1
+      for vgpath in "/Volumes/Recovery"/*/; do
+        if [ -f "${vgpath}usr/standalone/firmware/arm64eBaseSystem.dmg" ]; then
+          REC_IMG_SRC="${vgpath}usr/standalone/firmware/arm64eBaseSystem.dmg"
+          echo "recoveryOS: found at $REC_IMG_SRC (mounted $dev)"
+          break 2
+        fi
+      done
+    fi
+  done
+fi
+
+# Strategy 3: Try /System/Volumes/Recovery (SSV path, macOS 24+ Sealed System)
+if [ -z "$REC_IMG_SRC" ]; then
+  if [ -f "/System/Volumes/Recovery/${MACOS_VGID}/usr/standalone/firmware/arm64eBaseSystem.dmg" ]; then
+    REC_IMG_SRC="/System/Volumes/Recovery/${MACOS_VGID}/usr/standalone/firmware/arm64eBaseSystem.dmg"
+    echo "recoveryOS: found at /System/Volumes/Recovery (SSV path)"
+  fi
+fi
+
+# Strategy 4: Scan all Recovery mounts for arm64eBaseSystem.dmg
+if [ -z "$REC_IMG_SRC" ]; then
+  echo "Scanning all Recovery mounts..."
+  REC_IMG_SRC="$(find /Volumes/Recovery* -path '*/usr/standalone/firmware/arm64eBaseSystem.dmg' -maxdepth 5 2>/dev/null | head -1 || echo "")"
+  [ -n "$REC_IMG_SRC" ] && echo "recoveryOS: found via scan: $REC_IMG_SRC"
+fi
+
+# Strategy 5: Hardcoded fallback for known device paths
+if [ -z "$REC_IMG_SRC" ]; then
+  for try_dev in disk3s3 disk4s3 disk5s3 disk4s2; do
+    if diskutil info "$try_dev" >/dev/null 2>&1; then
+      diskutil unmount /Volumes/Recovery 2>/dev/null || true
+      sleep 1
+      if diskutil mount "$try_dev" 2>/dev/null; then
+        sleep 1
+        REC_IMG_SRC="$(find /Volumes/Recovery* -path '*/usr/standalone/firmware/arm64eBaseSystem.dmg' -maxdepth 5 2>/dev/null | head -1 || echo "")"
+        if [ -n "$REC_IMG_SRC" ]; then
+          echo "recoveryOS: found via fallback device $try_dev: $REC_IMG_SRC"
+          break
+        fi
+      fi
+    fi
+  done
 fi
 
 # Copy arm64eBaseSystem.dmg to a staging location on Cidre Data volume (writable)
@@ -741,8 +914,24 @@ if [ -f "$REC_IMG_SRC" ] && [ -d "/Volumes/Cidre" ]; then
   mkdir -p "/Volumes/Cidre/cidre/recovery"
   if cp "$REC_IMG_SRC" "/Volumes/Cidre/cidre/recovery/arm64eBaseSystem.dmg" 2>/dev/null; then
     REC_IMG_STAGING="/Volumes/Cidre/cidre/recovery/arm64eBaseSystem.dmg"
+    REC_IMG_SIZE=$(stat -f%z "$REC_IMG_STAGING" 2>/dev/null || echo "0")
+    echo "recoveryOS: staged to Cidre Data volume ($REC_IMG_SIZE bytes)"
     steps_done="${steps_done}recovery-os-staged "
+  else
+    echo "ERROR: Failed to copy arm64eBaseSystem.dmg to Cidre Data volume"
+    steps_failed="${steps_failed}recovery-os-staging-failed "
   fi
+else
+  echo "CRITICAL: arm64eBaseSystem.dmg not found on this Mac."
+  echo "Checked paths:"
+  echo "  - /Volumes/Recovery/*/usr/standalone/firmware/arm64eBaseSystem.dmg"
+  echo "  - /System/Volumes/Recovery/*/usr/standalone/firmware/arm64eBaseSystem.dmg"
+  echo "  - All mounted Recovery volumes"
+  echo "  - Devices: disk3s3, disk4s3, disk5s3, disk4s2"
+  echo ""
+  echo "Without the recoveryOS image, 1TR boot cannot work."
+  echo "The Mac will freeze or show a black screen after selecting Cidre."
+  steps_failed="${steps_failed}recovery-os(missing — arm64eBaseSystem.dmg not found. 1TR boot will freeze.) "
 fi
 
 # Step 7b: Set up Recovery volume with the recoveryOS image

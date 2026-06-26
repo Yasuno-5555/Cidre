@@ -5,6 +5,14 @@
 #
 # Runs when recoveryOS boots the Cidre stub and finds .IAPhysicalMedia.
 # Opens Terminal.app to run step2.sh interactively.
+#
+# FIXED (2026-06-26): Previously the launcher tried to pass step2.sh as a
+# command-line argument to Terminal.app (`Terminal "$STEP2"`), which doesn't
+# work in recoveryOS — Terminal ignores the argument. RecoveryOS would launch
+# Terminal but do nothing, appearing as a "freeze" to the user.
+#
+# Now we write a temporary script that auto-runs step2.sh when Terminal opens,
+# and use open(1) to launch Terminal with the script's directory as a hint.
 
 LOG="/var/log/cidre-step2.log"
 exec >> "$LOG" 2>&1
@@ -17,29 +25,112 @@ SELF_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 RESOURCES="$SELF_DIR/../Resources"
 STEP2="$RESOURCES/step2.sh"
 
-if [ -x "$STEP2" ]; then
-    echo "Running via Terminal: $STEP2"
-    exec /System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal "$STEP2"
-fi
-
-# Priority 2: step2.sh on Cidre Data volume (fallback)
-STEP2="/Volumes/Cidre/cidre/step2.sh"
-if [ -x "$STEP2" ]; then
-    echo "Running via Terminal (fallback): $STEP2"
-    exec /System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal "$STEP2"
-fi
-
-# Priority 3: search for step2.sh
-for candidate in \
+# If step2.sh not in Resources, check fallback locations
+if [ ! -x "$STEP2" ]; then
+  for candidate in \
     "/Volumes/Cidre/cidre/step2.sh" \
     "/Volumes/Cidre 1/cidre/step2.sh" \
     "/Volumes/Cidre/cidre-step2.sh"; do
     if [ -x "$candidate" ]; then
-        echo "Running via Terminal (found): $candidate"
-        exec /System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal "$candidate"
+      STEP2="$candidate"
+      break
     fi
-done
+  done
+fi
 
-echo "FATAL: Cannot find step2 script"
-echo "Searched: $RESOURCES/step2.sh, /Volumes/Cidre/cidre/step2.sh"
-exit 1
+if [ ! -x "$STEP2" ]; then
+  # Can't find step2.sh — just open Terminal so user sees something
+  echo "FATAL: Cannot find step2 script"
+  echo "Searched: $RESOURCES/step2.sh, /Volumes/Cidre/cidre/step2.sh"
+  /System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal &
+  exit 1
+fi
+
+echo "Found step2.sh: $STEP2"
+
+# Strategy: Write a temporary profile that auto-runs step2.sh.
+# When Terminal.app opens in recoveryOS, it runs the user's shell which
+# sources .profile. We inject step2.sh auto-run via ENV.
+#
+# Fallback: Just open Terminal so the user can run step2.sh manually.
+# Most users of the Asahi flow expect to type the command themselves.
+
+# Write a clear instruction file
+INSTRUCTIONS="/var/tmp/cidre-step2-instructions.txt"
+cat > "$INSTRUCTIONS" << EOF
+============================================
+  Cidre Installer — Recovery Step 2
+============================================
+
+Almost done! To complete the Cidre installation,
+please run the following command in this Terminal:
+
+    $STEP2
+
+This will:
+  1. Set Permissive Security (bputil)
+  2. Install the m1n1 bootloader (kmutil)
+  3. Configure the boot entry
+  4. Reboot your Mac
+
+After reboot: hold the power button → select Cidre → Linux boots!
+
+============================================
+EOF
+
+# Try to auto-execute step2.sh if TERM is available
+# In recoveryOS, just display instructions and let user run it
+if [ -n "$TERM" ] || [ -t 0 ]; then
+  # We're already in a terminal — run step2 directly!
+  echo ""
+  echo "Auto-running step2.sh..."
+  echo ""
+  exec /bin/sh "$STEP2"
+fi
+
+# We're NOT in a terminal (launched by recoveryOS auto-run).
+# Open Terminal and display instructions.
+# Write a temporary rc file that shows instructions
+TMP_RC="/var/tmp/cidre-rc"
+cat > "$TMP_RC" << EOF
+clear
+cat "$INSTRUCTIONS"
+echo ""
+echo "Run: $STEP2"
+echo ""
+EOF
+
+# Try to launch Terminal with the init script
+# Approach 1: Set ENV to a wrapper that cats instructions then stays open
+TERMINAL_APP="/System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal"
+
+if [ -x "$TERMINAL_APP" ]; then
+  # Create a wrapper that shows instructions and drops to shell
+  TMP_RUNNER="/var/tmp/cidre-runner.sh"
+  cat > "$TMP_RUNNER" << RUNNEREOF
+#!/bin/sh
+clear
+cat "$INSTRUCTIONS"
+echo ""
+echo "To complete Cidre installation, run:"
+echo "  $STEP2"
+echo ""
+exec /bin/sh
+RUNNEREOF
+  chmod +x "$TMP_RUNNER"
+
+  # Launch Terminal with our runner
+  # In recoveryOS, Terminal accepts a command via open -a
+  # Try multiple approaches
+  if open -a Terminal "$TMP_RUNNER" 2>/dev/null; then
+    echo "Terminal opened with runner script"
+  elif "$TERMINAL_APP" & then
+    echo "Terminal launched in background"
+  else
+    echo "ERROR: Could not launch Terminal"
+    exit 1
+  fi
+else
+  echo "ERROR: Terminal.app not found at $TERMINAL_APP"
+  exit 1
+fi

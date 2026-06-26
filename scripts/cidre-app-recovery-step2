@@ -156,6 +156,7 @@ fi
 # Fallback: search common locations
 if [ -z "$BOOT_OBJ" ]; then
   for candidate in \
+    "$SYSTEM_DIR/Finish Installation.app/Contents/Resources/boot.bin" \
     "/Volumes/Cidre/cidre/m1n1.bin" \
     "/Volumes/Cidre/cidre/boot.bin" \
     "/Volumes/Cidre/boot/m1n1.bin" \
@@ -164,17 +165,35 @@ if [ -z "$BOOT_OBJ" ]; then
     "/Volumes/Cidre/boot/m1n1.macho" \
     "$SYSTEM_DIR/System/Library/CoreServices/boot.efi.m1n1" \
     "$SYSTEM_DIR/boot/m1n1.bin" \
-    "/Volumes/Cidre/System/Library/CoreServices/boot.efi.m1n1"; do
+    "/Volumes/Cidre/System/Library/CoreServices/boot.efi.m1n1" \
+    "/Volumes/Cidre 1/cidre/m1n1.bin" \
+    "/Volumes/Cidre 1/cidre/boot.bin" \
+    "/Volumes/Cidre 1/boot/m1n1.bin"; do
     if [ -f "$candidate" ] && [ -s "$candidate" ]; then
       BOOT_OBJ="$candidate"
+      echo "Found boot object: $BOOT_OBJ"
       break
     fi
   done
 fi
 
+# Last resort: search for any m1n1.bin or boot.bin on all mounted volumes
+if [ -z "$BOOT_OBJ" ]; then
+  echo "Searching all mounted volumes for m1n1.bin/boot.bin..."
+  BOOT_OBJ="$(find /Volumes -name 'm1n1.bin' -o -name 'boot.bin' 2>/dev/null | head -1 || echo "")"
+  [ -n "$BOOT_OBJ" ] && echo "Found via global search: $BOOT_OBJ"
+fi
+
 if [ -z "$BOOT_OBJ" ]; then
   echo "ERROR: m1n1 boot object not found." >&2
   echo "Looking for m1n1.bin or m1n1.macho on Cidre volumes." >&2
+  echo ""
+  echo "Checked:"
+  echo "  - Finish Installation.app/Contents/Resources/boot.bin"
+  echo "  - /Volumes/Cidre/cidre/m1n1.bin"
+  echo "  - /Volumes/Cidre/boot/m1n1.bin"
+  echo "  - /Volumes/Cidre/System/.../boot.efi.m1n1"
+  echo "  - All mounted volumes"
   exit 1
 fi
 
