@@ -121,6 +121,48 @@ boot_files_ok="$(printf '%s\n' "$discovery_json" | python3 -c 'import json,sys; 
 steps_done=""
 steps_failed=""
 one_tr_ready="false"
+# Initialize variables that may not be set when VG already exists
+rec_device=""
+M1N1_BIN_SRC=""
+KERNELCACHE_SRC=""
+
+# ── Ensure Preboot is mounted (required for Phase 4 even when VG exists) ─
+if [ -n "$preboot_device" ] && [ -z "$preboot_mount" ]; then
+  diskutil mount "$preboot_device" 2>/dev/null || true
+  sleep 1
+  preboot_mount="$(diskutil info -plist "$preboot_device" 2>/dev/null | python3 -c 'import plistlib,sys; print(plistlib.loads(sys.stdin.buffer.read()).get("MountPoint",""))' 2>/dev/null || echo "")"
+fi
+# Ensure System mount is known
+if [ -n "$system_volume" ] && [ -z "$system_mount" ]; then
+  system_mount="$(diskutil info -plist "$system_volume" 2>/dev/null | python3 -c 'import plistlib,sys; print(plistlib.loads(sys.stdin.buffer.read()).get("MountPoint",""))' 2>/dev/null || echo "")"
+fi
+
+# ── Fix missing APFS roles on existing volumes ───────────────────────
+# Volumes may exist from a previous install attempt but lack proper roles.
+# Without roles, bless can't find paired Preboot/Recovery → mount failure.
+# ── Verify APFS roles on Preboot/Recovery (use apfs list, not diskutil info) ─
+# diskutil info -plist does NOT include Roles; must use diskutil apfs list.
+if [ -n "$container" ]; then
+  diskutil apfs list -plist "$container" 2>/dev/null | python3 -c "
+import plistlib, sys
+d = plistlib.loads(sys.stdin.buffer.read())
+for c in d.get('Containers', []):
+    for v in c.get('Volumes', []):
+        roles = v.get('Roles', []) or []
+        name = v.get('Name', '')
+        dev = v.get('DeviceIdentifier', '')
+        if name == 'Preboot' and 'Preboot' not in roles and 'B' not in roles:
+            print(f'MISSING_ROLE:B:{dev}')
+        if name == 'Recovery' and 'Recovery' not in roles and 'R' not in roles:
+            print(f'MISSING_ROLE:R:{dev}')
+" 2>/dev/null | while IFS=: read -r tag role dev; do
+    if [ "$tag" = "MISSING_ROLE" ]; then
+      echo "Fixing missing $role role on $dev..."
+      run_admin "/usr/sbin/diskutil apfs changeVolumeRole ${dev} ${role}" >/dev/null 2>&1 && \
+        echo "  $role role: set on $dev" || echo "  NOTE: Could not set $role role (may already be set)"
+    fi
+  done
+fi
 
 if [ "$dry_run" = true ]; then
   python3 -c "
@@ -263,11 +305,11 @@ fi
 MACOS_VGID=""
 # Method 1: Get macOS VG UUID from the system volume
 if [ -z "$MACOS_VGID" ]; then
-  MACOS_VGID="$(diskutil info / 2>/dev/null | grep "APFS Volume Group" | awk -F': ' '{print $2}' | head -1 || echo "")"
+  MACOS_VGID="$(diskutil info / 2>/dev/null | grep "APFS Volume Group" | awk -F': ' '{print $2}' | head -1 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' || echo "")"
 fi
 # Method 2: Scan system Preboot for any VG UUID with a restore bundle
 if [ -z "$MACOS_VGID" ]; then
-  MACOS_VGID="$(ls -d /System/Volumes/Preboot/*/restore 2>/dev/null | head -1 | xargs dirname 2>/dev/null | xargs basename 2>/dev/null || echo "")"
+  MACOS_VGID="$(ls -d /System/Volumes/Preboot/*/restore 2>/dev/null | head -1 | xargs dirname 2>/dev/null | xargs basename 2>/dev/null | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' || echo "")"
 fi
 # Method 3: Fallback to known common macOS VG UUIDs
 if [ -z "$MACOS_VGID" ]; then
@@ -291,82 +333,146 @@ else
 fi
 
 # ── Kernelcache search (Asahi ALARM reference approach) ────
-# Asahi ALARM extracts kernelcache from IPSW; we use the macOS restore bundle.
+# Asahi ALARM extracts kernelcache from IPSW; we use the macOS boot kernelcache.
 # The kernelcache is the ONLY file iBoot will load with Full Security.
 # Without it, the first 1TR boot cannot happen — iBoot rejects unsigned boot.efi.
 # CRITICAL: Never fall back to m1n1 for the first boot. It's unsigned, so
 # iBoot will always reject it with Full Security → reboot loop back to macOS.
 #
-# Search strategy:
-# 1. macOS Preboot restore bundle (any kernelcache.release.*, wildcard for macOS ver)
-# 2. macOS Preboot boot hash directory
-# 3. Cidre Preboot restore bundle
-# 4. Any kernelcache on the system Preboot volumes
+# CRITICAL: The kernelcache MUST match the current iBoot firmware version.
+# Using an old kernelcache (e.g., mac13g from the restore bundle on a Mac
+# running macOS 26) causes "rootvp not authenticated after mounting" panic
+# in recoveryOS. The restore bundle kernelcache is from the ORIGINAL macOS
+# that shipped with the Mac and may be years out of date.
+#
+# Search strategy (IN ORDER — first match wins):
+# 1. Current macOS ACTIVE boot hash kernelcache (PRIORITY — matches firmware)
+# 2. Current macOS any boot hash kernelcache (fallback)
+# 3. macOS Preboot restore bundle kernelcache (last resort, may be old)
+# 4. Cidre Preboot paths
+# 5. Any kernelcache on the system Preboot volumes
+#
+# The active boot hash is identified by the 'active' file in the boot directory,
+# or by picking the most recently modified hash directory.
 
-KC_CANDIDATES=""
+echo "Searching for Apple kernelcache (current macOS firmware version)..."
+
+KERNELCACHE_SRC=""
+KC_BOOT_HASH_DIR=""  # Track which boot hash dir provides the kernelcache
+
+# ── Priority 1 & 2: macOS boot hash kernelcache (matches current firmware) ─
 if [ -n "$MACOS_VGID" ]; then
-  # Wildcard kernelcache.release.* to support any macOS version (mac13g, mac14g, etc.)
-  KC_CANDIDATES="
-/System/Volumes/Preboot/${MACOS_VGID}/restore/kernelcache.release.*
-/System/Volumes/Preboot/${MACOS_VGID}/boot/*/System/Library/Caches/com.apple.kernelcaches/kernelcache
-"
+  MACOS_BOOT_DIR="/System/Volumes/Preboot/${MACOS_VGID}/boot"
+  ACTIVE_HASH=""
+
+  # Read the active boot hash
+  if [ -f "$MACOS_BOOT_DIR/active" ]; then
+    ACTIVE_HASH="$(cat "$MACOS_BOOT_DIR/active" 2>/dev/null | tr -d '\n' || echo "")"
+  fi
+
+  # Priority 1: Active boot hash kernelcache (guaranteed to match current firmware)
+  if [ -n "$ACTIVE_HASH" ]; then
+    ACTIVE_KC="$MACOS_BOOT_DIR/$ACTIVE_HASH/System/Library/Caches/com.apple.kernelcaches/kernelcache"
+    if [ -f "$ACTIVE_KC" ] && [ -s "$ACTIVE_KC" ]; then
+      KC_SIZE=$(stat -f%z "$ACTIVE_KC" 2>/dev/null || echo "0")
+      if [ "$KC_SIZE" -gt 10000000 ] 2>/dev/null; then
+        echo "  found active boot hash kernelcache (matches firmware): $ACTIVE_KC ($KC_SIZE bytes)"
+        KERNELCACHE_SRC="$ACTIVE_KC"
+        KC_BOOT_HASH_DIR="$MACOS_BOOT_DIR/$ACTIVE_HASH"
+      fi
+    fi
+  fi
+
+  # Priority 2: Any boot hash kernelcache (not necessarily active)
+  if [ -z "$KERNELCACHE_SRC" ]; then
+    for hash_dir in "$MACOS_BOOT_DIR"/*/; do
+      [ -d "$hash_dir" ] || continue
+      kc="$hash_dir/System/Library/Caches/com.apple.kernelcaches/kernelcache"
+      if [ -f "$kc" ] && [ -s "$kc" ]; then
+        KC_SIZE=$(stat -f%z "$kc" 2>/dev/null || echo "0")
+        if [ "$KC_SIZE" -gt 10000000 ] 2>/dev/null; then
+          echo "  found boot hash kernelcache: $kc ($KC_SIZE bytes)"
+          KERNELCACHE_SRC="$kc"
+          KC_BOOT_HASH_DIR="${hash_dir%/}"
+          break
+        fi
+      fi
+    done
+  fi
 fi
-KC_CANDIDATES="${KC_CANDIDATES}
-/Volumes/Preboot/${vg_uuid}/restore/kernelcache.release.*
-/Volumes/Preboot/${vg_uuid}/boot/*/System/Library/Caches/com.apple.kernelcaches/kernelcache
-"
 
-# Fallback: search all Preboot directories for any kernelcache
-KC_CANDIDATES="${KC_CANDIDATES}
-/System/Volumes/Preboot/*/restore/kernelcache.release.*
-/Volumes/Preboot/*/restore/kernelcache.release.*
-"
-
-echo "Searching for Apple kernelcache..."
-for candidate in $KC_CANDIDATES; do
-  for expanded in $candidate; do
+# ── Priority 3: macOS restore bundle kernelcache (may be old!) ─
+if [ -z "$KERNELCACHE_SRC" ] && [ -n "$MACOS_VGID" ]; then
+  for expanded in /System/Volumes/Preboot/${MACOS_VGID}/restore/kernelcache.release.*; do
     if [ -f "$expanded" ] && [ -s "$expanded" ]; then
       KC_SIZE=$(stat -f%z "$expanded" 2>/dev/null || echo "0")
-      # Kernelcache is typically 25-40 MB. m1n1 is ~1 MB.
-      # Use size to distinguish from m1n1 and other small binaries.
-      KC_TYPE=$(file "$expanded" 2>/dev/null || echo "")
       if [ "$KC_SIZE" -gt 10000000 ] 2>/dev/null; then
-        # Large file — almost certainly an IMG4 kernelcache
-        echo "  found (by size: $KC_SIZE bytes): $expanded"
+        echo "  WARNING: Using restore bundle kernelcache (may not match firmware): $expanded ($KC_SIZE bytes)"
+        echo "  If boot fails with 'rootvp not authenticated', the kernelcache is too old for this firmware."
         KERNELCACHE_SRC="$expanded"
-        break 2
-      elif echo "$KC_TYPE" | grep -qi "img4\|img4p"; then
-        echo "  found (by type: IMG4): $expanded"
-        KERNELCACHE_SRC="$expanded"
-        break 2
-      else
-        echo "  skipping (not kernelcache: ${KC_SIZE} bytes, ${KC_TYPE})" >&2
+        break
       fi
     fi
   done
-done
+fi
+
+# ── Priority 4: Cidre Preboot paths ─
+if [ -z "$KERNELCACHE_SRC" ]; then
+  for expanded in /Volumes/Preboot/${vg_uuid}/boot/*/System/Library/Caches/com.apple.kernelcaches/kernelcache \
+                 /Volumes/Preboot/${vg_uuid}/restore/kernelcache.release.*; do
+    if [ -f "$expanded" ] && [ -s "$expanded" ]; then
+      KC_SIZE=$(stat -f%z "$expanded" 2>/dev/null || echo "0")
+      if [ "$KC_SIZE" -gt 10000000 ] 2>/dev/null; then
+        echo "  found in Cidre Preboot: $expanded ($KC_SIZE bytes)"
+        KERNELCACHE_SRC="$expanded"
+        break
+      fi
+    fi
+  done
+fi
+
+# ── Priority 5: Any kernelcache on system Preboot volumes ─
+if [ -z "$KERNELCACHE_SRC" ]; then
+  for expanded in /System/Volumes/Preboot/*/boot/*/System/Library/Caches/com.apple.kernelcaches/kernelcache \
+                 /Volumes/Preboot/*/boot/*/System/Library/Caches/com.apple.kernelcaches/kernelcache \
+                 /System/Volumes/Preboot/*/restore/kernelcache.release.* \
+                 /Volumes/Preboot/*/restore/kernelcache.release.*; do
+    if [ -f "$expanded" ] && [ -s "$expanded" ]; then
+      KC_SIZE=$(stat -f%z "$expanded" 2>/dev/null || echo "0")
+      if [ "$KC_SIZE" -gt 10000000 ] 2>/dev/null; then
+        echo "  found (fallback): $expanded ($KC_SIZE bytes)"
+        KERNELCACHE_SRC="$expanded"
+        break
+      fi
+    fi
+  done
+fi
 
 if [ -n "$KERNELCACHE_SRC" ]; then
-  echo "Apple kernelcache found: $KERNELCACHE_SRC ($(du -sh "$KERNELCACHE_SRC" | awk '{print $1}'))"
+  echo "Apple kernelcache found: $KERNELCACHE_SRC ($(du -sh "$KERNELCACHE_SRC" 2>/dev/null | awk '{print $1}'))"
   steps_done="${steps_done}kernelcache-found "
+  if [ -n "$KC_BOOT_HASH_DIR" ]; then
+    steps_done="${steps_done}kernelcache-from-active-boot-hash "
+    echo "  This kernelcache matches the current iBoot firmware — boot should succeed."
+  fi
 else
   # CRITICAL: No kernelcache = no 1TR boot. Do NOT fall back to m1n1.
   # m1n1 is unsigned and will be rejected by iBoot with Full Security,
   # causing the exact "select Cidre → reboot to macOS" symptom.
   echo "ERROR: Apple kernelcache not found anywhere."
+  echo ""
   echo "Checked paths:"
-  for candidate in $KC_CANDIDATES; do
-    for expanded in $candidate; do
-      echo "  $expanded $( [ -f "$expanded" ] && echo "(EXISTS)" || echo "(missing)")"
-    done
-  done | sort -u
+  if [ -n "$MACOS_VGID" ]; then
+    echo "  /System/Volumes/Preboot/${MACOS_VGID}/boot/<hash>/System/Library/Caches/com.apple.kernelcaches/kernelcache"
+    echo "  /System/Volumes/Preboot/${MACOS_VGID}/restore/kernelcache.release.*"
+  fi
+  echo "  /Volumes/Preboot/${vg_uuid}/boot/*/System/Library/Caches/com.apple.kernelcaches/kernelcache"
+  echo "  /Volumes/Preboot/${vg_uuid}/restore/kernelcache.release.*"
   echo ""
   echo "The kernelcache (Apple-signed IMG4) is REQUIRED for the first 1TR boot."
   echo "Without it, iBoot will reject any unsigned bootloader with Full Security."
   echo ""
-  echo "To fix: ensure the macOS restore bundle is accessible at"
-  echo "  /System/Volumes/Preboot/<macOS-VG-UUID>/restore/"
-  echo "which contains kernelcache.release.* (an Apple-signed IMG4 file)."
+  echo "To fix: ensure macOS is booted and the Preboot volume is accessible."
   steps_failed="${steps_failed}kernelcache(missing — CRITICAL: 1TR boot requires Apple-signed IMG4 kernelcache. m1n1 cannot be used for first boot.) "
 fi
 
@@ -386,7 +492,7 @@ if [ -n "$preboot_mount" ] && [ -n "$vg_uuid" ]; then
   # MACOS_VGID was dynamically detected in Phase 3. Fall back to
   # scanning if detection failed.
   if [ -z "$MACOS_VGID" ]; then
-    MACOS_VGID="$(ls -d /System/Volumes/Preboot/*/restore 2>/dev/null | head -1 | xargs dirname 2>/dev/null | xargs basename 2>/dev/null || echo "")"
+    MACOS_VGID="$(ls -d /System/Volumes/Preboot/*/restore 2>/dev/null | head -1 | xargs dirname 2>/dev/null | xargs basename 2>/dev/null | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' || echo "")"
   fi
   SRC_RESTORE="/System/Volumes/Preboot/${MACOS_VGID}/restore"
   DST_DIR="${preboot_mount}/${vg_uuid}"
@@ -439,6 +545,32 @@ if [ -n "$preboot_mount" ] && [ -n "$vg_uuid" ]; then
       echo "  iBoot requires an Apple-signed IMG4 kernelcache with Full Security."
       steps_failed="${steps_failed}preboot-boot.efi-no-kernelcache "
     fi
+
+	  # ── Copy matching apticket.der from the boot hash directory ────
+	  # When the kernelcache comes from a macOS boot hash directory,
+	  # the matching apticket.der must also be copied to the Cidre Preboot
+	  # boot hash. The IM4M/apticket is the signature that iBoot uses to
+	  # verify the kernelcache IMG4. An old apticket (from the restore
+	  # bundle) won't match a new kernelcache (from the active boot hash).
+	  if [ -n "$KC_BOOT_HASH_DIR" ] && [ -d "$KC_BOOT_HASH_DIR" ] && [ -n "$KERNELCACHE_SRC" ]; then
+	    SRC_APT="$KC_BOOT_HASH_DIR/System/Library/Caches/apticket.der"
+	    if [ -f "$SRC_APT" ]; then
+	      CIDRE_BOOT_HASH=$(ls -d "$DST_DIR/boot"/*/ 2>/dev/null | head -1 || echo "")
+	      if [ -n "$CIDRE_BOOT_HASH" ] && [ -d "$CIDRE_BOOT_HASH" ]; then
+	        mkdir -p "${CIDRE_BOOT_HASH}System/Library/Caches"
+	        if cp "$SRC_APT" "${CIDRE_BOOT_HASH}System/Library/Caches/apticket.der" 2>/dev/null; then
+	          echo "apticket.der: updated in Cidre boot hash (matches current firmware kernelcache)"
+	          steps_done="${steps_done}apticket-updated "
+	        else
+	          run_admin "cp ${SRC_APT} ${CIDRE_BOOT_HASH}System/Library/Caches/apticket.der" >/dev/null 2>&1 && {
+	            steps_done="${steps_done}apticket-updated(admin) "
+	            echo "apticket.der: updated via admin"
+	          } || echo "WARNING: Could not update apticket.der in Cidre boot hash"
+	        fi
+	      fi
+	    fi
+	  fi
+
 
   # Save m1n1 backup for step2 restoration after bputil -g
   if [ -n "$M1N1_SRC" ] && [ -f "$M1N1_SRC" ]; then
@@ -494,17 +626,19 @@ fi
 ADMIN_USERS_SRC="/System/Volumes/Preboot/${MACOS_VGID}/var/db/AdminUserRecoveryInfo.plist"
 ADMIN_USERS_DST="${preboot_mount}/${vg_uuid}/var/db"
 if [ -f "$ADMIN_USERS_SRC" ] && [ -d "${preboot_mount}/${vg_uuid}" ]; then
-  mkdir -p "$ADMIN_USERS_DST"
-  [ -f "$ADMIN_USERS_DST/AdminUserRecoveryInfo.plist" ] && \
-    chflags noschg "$ADMIN_USERS_DST/AdminUserRecoveryInfo.plist" 2>/dev/null || true
-  if cp "$ADMIN_USERS_SRC" "$ADMIN_USERS_DST/AdminUserRecoveryInfo.plist" 2>/dev/null; then
-    chflags schg "$ADMIN_USERS_DST/AdminUserRecoveryInfo.plist" 2>/dev/null || true
+  # Preboot is owned by root — use admin privileges for all operations
+  if run_admin "mkdir -p ${ADMIN_USERS_DST} && cp ${ADMIN_USERS_SRC} ${ADMIN_USERS_DST}/AdminUserRecoveryInfo.plist && chflags schg ${ADMIN_USERS_DST}/AdminUserRecoveryInfo.plist" >/dev/null 2>&1; then
     steps_done="${steps_done}admin-users-copied "
     echo "AdminUserRecoveryInfo.plist: copied to Cidre Preboot"
   else
-    if run_admin "cp ${ADMIN_USERS_SRC} ${ADMIN_USERS_DST}/AdminUserRecoveryInfo.plist && chflags schg ${ADMIN_USERS_DST}/AdminUserRecoveryInfo.plist" >/dev/null 2>&1; then
-      steps_done="${steps_done}admin-users-copied(admin) "
-      echo "AdminUserRecoveryInfo.plist: copied via admin"
+    # Fallback: try without admin (may work if running as root)
+    mkdir -p "$ADMIN_USERS_DST" 2>/dev/null || true
+    [ -f "$ADMIN_USERS_DST/AdminUserRecoveryInfo.plist" ] && \
+      chflags noschg "$ADMIN_USERS_DST/AdminUserRecoveryInfo.plist" 2>/dev/null || true
+    if cp "$ADMIN_USERS_SRC" "$ADMIN_USERS_DST/AdminUserRecoveryInfo.plist" 2>/dev/null; then
+      chflags schg "$ADMIN_USERS_DST/AdminUserRecoveryInfo.plist" 2>/dev/null || true
+      steps_done="${steps_done}admin-users-copied "
+      echo "AdminUserRecoveryInfo.plist: copied to Cidre Preboot"
     else
       echo "WARNING: Could not copy AdminUserRecoveryInfo.plist"
       steps_failed="${steps_failed}admin-users-copy "
@@ -952,7 +1086,7 @@ print(bc.get('bless2', {}).get('RestoreBundlePath', ''))
     echo "Setting APFS bootable flag..."
     if /usr/bin/python3 -c "
 import ctypes
-from ctypes import c_char_p, c_ulong, POINTER, c_int, CDLL, get_errno, byref
+from ctypes import c_char_p, c_ulong, c_uint, POINTER, c_int, CDLL, get_errno, byref
 
 sysdll = CDLL('libSystem.B.dylib', use_errno=True)
 func = sysdll.fsctl
