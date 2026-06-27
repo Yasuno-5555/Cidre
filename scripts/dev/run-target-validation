@@ -33,6 +33,7 @@ usage() {
   echo "  --metadata-only-override-harness-only Run metadata-only override harness tests"
   echo "  --bootstrap-safe-mode-probe-only      Run bootstrap safe-mode probe tests"
   echo "  --cidre-wrapper-strategy-only         Run Cidre installer wrapper strategy tests"
+  echo "  --cidre-wrapper-selection-only        Run Cidre installer wrapper selection tests"
   exit 1
 }
 
@@ -120,6 +121,10 @@ while [ $# -gt 0 ]; do
       ;;
     --cidre-wrapper-strategy-only)
       CIDRE_WRAPPER_STRATEGY_ONLY=1
+      shift
+      ;;
+    --cidre-wrapper-selection-only)
+      CIDRE_WRAPPER_SELECTION_ONLY=1
       shift
       ;;
     *)
@@ -226,6 +231,12 @@ fi
 if [ "${CIDRE_WRAPPER_STRATEGY_ONLY:-0}" -eq 1 ]; then
   echo "Running Cidre installer wrapper strategy tests only..."
   "$REPO_ROOT/installer/scripts/run-cidre-wrapper-strategy-tests"
+  exit 0
+fi
+
+if [ "${CIDRE_WRAPPER_SELECTION_ONLY:-0}" -eq 1 ]; then
+  echo "Running Cidre installer wrapper selection tests only..."
+  "$REPO_ROOT/installer/scripts/run-cidre-wrapper-selection-tests"
   exit 0
 fi
 

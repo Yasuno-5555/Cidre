@@ -77,3 +77,13 @@ To run the safe-mode probe tests suite:
 ```bash
 installer/scripts/run-bootstrap-safe-mode-probe-tests
 ```
+
+---
+
+## 8. Cidre Wrapper Metadata Selection
+
+To run the wrapper selection tests suite:
+
+```bash
+installer/scripts/run-cidre-wrapper-selection-tests
+```
