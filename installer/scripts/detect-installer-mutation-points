@@ -1,0 +1,88 @@
+#!/bin/bash
+# detect-installer-mutation-points: Static inspector for identifying disk partition/nvram mutations
+set -euo pipefail
+
+INPUT=""
+
+usage() {
+  echo "Usage: $0 --input <path>"
+  exit 1
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --input)
+      if [ $# -lt 2 ]; then
+        echo "ERROR: --input requires a path." >&2
+        exit 1
+      fi
+      INPUT="$2"
+      shift 2
+      ;;
+    *)
+      echo "ERROR: Unknown option: $1" >&2
+      usage
+      ;;
+  esac
+done
+
+if [ -z "$INPUT" ]; then
+  echo "ERROR: --input is required." >&2
+  usage
+fi
+
+if [ ! -f "$INPUT" ]; then
+  echo "ERROR: File not found at $INPUT" >&2
+  exit 1
+fi
+
+echo "=== Mutation Boundary Report ==="
+echo ""
+
+# Scan logic
+errors=0
+
+# Warnings check
+while IFS= read -r line; do
+  if [ -n "$line" ]; then
+    line_num=$(echo "$line" | cut -d':' -f1)
+    content=$(echo "$line" | cut -d':' -f2-)
+    echo "warning:"
+    echo "  line:   $line_num"
+    echo "  match:  $content"
+    echo "  reason: privilege escalation begins here"
+    echo ""
+    errors=$((errors + 1))
+  fi
+done < <(grep -n -E "sudo |chown|chmod|mount|umount" "$INPUT" || echo "")
+
+# Danger check
+while IFS= read -r line; do
+  if [ -n "$line" ]; then
+    line_num=$(echo "$line" | cut -d':' -f1)
+    content=$(echo "$line" | cut -d':' -f2-)
+    echo "danger:"
+    echo "  line:   $line_num"
+    echo "  match:  $content"
+    echo "  reason: disk mutation / system override candidate"
+    echo ""
+    errors=$((errors + 1))
+  fi
+done < <(grep -n -E "diskutil|bless|nvram|gpt|fdisk|dd |mkfs|parted|asr|newfs" "$INPUT" || echo "")
+
+# Entrypoint execution check
+while IFS= read -r line; do
+  if [ -n "$line" ]; then
+    line_num=$(echo "$line" | cut -d':' -f1)
+    content=$(echo "$line" | cut -d':' -f2-)
+    echo "danger:"
+    echo "  line:   $line_num"
+    echo "  match:  $content"
+    echo "  reason: installer entrypoint execution"
+    echo ""
+    errors=$((errors + 1))
+  fi
+done < <(grep -n -E "\./install.sh|\./installer-bootstrap.sh|\./alx.sh" "$INPUT" || echo "")
+
+echo "Inspection completed. Detected $errors potential mutation points."
+exit 0

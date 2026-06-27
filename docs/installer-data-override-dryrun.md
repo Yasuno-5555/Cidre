@@ -34,3 +34,10 @@ installer/scripts/print-installer-override-env \
   --installer-data-url http://127.0.0.1:8765/asahi-installer-data.cidre.dev.json \
   --repo-base http://127.0.0.1:8765
 ```
+
+---
+
+## 4. Relationship to Bootstrap Inspection
+
+Phase 19 proved that Cidre can serve and validate INSTALLER_DATA-shaped URLs.
+Phase 20 studies how real bootstrap scripts consume those URLs to ensure no danger boundaries are breached.

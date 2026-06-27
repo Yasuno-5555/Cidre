@@ -1,0 +1,121 @@
+#!/bin/bash
+# print-safe-bootstrap-override-plan: Generates safe shell override plans without executing any commands
+set -euo pipefail
+
+DATA_URL=""
+REPO_BASE=""
+INSTALLER_BASE=""
+FORMAT="shell"
+
+usage() {
+  echo "Usage: $0 --installer-data-url <url> --repo-base <url> [--installer-base <url>] [--format <format>]"
+  exit 1
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --installer-data-url)
+      if [ $# -lt 2 ]; then
+        echo "ERROR: --installer-data-url requires an argument." >&2
+        exit 1
+      fi
+      DATA_URL="$2"
+      shift 2
+      ;;
+    --repo-base)
+      if [ $# -lt 2 ]; then
+        echo "ERROR: --repo-base requires an argument." >&2
+        exit 1
+      fi
+      REPO_BASE="$2"
+      shift 2
+      ;;
+    --installer-base)
+      if [ $# -lt 2 ]; then
+        echo "ERROR: --installer-base requires an argument." >&2
+        exit 1
+      fi
+      INSTALLER_BASE="$2"
+      shift 2
+      ;;
+    --format)
+      if [ $# -lt 2 ]; then
+        echo "ERROR: --format requires a type." >&2
+        exit 1
+      fi
+      FORMAT="$2"
+      shift 2
+      ;;
+    *)
+      echo "ERROR: Unknown option: $1" >&2
+      usage
+      ;;
+  esac
+done
+
+if [ -z "$DATA_URL" ] || [ -z "$REPO_BASE" ]; then
+  echo "ERROR: Both --installer-data-url and --repo-base are required." >&2
+  usage
+fi
+
+plan_block=""
+
+if [ "$FORMAT" = "markdown" ]; then
+  plan_block=$(cat <<EOF
+# Cidre Safe Bootstrap Override Plan
+
+Configure these variables inside your shell before starting the dry-run test check.
+
+\`\`\`sh
+export INSTALLER_DATA="$DATA_URL"
+export REPO_BASE="$REPO_BASE"
+EOF
+)
+  if [ -n "$INSTALLER_BASE" ]; then
+    plan_block=$(cat <<EOF
+$plan_block
+export INSTALLER_BASE="$INSTALLER_BASE"
+EOF
+)
+  fi
+  plan_block=$(cat <<EOF
+$plan_block
+export CIDRE_BOOTSTRAP_OVERRIDE_DRYRUN="1"
+\`\`\`
+
+> [!WARNING]
+> Do not execute bootstrap scripts or pipe URLs into shell commands during Phase 20.
+EOF
+)
+else
+  plan_block=$(cat <<EOF
+# Cidre bootstrap override plan.
+# Phase 20 static inspection only.
+# Do not execute installer scripts with this yet.
+
+export INSTALLER_DATA="$DATA_URL"
+export REPO_BASE="$REPO_BASE"
+EOF
+)
+  if [ -n "$INSTALLER_BASE" ]; then
+    plan_block=$(cat <<EOF
+$plan_block
+export INSTALLER_BASE="$INSTALLER_BASE"
+EOF
+)
+  fi
+  plan_block=$(cat <<EOF
+$plan_block
+export CIDRE_BOOTSTRAP_OVERRIDE_DRYRUN="1"
+
+# Not executed:
+# curl ... | sh
+# installer-bootstrap.sh
+# alx.sh
+# install.sh
+EOF
+)
+fi
+
+echo "$plan_block"
+exit 0

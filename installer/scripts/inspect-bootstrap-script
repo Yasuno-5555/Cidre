@@ -1,0 +1,95 @@
+#!/bin/bash
+# inspect-bootstrap-script: Statically inspects shell bootstrap files for variables and executions
+set -euo pipefail
+
+INPUT=""
+LIST_VARS=0
+LIST_FETCH=0
+LIST_EXEC=0
+LIST_DANGER=0
+
+usage() {
+  echo "Usage: $0 --input <path> [--list-vars] [--list-fetches] [--list-exec] [--list-danger]"
+  exit 1
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --input)
+      if [ $# -lt 2 ]; then
+        echo "ERROR: --input requires a path." >&2
+        exit 1
+      fi
+      INPUT="$2"
+      shift 2
+      ;;
+    --list-vars)
+      LIST_VARS=1
+      shift
+      ;;
+    --list-fetches)
+      LIST_FETCH=1
+      shift
+      ;;
+    --list-exec)
+      LIST_EXEC=1
+      shift
+      ;;
+    --list-danger)
+      LIST_DANGER=1
+      shift
+      ;;
+    *)
+      echo "ERROR: Unknown option: $1" >&2
+      usage
+      ;;
+  esac
+done
+
+if [ -z "$INPUT" ]; then
+  echo "ERROR: --input is required." >&2
+  usage
+fi
+
+if [ ! -f "$INPUT" ]; then
+  echo "ERROR: File not found at $INPUT" >&2
+  exit 1
+fi
+
+echo "=== Statically Inspecting Shell Script ==="
+echo "File: $INPUT"
+echo ""
+
+# Default to listing everything if no flags are passed
+if [ $LIST_VARS -eq 0 ] && [ $LIST_FETCH -eq 0 ] && [ $LIST_EXEC -eq 0 ] && [ $LIST_DANGER -eq 0 ]; then
+  LIST_VARS=1
+  LIST_FETCH=1
+  LIST_EXEC=1
+  LIST_DANGER=1
+fi
+
+if [ $LIST_VARS -eq 1 ]; then
+  echo "Override Variables Matches:"
+  grep -n -E "INSTALLER_DATA|INSTALLER_DATA_ALT|REPO_BASE|INSTALLER_BASE|EXPERT|VERSION_FLAG" "$INPUT" || echo "  No variables matched."
+  echo ""
+fi
+
+if [ $LIST_FETCH -eq 1 ]; then
+  echo "Fetch Calls Matches:"
+  grep -n -E "curl|wget|urllib|requests" "$INPUT" || echo "  No fetch calls matched."
+  echo ""
+fi
+
+if [ $LIST_EXEC -eq 1 ]; then
+  echo "Shell Executions Matches:"
+  grep -n -E "sh |bash|zsh|python|exec |sudo" "$INPUT" || echo "  No executions matched."
+  echo ""
+fi
+
+if [ $LIST_DANGER -eq 1 ]; then
+  echo "Danger Partition/Disk Operations Matches:"
+  grep -n -E "diskutil|bless|nvram|asr|dd |gpt|fdisk|mount|umount|newfs|mkfs|parted" "$INPUT" || echo "  No dangerous mutations matched."
+  echo ""
+fi
+
+exit 0

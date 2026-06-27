@@ -26,6 +26,7 @@ usage() {
   echo "  --installer-compat-only Run upstream installer compatibility study tests"
   echo "  --asahi-adapter-only    Run Asahi metadata adapter prototype tests"
   echo "  --installer-override-only Run INSTALLER_DATA override dryrun tests"
+  echo "  --bootstrap-inspection-only Run bootstrap override static inspections"
   exit 1
 }
 
@@ -85,6 +86,10 @@ while [ $# -gt 0 ]; do
       ;;
     --installer-override-only)
       INSTALLER_OVERRIDE_ONLY=1
+      shift
+      ;;
+    --bootstrap-inspection-only)
+      BOOTSTRAP_INSPECTION_ONLY=1
       shift
       ;;
     *)
@@ -149,6 +154,12 @@ fi
 if [ "${INSTALLER_OVERRIDE_ONLY:-0}" -eq 1 ]; then
   echo "Running INSTALLER_DATA override dryrun tests only..."
   "$REPO_ROOT/installer/scripts/run-installer-override-dryrun-tests"
+  exit 0
+fi
+
+if [ "${BOOTSTRAP_INSPECTION_ONLY:-0}" -eq 1 ]; then
+  echo "Running bootstrap override static inspections only..."
+  "$REPO_ROOT/installer/scripts/run-bootstrap-inspection-tests"
   exit 0
 fi
 

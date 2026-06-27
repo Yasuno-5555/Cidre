@@ -1,0 +1,64 @@
+#!/bin/bash
+# extract-bootstrap-vars: Parse simple KEY=value assignments inside bootstrap files
+set -euo pipefail
+
+INPUT=""
+
+usage() {
+  echo "Usage: $0 --input <path>"
+  exit 1
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --input)
+      if [ $# -lt 2 ]; then
+        echo "ERROR: --input requires a path." >&2
+        exit 1
+      fi
+      INPUT="$2"
+      shift 2
+      ;;
+    *)
+      echo "ERROR: Unknown option: $1" >&2
+      usage
+      ;;
+  esac
+done
+
+if [ -z "$INPUT" ]; then
+  echo "ERROR: --input is required." >&2
+  usage
+fi
+
+if [ ! -f "$INPUT" ]; then
+  echo "ERROR: File not found at $INPUT" >&2
+  exit 1
+fi
+
+echo "=== Bootstrap Override Variables ==="
+echo ""
+
+VARS_TO_CHECK=(INSTALLER_DATA INSTALLER_DATA_ALT REPO_BASE INSTALLER_BASE EXPERT VERSION_FLAG INSTALLER_STAGE)
+
+for var in "${VARS_TO_CHECK[@]}"; do
+  # Find variable declaration line
+  match_line=$(grep -n "$var" "$INPUT" | head -n 1 || echo "")
+  if [ -n "$match_line" ]; then
+    line_num=$(echo "$match_line" | cut -d':' -f1)
+    val_pattern=$(echo "$match_line" | cut -d':' -f2-)
+    
+    echo "$var:"
+    echo "  found:        yes"
+    echo "  line:         $line_num"
+    echo "  pattern:      $val_pattern"
+    echo "  overrideable: likely"
+    echo ""
+  else
+    echo "$var:"
+    echo "  found:        no"
+    echo ""
+  fi
+done
+
+exit 0

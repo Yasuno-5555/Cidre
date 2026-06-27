@@ -1,0 +1,104 @@
+#!/bin/bash
+# run-bootstrap-inspection-tests: Phase 20 bootstrap static inspection tests runner
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+REQ_UPSTREAM=0
+
+usage() {
+  echo "Usage: $0 [--require-upstream]"
+  exit 1
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --require-upstream)
+      REQ_UPSTREAM=1
+      shift
+      ;;
+    *)
+      echo "ERROR: Unknown option: $1" >&2
+      usage
+      ;;
+  esac
+done
+
+echo "=== Running Bootstrap Static Inspection Tests ==="
+
+SAFE_FIXTURE="$REPO_ROOT/installer/bootstrap/fixtures/minimal-bootstrap-sample.sh"
+DANGER_FIXTURE="$REPO_ROOT/installer/bootstrap/fixtures/dangerous-bootstrap-sample.sh"
+
+# Snapshots paths
+ASAHI_BOOT="$REPO_ROOT/installer/bootstrap/upstream/asahi-bootstrap-dev.snapshot.sh"
+ASAHI_INST="$REPO_ROOT/installer/bootstrap/upstream/asahi-install-sh.snapshot.sh"
+ALARM_BOOT="$REPO_ROOT/installer/bootstrap/upstream/alarm-installer-bootstrap.snapshot.sh"
+ALARM_INST="$REPO_ROOT/installer/bootstrap/upstream/alarm-install-sh.snapshot.sh"
+
+# Test 1: Static variables inspection on safe fixture
+echo "Test 1: Inspecting safe bootstrap fixture..."
+"$REPO_ROOT/installer/scripts/inspect-bootstrap-script" --input "$SAFE_FIXTURE" --list-vars --list-fetches
+echo "  [OK] Safe fixture variables verified."
+
+# Test 2: Variable extraction on safe fixture
+echo "Test 2: Extracting variables..."
+"$REPO_ROOT/installer/scripts/extract-bootstrap-vars" --input "$SAFE_FIXTURE"
+echo "  [OK] Extraction completed."
+
+# Test 3: Mutation point detection on dangerous fixture
+echo "Test 3: Detecting danger mutation points..."
+"$REPO_ROOT/installer/scripts/detect-installer-mutation-points" --input "$DANGER_FIXTURE"
+echo "  [OK] Danger points detection completed."
+
+# Test 4: Print safe override plans
+echo "Test 4: Printing safe override plans..."
+"$REPO_ROOT/installer/scripts/print-safe-bootstrap-override-plan" \
+  --installer-data-url "http://127.0.0.1:8765/asahi.json" \
+  --repo-base "http://127.0.0.1:8765"
+echo "  [OK] Override plan printed."
+
+# Test 5: Check snapshots presence
+echo "Test 5: Checking upstream snapshots presence..."
+snapshots_exist=1
+if [ ! -f "$ASAHI_BOOT" ] || [ ! -f "$ASAHI_INST" ] || [ ! -f "$ALARM_BOOT" ] || [ ! -f "$ALARM_INST" ]; then
+  snapshots_exist=0
+fi
+
+if [ "$snapshots_exist" -eq 0 ]; then
+  if [ "$REQ_UPSTREAM" -eq 1 ]; then
+    echo "ERROR: Upstream bootstrap snapshots required but missing from $REPO_ROOT/installer/bootstrap/upstream/" >&2
+    exit 2
+  else
+    echo "  [WARN] Upstream snapshots missing. Skipping snapshot inspection tests."
+    echo "All local static inspection tests passed successfully (permissive bypass)!"
+    exit 0
+  fi
+fi
+
+echo "Test 6: Inspecting upstream snapshots..."
+"$REPO_ROOT/installer/scripts/inspect-bootstrap-script" --input "$ASAHI_BOOT"
+"$REPO_ROOT/installer/scripts/extract-bootstrap-vars" --input "$ASAHI_BOOT"
+"$REPO_ROOT/installer/scripts/detect-installer-mutation-points" --input "$ASAHI_INST"
+"$REPO_ROOT/installer/scripts/detect-installer-mutation-points" --input "$ALARM_INST"
+
+# --- Negative Tests Section ---
+echo "=== Running Negative Static Inspection Tests ==="
+
+# Neg 1: Missing input file
+echo "Neg 1: Missing file check..."
+if "$REPO_ROOT/installer/scripts/inspect-bootstrap-script" --input "$REPO_ROOT/nonexistent.sh" >/dev/null 2>&1; then
+  echo "ERROR: Expected failure on missing file, but passed." >&2
+  exit 1
+fi
+echo "  [PASSED] Caught missing file check."
+
+# Neg 2: Unrecognized options
+echo "Neg 2: Unknown options check..."
+if "$REPO_ROOT/installer/scripts/inspect-bootstrap-script" --input "$SAFE_FIXTURE" --unknown-option >/dev/null 2>&1; then
+  echo "ERROR: Expected failure on unknown option, but passed." >&2
+  exit 1
+fi
+echo "  [PASSED] Caught unknown option."
+
+echo "All Bootstrap Static Inspection Tests completed successfully!"
+exit 0

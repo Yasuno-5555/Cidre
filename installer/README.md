@@ -37,3 +37,13 @@ To execute the override dry-run verification suite:
 ```bash
 installer/scripts/run-installer-override-dryrun-tests
 ```
+
+---
+
+## 4. Static Bootstrap Override Inspection
+
+To run the bootstrap static analysis suite:
+
+```bash
+installer/scripts/run-bootstrap-inspection-tests
+```
