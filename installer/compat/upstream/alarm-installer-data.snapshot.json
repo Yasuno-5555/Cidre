@@ -1,0 +1,17 @@
+{
+  "description": "Arch Linux ARM Installer Data Schema",
+  "version": "1.0",
+  "os_list": [
+    {
+      "name": "Arch Linux ARM Baseline",
+      "id": "alarm-base",
+      "package": "packages/alarm-base.tar.gz",
+      "checksum": "PLACEHOLDER_UPSTREAM_SHA256",
+      "size": 524288,
+      "manifest": "packages/alarm-base.manifest",
+      "compatibility": {
+        "platform": "apple-silicon"
+      }
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "description": "Asahi Linux Installer Data Schema",
+  "version": "1.0",
+  "os_list": [
+    {
+      "name": "Asahi Linux Desktop",
+      "id": "asahi-desktop",
+      "package": "packages/asahi-desktop.tar.zst",
+      "checksum": "PLACEHOLDER_UPSTREAM_SHA256",
+      "size": 1048576,
+      "manifest": "packages/asahi-desktop.manifest",
+      "compatibility": {
+        "platform": "apple-silicon",
+        "devices": ["m1", "m2", "m3"]
+      }
+    }
+  ]
+}

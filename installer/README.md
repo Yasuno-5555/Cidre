@@ -14,3 +14,16 @@ This directory manages the installer integration metadata and local selection si
   - `verify-local-image-artifact`: Validates target archives file structures.
   - `simulate-installer-selection`: Performs user selection dry-run simulator.
   - `run-local-integration-tests`: Tests all local scripts.
+  - `inspect-asahi-installer-data`: Inspects upstream metadata schemas.
+  - `compare-installer-metadata-shape`: Analyzes mappings overlap between Cidre and Asahi.
+  - `run-installer-compat-study-tests`: Runs compatibility study validator.
+
+---
+
+## 2. Upstream Compatibility Study
+
+To run the compatibility analysis suite:
+
+```bash
+installer/scripts/run-installer-compat-study-tests
+```

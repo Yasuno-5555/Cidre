@@ -38,3 +38,10 @@ installer/scripts/verify-hosted-release-assets \
 
 Cidre utilizes `verify-dev-release-fetch` to query hosted dev release tags (e.g. `v0.10.0-dev`).
 It fetches image binaries over HTTPS using `curl -L`, validating sizes and SHA256 checksums before resolving candidates. Strict checking mode rejects placeholder checksum parameters.
+
+---
+
+## 5. Relationship to Asahi/ALARM Installer Data
+
+Cidre's hosted release assets must ultimately map to the metadata model used by the Asahi/ALARM installer bootstrap flow.
+Phase 17 studies this layout to ensure that Cidre's exported structures can translate into the upstream ecosystem without manual patching.

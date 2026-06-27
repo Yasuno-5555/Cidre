@@ -1,0 +1,13 @@
+{
+  "_warning": "Local approximation for Phase 17 compatibility tests. Not upstream installer data.",
+  "version": "1.0",
+  "os_list": [
+    {
+      "name": "Cidre Desktop Seed",
+      "id": "cidre-seed-aarch64",
+      "package": "packages/cidre-seed-aarch64-v0.10.0.tar.zst",
+      "checksum": "PLACEHOLDER_UPSTREAM_SHA256",
+      "size": 1234567890
+    }
+  ]
+}

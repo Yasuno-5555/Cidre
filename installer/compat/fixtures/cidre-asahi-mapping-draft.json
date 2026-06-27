@@ -1,0 +1,15 @@
+{
+  "_warning": "Draft mapping only. Do not use with the real installer.",
+  "mappings": [
+    {
+      "source_key": ".images[].label",
+      "target_key": ".os_list[].name",
+      "status": "compatible"
+    },
+    {
+      "source_key": ".images[].url",
+      "target_key": ".os_list[].package",
+      "status": "transform-required"
+    }
+  ]
+}

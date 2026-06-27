@@ -1,0 +1,114 @@
+#!/bin/bash
+# inspect-asahi-installer-data: Parses and displays upstream installer data shape
+set -euo pipefail
+
+INPUT=""
+FORMAT="text"
+LIST_KEYS=0
+LIST_OS=0
+
+usage() {
+  echo "Usage: $0 --input <path> [--format <text|json>] [--list-keys] [--list-os]"
+  exit 1
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --input)
+      if [ $# -lt 2 ]; then
+        echo "ERROR: --input requires a path." >&2
+        exit 1
+      fi
+      INPUT="$2"
+      shift 2
+      ;;
+    --format)
+      if [ $# -lt 2 ]; then
+        echo "ERROR: --format requires a type." >&2
+        exit 1
+      fi
+      FORMAT="$2"
+      shift 2
+      ;;
+    --list-keys)
+      LIST_KEYS=1
+      shift
+      ;;
+    --list-os)
+      LIST_OS=1
+      shift
+      ;;
+    *)
+      echo "ERROR: Unknown option: $1" >&2
+      usage
+      ;;
+  esac
+done
+
+if [ -z "$INPUT" ]; then
+  echo "ERROR: --input is required." >&2
+  usage
+fi
+
+if [ ! -f "$INPUT" ]; then
+  echo "ERROR: File not found at $INPUT" >&2
+  exit 1
+fi
+
+if ! command -v jq >/dev/null 2>&1; then
+  echo "ERROR: jq is required." >&2
+  exit 1
+fi
+
+# Basic JSON checks
+if ! jq . "$INPUT" >/dev/null 2>&1; then
+  echo "ERROR: Invalid JSON structure in $INPUT" >&2
+  exit 1
+fi
+
+if [ "$FORMAT" = "json" ]; then
+  # JSON mode prints raw
+  jq . "$INPUT"
+  exit 0
+fi
+
+# Default text mode parsing
+echo "=== Upstream Installer Metadata Shape Inspection ==="
+echo "File: $INPUT"
+echo ""
+
+# Root keys
+echo "Top-Level Keys:"
+jq -r 'keys | .[] | "  - \(.)"' "$INPUT"
+echo ""
+
+os_list_exists=$(jq -r '.os_list | type' "$INPUT" 2>/dev/null || echo "null")
+if [ "$os_list_exists" != "array" ]; then
+  echo "WARNING: os_list array is missing or invalid in $INPUT."
+  exit 0
+fi
+
+os_count=$(jq '.os_list | length' "$INPUT")
+echo "Candidates Count in os_list: $os_count"
+echo ""
+
+if [ "$LIST_KEYS" -eq 1 ]; then
+  echo "Keys inside os_list entry:"
+  jq -r '.os_list[0] | keys | .[] | "  - \(.)"' "$INPUT"
+  echo ""
+fi
+
+if [ "$LIST_OS" -eq 1 ] || [ "$os_count" -gt 0 ]; then
+  echo "Available OS Selection list:"
+  index=1
+  while IFS=$'\t' read -r os_id os_name os_pkg os_chk; do
+    echo "[$index] $os_name"
+    echo "    id:       $os_id"
+    echo "    package:  $os_pkg"
+    echo "    checksum: $os_chk"
+    echo ""
+    index=$((index + 1))
+  done < <(jq -r '.os_list[] | [ .id, .name, .package, .checksum ] | @tsv' "$INPUT")
+fi
+
+exit 0

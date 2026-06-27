@@ -1,0 +1,102 @@
+#!/bin/bash
+# run-installer-compat-study-tests: Phase 17 installer compatibility tests runner
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+REQ_UPSTREAM=0
+
+usage() {
+  echo "Usage: $0 [--require-upstream]"
+  exit 1
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --require-upstream)
+      REQ_UPSTREAM=1
+      shift
+      ;;
+    *)
+      echo "ERROR: Unknown option: $1" >&2
+      usage
+      ;;
+  esac
+done
+
+echo "=== Running Installer Compatibility Study Tests ==="
+
+# Staging inputs
+ASAHI_SNAPSHOT="$REPO_ROOT/installer/compat/upstream/asahi-installer-data.snapshot.json"
+ALARM_SNAPSHOT="$REPO_ROOT/installer/compat/upstream/alarm-installer-data.snapshot.json"
+MINIMAL_FIXTURE="$REPO_ROOT/installer/compat/fixtures/minimal-asahi-like-installer-data.json"
+MAPPING_DRAFT="$REPO_ROOT/installer/compat/fixtures/cidre-asahi-mapping-draft.json"
+CIDRE_DEV_METADATA="$REPO_ROOT/installer/generated/cidre-installer-data.dev.json"
+
+# Test 1: Validate local mapping fixtures format
+echo "Test 1: Validating local compatibility JSON files..."
+jq . "$MINIMAL_FIXTURE" >/dev/null
+jq . "$MAPPING_DRAFT" >/dev/null
+echo "  [OK] JSON syntax verified."
+
+# Test 2: Run Asahi-like validator on minimal fixture
+echo "Test 2: Running Asahi-like validator..."
+"$REPO_ROOT/installer/scripts/validate-asahi-like-installer-data" --permissive "$MINIMAL_FIXTURE"
+echo "  [OK] Validator check passed."
+
+# Test 3: Upstream snapshots check
+echo "Test 3: Checking upstream snapshots presence..."
+snapshots_exist=1
+if [ ! -f "$ASAHI_SNAPSHOT" ] || [ ! -f "$ALARM_SNAPSHOT" ]; then
+  snapshots_exist=0
+fi
+
+if [ "$snapshots_exist" -eq 0 ]; then
+  if [ "$REQ_UPSTREAM" -eq 1 ]; then
+    echo "ERROR: Upstream snapshots required but missing from $REPO_ROOT/installer/compat/upstream/" >&2
+    exit 2
+  else
+    echo "  [WARN] Upstream snapshots missing. Skipping shape inspection and comparison tests."
+    echo "All local compatibility tests passed successfully (permissive bypass)!"
+    exit 0
+  fi
+fi
+
+# Test 4: Inspection of snapshots
+echo "Test 4: Inspecting upstream snapshots..."
+"$REPO_ROOT/installer/scripts/inspect-asahi-installer-data" --input "$ASAHI_SNAPSHOT" --list-keys --list-os
+"$REPO_ROOT/installer/scripts/inspect-asahi-installer-data" --input "$ALARM_SNAPSHOT" --list-os
+
+# Test 5: Comparison report runner
+echo "Test 5: Comparing metadata shapes..."
+# Ensure dev metadata is generated, otherwise mock a path
+target_dev="$CIDRE_DEV_METADATA"
+if [ ! -f "$target_dev" ]; then
+  target_dev="$REPO_ROOT/installer/generated/cidre-installer-data.local.json"
+fi
+
+"$REPO_ROOT/installer/scripts/compare-installer-metadata-shape" \
+  --cidre "$target_dev" \
+  --upstream "$ASAHI_SNAPSHOT"
+
+# --- Negative Tests Section ---
+echo "=== Running Negative Compat Tests ==="
+
+# Neg 1: Missing metadata file
+echo "Neg 1: Missing input file check..."
+if "$REPO_ROOT/installer/scripts/inspect-asahi-installer-data" --input "$REPO_ROOT/nonexistent.json" >/dev/null 2>&1; then
+  echo "ERROR: Expected failure on missing input, but passed." >&2
+  exit 1
+fi
+echo "  [PASSED] Caught missing input file."
+
+# Neg 2: Placeholder checksum in strict mode
+echo "Neg 2: Strict validator placeholder check..."
+if "$REPO_ROOT/installer/scripts/validate-asahi-like-installer-data" --strict "$MINIMAL_FIXTURE" >/dev/null 2>&1; then
+  echo "ERROR: Expected failure on strict mode with placeholder hash, but passed." >&2
+  exit 1
+fi
+echo "  [PASSED] Caught strict mode placeholder checksum."
+
+echo "All Installer Compatibility Study Tests completed successfully!"
+exit 0
