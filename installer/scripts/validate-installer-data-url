@@ -1,0 +1,86 @@
+#!/bin/bash
+# validate-installer-data-url: Fetches and validates Asahi-like candidate definitions directly from web endpoints
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+URL=""
+STRICT=0
+DOWNLOAD_DIR="${CIDRE_FETCH_DIR:-/tmp/cidre-installer-data-url}"
+
+usage() {
+  echo "Usage: $0 --url <url> [--strict] [--download-dir <dir>]"
+  exit 1
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --url)
+      if [ $# -lt 2 ]; then
+        echo "ERROR: --url requires an argument." >&2
+        exit 1
+      fi
+      URL="$2"
+      shift 2
+      ;;
+    --strict)
+      STRICT=1
+      shift
+      ;;
+    --download-dir)
+      if [ $# -lt 2 ]; then
+        echo "ERROR: --download-dir requires a path." >&2
+        exit 1
+      fi
+      DOWNLOAD_DIR="$2"
+      shift 2
+      ;;
+    *)
+      echo "ERROR: Unknown option: $1" >&2
+      usage
+      ;;
+  esac
+done
+
+if [ -z "$URL" ]; then
+  echo "ERROR: --url is required." >&2
+  usage
+fi
+
+rm -rf "$DOWNLOAD_DIR"
+mkdir -p "$DOWNLOAD_DIR"
+
+target_out="$DOWNLOAD_DIR/fetched.json"
+
+echo "Running INSTALLER_DATA URL validation..."
+echo "URL: $URL"
+echo ""
+
+fetch_args=(--url "$URL" --output "$target_out" --force)
+if [ "$STRICT" -eq 1 ]; then
+  fetch_args+=("--strict")
+fi
+
+# Fetch
+"$SCRIPT_DIR/fetch-installer-data" "${fetch_args[@]}"
+
+# Validate
+echo "Validating schema layout compatibility..."
+val_args=("$target_out")
+if [ "$STRICT" -eq 1 ]; then
+  val_args+=("--strict")
+fi
+"$SCRIPT_DIR/validate-generated-asahi-installer-data" "${val_args[@]}"
+
+# Selection simulation
+echo "Simulating candidate selection..."
+"$SCRIPT_DIR/simulate-asahi-installer-data-selection" --data "$target_out"
+
+echo ""
+echo "=== INSTALLER_DATA dry-run validation passed. ==="
+echo "  URL: $URL"
+echo "  No installer was invoked."
+echo "  No disk changes were made."
+echo "================================================="
+
+rm -rf "$DOWNLOAD_DIR"
+exit 0

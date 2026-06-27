@@ -27,3 +27,13 @@ To run the compatibility analysis suite:
 ```bash
 installer/scripts/run-installer-compat-study-tests
 ```
+
+---
+
+## 3. Local INSTALLER_DATA Override Dry-run
+
+To execute the override dry-run verification suite:
+
+```bash
+installer/scripts/run-installer-override-dryrun-tests
+```

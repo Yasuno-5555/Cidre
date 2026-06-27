@@ -1,0 +1,94 @@
+#!/bin/bash
+# fetch-installer-data: Downloads generated installer metadata from local or remote web URLs
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+URL=""
+OUTPUT=""
+VALIDATE=0
+STRICT=0
+FORCE=0
+
+usage() {
+  echo "Usage: $0 --url <url> --output <path> [--validate] [--strict] [--force]"
+  exit 1
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --url)
+      if [ $# -lt 2 ]; then
+        echo "ERROR: --url requires an argument." >&2
+        exit 1
+      fi
+      URL="$2"
+      shift 2
+      ;;
+    --output)
+      if [ $# -lt 2 ]; then
+        echo "ERROR: --output requires a path." >&2
+        exit 1
+      fi
+      OUTPUT="$2"
+      shift 2
+      ;;
+    --validate)
+      VALIDATE=1
+      shift
+      ;;
+    --strict)
+      STRICT=1
+      shift
+      ;;
+    --force)
+      FORCE=1
+      shift
+      ;;
+    *)
+      echo "ERROR: Unknown option: $1" >&2
+      usage
+      ;;
+  esac
+done
+
+if [ -z "$URL" ] || [ -z "$OUTPUT" ]; then
+  echo "ERROR: Both --url and --output are required." >&2
+  usage
+fi
+
+if [[ ! "$URL" =~ ^https:// && ! "$URL" =~ ^http://127.0.0.1 && ! "$URL" =~ ^http://localhost ]]; then
+  echo "ERROR: Unsupported URL scheme: '$URL' (Must be secure HTTPS or local HTTP mock paths)." >&2
+  exit 1
+fi
+
+if [ -f "$OUTPUT" ] && [ "$FORCE" -eq 0 ]; then
+  echo "ERROR: Output file already exists at $OUTPUT. Use --force to overwrite." >&2
+  exit 1
+fi
+
+if ! command -v curl >/dev/null 2>&1; then
+  echo "ERROR: curl is required." >&2
+  exit 1
+fi
+
+echo "Fetching installer data from URL: $URL..."
+mkdir -p "$(dirname "$OUTPUT")"
+
+if ! curl -L -s --fail -o "$OUTPUT" "$URL"; then
+  echo "ERROR: Failed to fetch data from URL: $URL" >&2
+  rm -f "$OUTPUT" || true
+  exit 1
+fi
+
+echo "Fetch completed. File saved to: $OUTPUT"
+
+if [ "$VALIDATE" -eq 1 ]; then
+  echo "Running metadata schema validation on fetched file..."
+  val_args=("$OUTPUT")
+  if [ "$STRICT" -eq 1 ]; then
+    val_args+=("--strict")
+  fi
+  "$SCRIPT_DIR/validate-generated-asahi-installer-data" "${val_args[@]}"
+fi
+
+exit 0

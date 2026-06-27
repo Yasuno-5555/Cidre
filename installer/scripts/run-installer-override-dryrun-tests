@@ -1,0 +1,100 @@
+#!/bin/bash
+# run-installer-override-dryrun-tests: Phase 19 installer override tests runner
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+TEST_TMPDIR="${CIDRE_TEST_TMPDIR:-/tmp/cidre-installer-override-dryrun}"
+rm -rf "$TEST_TMPDIR"
+mkdir -p "$TEST_TMPDIR/generated"
+mkdir -p "$TEST_TMPDIR/fetch"
+
+echo "=== Running Installer Override Dry-run Tests ==="
+
+FIXTURE="$REPO_ROOT/installer/fixtures/cidre-seed-v0.integration.json"
+LOCAL_LAYOUT="$REPO_ROOT/installer/release/cidre-release-layout.localhost.json"
+
+# Staging initial local metadata format
+"$REPO_ROOT/installer/scripts/export-installer-metadata" \
+  --metadata "$FIXTURE" \
+  --output "$TEST_TMPDIR/local-facing.json" \
+  --channel local
+
+# Rewrite metadata URLs pointing to dev release targets
+"$REPO_ROOT/installer/scripts/prepare-dev-release-assets" \
+  --layout "$LOCAL_LAYOUT" \
+  --metadata "$TEST_TMPDIR/local-facing.json" \
+  --output "$TEST_TMPDIR/dev-facing.json"
+
+# Export Asahi-like candidate formats to generated folder
+"$REPO_ROOT/installer/scripts/export-asahi-installer-data" \
+  --input "$TEST_TMPDIR/dev-facing.json" \
+  --output "$TEST_TMPDIR/generated/asahi-installer-data.cidre.dev.json" \
+  --channel dev
+
+# Start mock HTTP server
+echo "Starting mock HTTP server on port 8765..."
+python3 -m http.server 8765 --bind 127.0.0.1 --directory "$TEST_TMPDIR/generated" >/dev/null 2>&1 &
+SERVER_PID=$!
+
+cleanup() {
+  echo "Stopping mock HTTP server (PID: $SERVER_PID)..."
+  kill "$SERVER_PID" || true
+  rm -rf "$TEST_TMPDIR"
+}
+trap cleanup EXIT
+
+# Wait a moment for server initialization
+echo "Waiting for server to spin up..."
+sleep 3
+
+# Test 1: Fetch and validation
+echo "Test 1: Validating installer data URL..."
+"$REPO_ROOT/installer/scripts/validate-installer-data-url" \
+  --url "http://127.0.0.1:8765/asahi-installer-data.cidre.dev.json" \
+  --download-dir "$TEST_TMPDIR/fetch"
+
+# Test 2: Print override variables
+echo "Test 2: Exporting override configurations..."
+"$REPO_ROOT/installer/scripts/print-installer-override-env" \
+  --installer-data-url "http://127.0.0.1:8765/asahi-installer-data.cidre.dev.json" \
+  --repo-base "http://127.0.0.1:8765" \
+  --output "$TEST_TMPDIR/installer-env.env"
+
+# Verify generated file
+if [ ! -f "$TEST_TMPDIR/installer-env.env" ]; then
+  echo "ERROR: Override config file not generated." >&2
+  exit 1
+fi
+echo "  [OK] Override config file generated successfully."
+
+# --- Negative Tests Section ---
+echo "=== Running Negative Override Tests ==="
+
+# Neg 1: Unsupported URL scheme
+echo "Neg 1: Unsupported scheme checks..."
+if "$REPO_ROOT/installer/scripts/validate-installer-data-url" --url "file:///tmp/asahi.json" >/dev/null 2>&1; then
+  echo "ERROR: Expected failure on unsupported scheme, but passed." >&2
+  exit 1
+fi
+echo "  [PASSED] Caught unsupported URL scheme."
+
+# Neg 2: Server unavailable
+echo "Neg 2: Server unavailable checks..."
+if "$REPO_ROOT/installer/scripts/validate-installer-data-url" --url "http://127.0.0.1:9876/asahi.json" >/dev/null 2>&1; then
+  echo "ERROR: Expected failure on unreachable server, but passed." >&2
+  exit 1
+fi
+echo "  [PASSED] Caught server unavailable."
+
+# Neg 3: Safety check - ensure no execution lines are parsed
+echo "Neg 3: Safety assertions check..."
+if grep -q "install.sh" "$TEST_TMPDIR/installer-env.env" || grep -q "diskutil" "$TEST_TMPDIR/installer-env.env"; then
+  echo "ERROR: Safety violation. Installer script containing execution targets discovered." >&2
+  exit 1
+fi
+echo "  [PASSED] Safety check passed (no execution logic inside config)."
+
+echo "All Installer Override Dry-run Tests completed successfully!"
+exit 0

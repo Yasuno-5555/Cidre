@@ -25,6 +25,7 @@ usage() {
   echo "  --hosted-dev-only      Run hosted dev release fetch integration tests"
   echo "  --installer-compat-only Run upstream installer compatibility study tests"
   echo "  --asahi-adapter-only    Run Asahi metadata adapter prototype tests"
+  echo "  --installer-override-only Run INSTALLER_DATA override dryrun tests"
   exit 1
 }
 
@@ -80,6 +81,10 @@ while [ $# -gt 0 ]; do
       ;;
     --asahi-adapter-only)
       ASAHI_ADAPTER_ONLY=1
+      shift
+      ;;
+    --installer-override-only)
+      INSTALLER_OVERRIDE_ONLY=1
       shift
       ;;
     *)
@@ -138,6 +143,12 @@ fi
 if [ "${ASAHI_ADAPTER_ONLY:-0}" -eq 1 ]; then
   echo "Running Asahi metadata adapter prototype tests only..."
   "$REPO_ROOT/installer/scripts/run-asahi-adapter-tests"
+  exit 0
+fi
+
+if [ "${INSTALLER_OVERRIDE_ONLY:-0}" -eq 1 ]; then
+  echo "Running INSTALLER_DATA override dryrun tests only..."
+  "$REPO_ROOT/installer/scripts/run-installer-override-dryrun-tests"
   exit 0
 fi
 
