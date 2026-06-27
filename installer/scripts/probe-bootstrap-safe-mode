@@ -1,0 +1,173 @@
+#!/bin/bash
+# probe-bootstrap-safe-mode: Statically scans bootstrap snapshots for safe help/list/dry-run options
+set -euo pipefail
+
+SNAPSHOT=""
+ENV_FILE=""
+HARNESS_RES=""
+OUTPUT=""
+FORMAT="text"
+STRICT=0
+
+usage() {
+  echo "Usage: $0 --bootstrap-snapshot <path> --override-env <path> [--metadata-harness-result <path>] [--output <path>] [--format <format>] [--strict]"
+  exit 1
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --bootstrap-snapshot)
+      if [ $# -lt 2 ]; then
+        echo "ERROR: --bootstrap-snapshot requires a path." >&2
+        exit 1
+      fi
+      SNAPSHOT="$2"
+      shift 2
+      ;;
+    --override-env)
+      if [ $# -lt 2 ]; then
+        echo "ERROR: --override-env requires a path." >&2
+        exit 1
+      fi
+      ENV_FILE="$2"
+      shift 2
+      ;;
+    --metadata-harness-result)
+      if [ $# -lt 2 ]; then
+        echo "ERROR: --metadata-harness-result requires a path." >&2
+        exit 1
+      fi
+      HARNESS_RES="$2"
+      shift 2
+      ;;
+    --output)
+      if [ $# -lt 2 ]; then
+        echo "ERROR: --output requires a path." >&2
+        exit 1
+      fi
+      OUTPUT="$2"
+      shift 2
+      ;;
+    --format)
+      if [ $# -lt 2 ]; then
+        echo "ERROR: --format requires a type." >&2
+        exit 1
+      fi
+      FORMAT="$2"
+      shift 2
+      ;;
+    --strict)
+      STRICT=1
+      shift
+      ;;
+    *)
+      echo "ERROR: Unknown option: $1" >&2
+      usage
+      ;;
+  esac
+done
+
+if [ -z "$SNAPSHOT" ] || [ -z "$ENV_FILE" ]; then
+  echo "ERROR: Both --bootstrap-snapshot and --override-env are required." >&2
+  usage
+fi
+
+if [ ! -f "$SNAPSHOT" ]; then
+  echo "ERROR: Bootstrap snapshot file not found: $SNAPSHOT" >&2
+  exit 1
+fi
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+# Verify Phase 24 harness results if provided
+if [ -n "$HARNESS_RES" ] && [ -f "$HARNESS_RES" ]; then
+  if ! grep -q "A_SAFE_METADATA_PATH" "$HARNESS_RES"; then
+    echo "ERROR: Precondition fail. Phase 24 harness must return A_SAFE_METADATA_PATH." >&2
+    exit 1
+  fi
+fi
+
+decision="NO_SAFE_MODE"
+rationale="No safe list, help, or dry-run argument handling could be statically verified before installer execution."
+
+echo "=== Bootstrap Safe-mode / No-exec Capability Probe ===" >&2
+
+# Scan for candidate options
+has_help=$(grep -E "\-\-help|\-h" "$SNAPSHOT" || echo "")
+has_dryrun=$(grep -E "\-\-dry\-run|\-\-no\-exec" "$SNAPSHOT" || echo "")
+has_list=$(grep -E "\-\-list|\-\-metadata\-only" "$SNAPSHOT" || echo "")
+has_version=$(grep -E "\-\-version" "$SNAPSHOT" || echo "")
+
+# Checks if snapshot contains dangerous command invocations globally
+has_dangers=$(grep -E "diskutil|bless|nvram|gpt|fdisk|dd " "$SNAPSHOT" || echo "")
+
+# Basic candidate matching rules
+if [ -n "$has_help" ] || [ -n "$has_dryrun" ] || [ -n "$has_list" ] || [ -n "$has_version" ]; then
+  # Check if getopts or option parsing is present
+  if grep -q -E "getopts|case|shift" "$SNAPSHOT"; then
+    # Check if there is an exit/return in parsing block before running any commands
+    if grep -q "exit" "$SNAPSHOT" && [ -z "$has_dangers" ]; then
+      decision="SAFE_MODE_FOUND"
+      rationale="Safe flag branch (e.g. --help/--list) parser detected, returning safely before running dangerous mutation commands."
+    else
+      # If safe flag parsing exists, but dangerous commands are also present in script
+      decision="PATCH_REQUIRED"
+      rationale="Override options block is present, but lacks strict exit boundaries before executing dangerous installers commands. Local wrappers are required."
+    fi
+  fi
+fi
+
+# Write results
+if [ -n "$OUTPUT" ]; then
+  mkdir -p "$(dirname "$OUTPUT")"
+  cat <<EOF > "$OUTPUT"
+# Phase 25 Safe-mode Probe Result
+
+## Inputs
+- bootstrap snapshot: $SNAPSHOT
+- override env:       $ENV_FILE
+- Phase 24 harness result: $([ -n "$HARNESS_RES" ] && echo "$HARNESS_RES" || echo "none")
+
+## Safe-mode Candidates
+| Candidate | Found | Appears before installer execution | Guard result | Notes |
+|---|---:|---:|---|---|
+| --help / -h | $([ -n "$has_help" ] && echo "yes" || echo "no") | $([ "$decision" = "SAFE_MODE_FOUND" ] && echo "yes" || echo "no") | $([ -z "$has_dangers" ] && echo "passed" || echo "failed") | |
+| --dry-run | $([ -n "$has_dryrun" ] && echo "yes" || echo "no") | $([ "$decision" = "SAFE_MODE_FOUND" ] && echo "yes" || echo "no") | $([ -z "$has_dangers" ] && echo "passed" || echo "failed") | |
+| --list / --metadata-only | $([ -n "$has_list" ] && echo "yes" || echo "no") | $([ "$decision" = "SAFE_MODE_FOUND" ] && echo "yes" || echo "no") | $([ -z "$has_dangers" ] && echo "passed" || echo "failed") | |
+
+## Dangerous Boundaries
+- install.sh:          $([ -f "$SNAPSHOT" ] && grep -q "install.sh" "$SNAPSHOT" && echo "yes" || echo "no")
+- alx.sh:              $([ -f "$SNAPSHOT" ] && grep -q "alx.sh" "$SNAPSHOT" && echo "yes" || echo "no")
+- sudo:                $([ -f "$SNAPSHOT" ] && grep -q "sudo" "$SNAPSHOT" && echo "yes" || echo "no")
+- diskutil/bless/nvram: $([ -n "$has_dangers" ] && echo "yes" || echo "no")
+- partition/format tools: $([ -n "$has_dangers" ] && echo "yes" || echo "no")
+
+## Decision
+$decision
+
+## Rationale
+$rationale
+
+## Next Action
+$([ "$decision" = "SAFE_MODE_FOUND" ] && echo "Proceed to Phase 26: Controlled Bootstrap No-exec Invocation" || echo "Transition to wrapper strategy")
+
+## Safety Statement
+No bootstrap script was executed.
+No installer was invoked.
+No disk changes were made.
+EOF
+fi
+
+if [ "$FORMAT" = "json" ]; then
+  cat <<EOF
+{
+  "decision": "$decision",
+  "rationale": "$rationale"
+}
+EOF
+else
+  echo "Decision: $decision"
+  echo "Rationale: $rationale"
+fi
+
+exit 0

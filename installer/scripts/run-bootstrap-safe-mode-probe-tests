@@ -1,0 +1,108 @@
+#!/bin/bash
+# run-bootstrap-safe-mode-probe-tests: Phase 25 safe-mode probe tests runner
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+TEST_TMPDIR="${CIDRE_TEST_TMPDIR:-/tmp/cidre-bootstrap-safe-mode-probe-tests}"
+rm -rf "$TEST_TMPDIR"
+mkdir -p "$TEST_TMPDIR"
+
+echo "=== Running Bootstrap Safe-mode Probe Tests ==="
+
+MOCK_ENV="$TEST_TMPDIR/mock.env"
+echo 'export INSTALLER_DATA="http://127.0.0.1:8765/asahi.json"' > "$MOCK_ENV"
+
+# 1. help-before-install fixture (SAFE_MODE_FOUND)
+FIX_SAFE_HELP="$TEST_TMPDIR/safe-help.sh"
+cat <<'EOF' > "$FIX_SAFE_HELP"
+#!/bin/sh
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --help|-h)
+      echo "Help menu"
+      exit 0
+      ;;
+  esac
+done
+EOF
+
+# 2. immediate-install fixture (NO_SAFE_MODE)
+FIX_IMMEDIATE="$TEST_TMPDIR/immediate.sh"
+cat <<'EOF' > "$FIX_IMMEDIATE"
+#!/bin/sh
+echo "Installing..."
+./install.sh
+EOF
+
+# 3. separable-metadata-no-flag fixture (PATCH_REQUIRED)
+FIX_PATCH="$TEST_TMPDIR/patch.sh"
+cat <<'EOF' > "$FIX_PATCH"
+#!/bin/sh
+# Declares flags, but doesn't exit before executing alx.sh
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --help)
+      echo "Help"
+      ;;
+  esac
+done
+nvram boot-args=test
+./alx.sh
+EOF
+
+# Test 1: SAFE_MODE_FOUND case
+echo "Test 1: Testing SAFE_MODE_FOUND..."
+res1=$("$REPO_ROOT/installer/scripts/probe-bootstrap-safe-mode" \
+  --bootstrap-snapshot "$FIX_SAFE_HELP" \
+  --override-env "$MOCK_ENV" \
+  --format json | jq -r '.decision')
+
+if [ "$res1" != "SAFE_MODE_FOUND" ]; then
+  echo "ERROR: Expected SAFE_MODE_FOUND but got '$res1'." >&2
+  exit 1
+fi
+echo "  [OK] SAFE_MODE_FOUND matched successfully."
+
+# Test 2: NO_SAFE_MODE case
+echo "Test 2: Testing NO_SAFE_MODE..."
+res2=$("$REPO_ROOT/installer/scripts/probe-bootstrap-safe-mode" \
+  --bootstrap-snapshot "$FIX_IMMEDIATE" \
+  --override-env "$MOCK_ENV" \
+  --format json | jq -r '.decision')
+
+if [ "$res2" != "NO_SAFE_MODE" ]; then
+  echo "ERROR: Expected NO_SAFE_MODE but got '$res2'." >&2
+  exit 1
+fi
+echo "  [OK] NO_SAFE_MODE matched successfully."
+
+# Test 3: PATCH_REQUIRED case
+echo "Test 3: Testing PATCH_REQUIRED..."
+res3=$("$REPO_ROOT/installer/scripts/probe-bootstrap-safe-mode" \
+  --bootstrap-snapshot "$FIX_PATCH" \
+  --override-env "$MOCK_ENV" \
+  --format json | jq -r '.decision')
+
+if [ "$res3" != "PATCH_REQUIRED" ]; then
+  echo "ERROR: Expected PATCH_REQUIRED but got '$res3'." >&2
+  exit 1
+fi
+echo "  [OK] PATCH_REQUIRED matched successfully."
+
+# Test 4: Guard check against command strings containing partition tools
+echo "Test 4: Running guard checks against command strings..."
+if "$REPO_ROOT/installer/scripts/guard-installer-danger-zone" --command "sudo diskutil list" >/dev/null 2>&1; then
+  echo "ERROR: Guard expected to block 'diskutil', but passed." >&2
+  exit 1
+fi
+if "$REPO_ROOT/installer/scripts/guard-installer-danger-zone" --command "nvram boot-args" >/dev/null 2>&1; then
+  echo "ERROR: Guard expected to block 'nvram', but passed." >&2
+  exit 1
+fi
+echo "  [OK] Guard verification checks passed."
+
+echo "All Bootstrap Safe-mode Probe Tests completed successfully!"
+rm -rf "$TEST_TMPDIR"
+exit 0

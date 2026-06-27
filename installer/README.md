@@ -67,3 +67,13 @@ To run the override harness tests suite:
 ```bash
 installer/scripts/run-metadata-only-override-harness-tests
 ```
+
+---
+
+## 7. Bootstrap Safe-mode / No-exec Capability Probe
+
+To run the safe-mode probe tests suite:
+
+```bash
+installer/scripts/run-bootstrap-safe-mode-probe-tests
+```
