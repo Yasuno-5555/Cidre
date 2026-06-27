@@ -1,17 +1,18 @@
 #!/bin/bash
-# cidre-firstboot: Validates post-install configurations on first graphical login
+# cidre-healthcheck: Validates post-install configurations on login or manual run
 set -euo pipefail
 
 STATE_DIR="${HOME}/.local/state/cidre"
-MARKER_FILE="${STATE_DIR}/firstboot-done"
+SYSTEM_STATE_DIR="/var/lib/cidre"
+MARKER_FILE="${STATE_DIR}/healthcheck.initial.done"
 FORCE=false
 STATUS_ONLY=false
 
 show_help() {
-  echo "Usage: cidre-firstboot [options]"
+  echo "Usage: cidre-healthcheck [options]"
   echo "Options:"
-  echo "  --force       Rerun the first-boot diagnostic check"
-  echo "  --status      Show whether the first-boot diagnostic has completed"
+  echo "  --force       Rerun the initial diagnostic health check"
+  echo "  --status      Show whether the initial diagnostic has completed"
   echo "  --help        Show this help message"
 }
 
@@ -26,9 +27,9 @@ done
 
 if [ "$STATUS_ONLY" = true ]; then
   if [ -f "$MARKER_FILE" ]; then
-    echo "First-boot verification: Completed"
+    echo "Initial healthcheck verification: Completed"
   else
-    echo "First-boot verification: Pending"
+    echo "Initial healthcheck verification: Pending"
   fi
   exit 0
 fi
@@ -37,14 +38,14 @@ if [ -f "$MARKER_FILE" ] && [ "$FORCE" = false ]; then
   exit 0
 fi
 
-echo "=== Cidre First-Boot Health Check ==="
+echo "=== Cidre Initial Health Check ==="
 echo "Verifying environment health..."
 
-STATUS_FILE="${STATE_DIR}/firstboot-status"
+STATUS_FILE="${STATE_DIR}/healthcheck-status"
 mkdir -p "$STATE_DIR"
 
 if command -v cidre-doctor >/dev/null 2>&1; then
-  echo "Running daily driver diagnostics..."
+  echo "Running driver diagnostics..."
   DAILY_OK=true
   cidre-doctor --daily || DAILY_OK=false
 
@@ -61,6 +62,7 @@ if command -v cidre-doctor >/dev/null 2>&1; then
     echo "Daily: SUCCESS" >> "$STATUS_FILE"
     echo "Maintenance: SUCCESS" >> "$STATUS_FILE"
     echo "Resume: SUCCESS" >> "$STATUS_FILE"
+    echo "All initial health checks passed."
   else
     echo "FAILED" > "$STATUS_FILE"
     echo "Daily: $([ "$DAILY_OK" = true ] && echo "SUCCESS" || echo "FAILED")" >> "$STATUS_FILE"
@@ -77,4 +79,5 @@ else
 fi
 
 touch "$MARKER_FILE"
-echo "First-boot validation marked as complete."
+echo "Initial healthcheck validation marked as complete."
+
