@@ -68,6 +68,8 @@ FATAL_PATTERNS=(
   "mkfs"
   "parted"
   "asr"
+  "tar.*\\-x"
+  "tar.*\\-\\-extract"
 )
 
 blocked=0

@@ -87,3 +87,13 @@ To run the wrapper selection tests suite:
 ```bash
 installer/scripts/run-cidre-wrapper-selection-tests
 ```
+
+---
+
+## 9. Cidre Wrapper Artifact Fetch and Integrity Verification
+
+To run the wrapper artifact fetch tests suite:
+
+```bash
+installer/scripts/run-cidre-wrapper-artifact-tests
+```

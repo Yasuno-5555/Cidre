@@ -1,0 +1,150 @@
+#!/bin/bash
+# validate-cidre-wrapper-artifact: Validates verified-artifact.json structure and files
+set -euo pipefail
+
+ARTIFACT=""
+STRICT=0
+REQ_FILES=0
+
+usage() {
+  echo "Usage: $0 --artifact <path> [--strict] [--require-files]"
+  exit 1
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --artifact)
+      if [ $# -lt 2 ]; then
+        echo "ERROR: --artifact requires a path." >&2
+        exit 1
+      fi
+      ARTIFACT="$2"
+      shift 2
+      ;;
+    --strict)
+      STRICT=1
+      shift
+      ;;
+    --require-files)
+      REQ_FILES=1
+      shift
+      ;;
+    *)
+      echo "ERROR: Unknown option: $1" >&2
+      usage
+      ;;
+  esac
+done
+
+if [ -z "$ARTIFACT" ]; then
+  echo "ERROR: --artifact is required." >&2
+  usage
+fi
+
+if [ ! -f "$ARTIFACT" ]; then
+  echo "ERROR: Verified artifact file not found: $ARTIFACT" >&2
+  exit 1
+fi
+
+if ! jq . "$ARTIFACT" >/dev/null 2>&1; then
+  echo "ERROR: Invalid JSON shape in verified artifact file." >&2
+  exit 1
+fi
+
+# Load variables
+v_ver=$(jq -r '.verification_version' "$ARTIFACT")
+s_id=$(jq -r '.selected_id' "$ARTIFACT")
+art_p=$(jq -r '.artifact_path' "$ARTIFACT")
+man_p=$(jq -r '.manifest_path' "$ARTIFACT")
+filename=$(jq -r '.artifact_filename' "$ARTIFACT")
+fmt=$(jq -r '.artifact_format' "$ARTIFACT")
+size=$(jq -r '.artifact_size_bytes' "$ARTIFACT")
+sha_exp=$(jq -r '.sha256_expected' "$ARTIFACT")
+sha_act=$(jq -r '.sha256_actual' "$ARTIFACT")
+verified=$(jq -r '.sha256_verified' "$ARTIFACT")
+man_fetch=$(jq -r '.manifest_fetched' "$ARTIFACT")
+e_allowed=$(jq -r '.extract_allowed' "$ARTIFACT")
+i_allowed=$(jq -r '.install_allowed' "$ARTIFACT")
+reason=$(jq -r '.reason' "$ARTIFACT")
+
+# Existence check
+if [ "$v_ver" = "null" ] || [ "$s_id" = "null" ] || [ "$art_p" = "null" ] || [ "$man_p" = "null" ] || \
+   [ "$filename" = "null" ] || [ "$fmt" = "null" ] || [ "$size" = "null" ] || [ "$sha_exp" = "null" ] || \
+   [ "$sha_act" = "null" ] || [ "$verified" = "null" ] || [ "$man_fetch" = "null" ] || [ "$reason" = "null" ]; then
+  echo "ERROR: Missing required fields in verified artifact JSON." >&2
+  exit 1
+fi
+
+# Value checks
+if [ "$fmt" != "tar.zst" ]; then
+  echo "ERROR: Unsupported artifact format: $fmt" >&2
+  exit 1
+fi
+
+if [ "$size" -le 0 ]; then
+  echo "ERROR: Invalid artifact size: $size bytes." >&2
+  exit 1
+fi
+
+if [ "$sha_exp" != "$sha_act" ]; then
+  echo "ERROR: Checksum mismatch inside verification file." >&2
+  exit 1
+fi
+
+if [ "$verified" != "true" ]; then
+  echo "ERROR: sha256_verified must be true." >&2
+  exit 1
+fi
+
+if [ "$man_fetch" != "true" ]; then
+  echo "ERROR: manifest_fetched must be true." >&2
+  exit 1
+fi
+
+if [ "$e_allowed" != "false" ]; then
+  echo "ERROR: extract_allowed must be false in Phase 28." >&2
+  exit 1
+fi
+
+if [ "$i_allowed" != "false" ]; then
+  echo "ERROR: install_allowed must be false in Phase 28." >&2
+  exit 1
+fi
+
+# Check files on disk
+if [ "$REQ_FILES" -eq 1 ]; then
+  if [ ! -f "$art_p" ]; then
+    echo "ERROR: Local artifact file does not exist at $art_p." >&2
+    exit 1
+  fi
+  art_size=$(wc -c < "$art_p" | tr -d ' ')
+  if [ "$art_size" -eq 0 ]; then
+    echo "ERROR: Local artifact file is empty." >&2
+    exit 1
+  fi
+
+  if [ ! -f "$man_p" ]; then
+    echo "ERROR: Local manifest file does not exist at $man_p." >&2
+    exit 1
+  fi
+  man_size=$(wc -c < "$man_p" | tr -d ' ')
+  if [ "$man_size" -eq 0 ]; then
+    echo "ERROR: Local manifest file is empty." >&2
+    exit 1
+  fi
+fi
+
+# Strict rules
+if [ "$STRICT" -eq 1 ]; then
+  if [ "$sha_exp" = "PLACEHOLDER_SHA256" ] || [ -z "$sha_exp" ]; then
+    echo "ERROR: Placeholder checksum not allowed in strict mode." >&2
+    exit 2
+  fi
+  if [ "$e_allowed" = "true" ] || [ "$i_allowed" = "true" ]; then
+    echo "ERROR: Mutation permissions must be strictly false." >&2
+    exit 2
+  fi
+fi
+
+echo "Verified artifact file validates successfully."
+exit 0

@@ -34,6 +34,7 @@ usage() {
   echo "  --bootstrap-safe-mode-probe-only      Run bootstrap safe-mode probe tests"
   echo "  --cidre-wrapper-strategy-only         Run Cidre installer wrapper strategy tests"
   echo "  --cidre-wrapper-selection-only        Run Cidre installer wrapper selection tests"
+  echo "  --cidre-wrapper-artifact-only         Run Cidre installer wrapper artifact fetch tests"
   exit 1
 }
 
@@ -125,6 +126,10 @@ while [ $# -gt 0 ]; do
       ;;
     --cidre-wrapper-selection-only)
       CIDRE_WRAPPER_SELECTION_ONLY=1
+      shift
+      ;;
+    --cidre-wrapper-artifact-only)
+      CIDRE_WRAPPER_ARTIFACT_ONLY=1
       shift
       ;;
     *)
@@ -237,6 +242,12 @@ fi
 if [ "${CIDRE_WRAPPER_SELECTION_ONLY:-0}" -eq 1 ]; then
   echo "Running Cidre installer wrapper selection tests only..."
   "$REPO_ROOT/installer/scripts/run-cidre-wrapper-selection-tests"
+  exit 0
+fi
+
+if [ "${CIDRE_WRAPPER_ARTIFACT_ONLY:-0}" -eq 1 ]; then
+  echo "Running Cidre installer wrapper artifact fetch tests only..."
+  "$REPO_ROOT/installer/scripts/run-cidre-wrapper-artifact-tests"
   exit 0
 fi
 

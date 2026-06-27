@@ -1,0 +1,197 @@
+#!/bin/bash
+# run-cidre-wrapper-artifact-tests: Phase 28 wrapper artifact verification tests runner
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+TEST_TMPDIR="${CIDRE_TEST_TMPDIR:-/tmp/cidre-wrapper-artifact-tests}"
+rm -rf "$TEST_TMPDIR"
+mkdir -p "$TEST_TMPDIR/server"
+mkdir -p "$TEST_TMPDIR/downloads"
+mkdir -p "$TEST_TMPDIR/generated"
+
+echo "=== Running Cidre Wrapper Artifact Tests ==="
+
+# Create dummy artifact and manifest files
+echo "dummy rootfs data" > "$TEST_TMPDIR/server/cidre-seed-aarch64-v0.10.0.tar.zst"
+echo "dummy manifest data" > "$TEST_TMPDIR/server/cidre-seed-aarch64-v0.10.0.manifest"
+
+# Calculate real hash of the dummy artifact
+sha_tool=""
+if command -v sha256sum >/dev/null 2>&1; then
+  sha_tool="sha256sum"
+elif command -v shasum >/dev/null 2>&1; then
+  sha_tool="shasum -a 256"
+fi
+DUMMY_SHA=$($sha_tool "$TEST_TMPDIR/server/cidre-seed-aarch64-v0.10.0.tar.zst" | cut -d' ' -f1)
+
+# Start mock HTTP server
+python3 -m http.server 8760 --bind 127.0.0.1 --directory "$TEST_TMPDIR/server" >/dev/null 2>&1 &
+SERVER_PID=$!
+
+cleanup() {
+  echo "Stopping mock HTTP server (PID: $SERVER_PID)..."
+  kill "$SERVER_PID" || true
+  rm -rf "$TEST_TMPDIR"
+}
+trap cleanup EXIT
+
+# Wait a moment for server to boot
+sleep 2
+
+# Construct valid selected-image JSON
+cat <<EOF > "$TEST_TMPDIR/selected-valid.json"
+{
+  "selection_version": "0.1",
+  "selected_id": "cidre-seed-aarch64",
+  "name": "Cidre Desktop Seed",
+  "version": "0.10.0",
+  "arch": "aarch64",
+  "platform": "apple-silicon",
+  "package": "cidre-seed-aarch64-v0.10.0.tar.zst",
+  "url": "http://127.0.0.1:8760/cidre-seed-aarch64-v0.10.0.tar.zst",
+  "manifest": "http://127.0.0.1:8760/cidre-seed-aarch64-v0.10.0.manifest",
+  "sha256": "$DUMMY_SHA",
+  "first_boot_mode": "desktop-welcome",
+  "asset_layout": {
+    "artifact_kind": "cidre-seed-rootfs",
+    "artifact_format": "tar.zst"
+  },
+  "install_allowed": false,
+  "reason": "Selection only."
+}
+EOF
+
+# Test 1: Positive artifact fetch and integrity check
+echo "Test 1: Testing valid artifact fetch and integrity check..."
+"$REPO_ROOT/installer/scripts/cidre-wrapper-fetch-artifact" \
+  --selection "$TEST_TMPDIR/selected-valid.json" \
+  --download-dir "$TEST_TMPDIR/downloads" \
+  --output "$TEST_TMPDIR/generated/verified-artifact.json"
+
+# Validate output
+"$REPO_ROOT/installer/scripts/validate-cidre-wrapper-artifact" \
+  --artifact "$TEST_TMPDIR/generated/verified-artifact.json" \
+  --require-files
+
+echo "  [OK] Valid artifact fetch and sha256 check passed."
+
+# --- Negative Tests Section ---
+echo "=== Running Negative Fetch Tests ==="
+
+# Neg 1: Checksum mismatch (expect fetch tool fail)
+echo "Neg 1: Testing checksum mismatch..."
+cat <<EOF > "$TEST_TMPDIR/selected-bad-sha.json"
+{
+  "selection_version": "0.1",
+  "selected_id": "cidre-seed-aarch64",
+  "name": "Cidre Desktop Seed",
+  "version": "0.10.0",
+  "arch": "aarch64",
+  "platform": "apple-silicon",
+  "package": "cidre-seed-aarch64-v0.10.0.tar.zst",
+  "url": "http://127.0.0.1:8760/cidre-seed-aarch64-v0.10.0.tar.zst",
+  "manifest": "http://127.0.0.1:8760/cidre-seed-aarch64-v0.10.0.manifest",
+  "sha256": "BAD_SHA256_HASH_VALUE_HERE",
+  "first_boot_mode": "desktop-welcome",
+  "asset_layout": {
+    "artifact_kind": "cidre-seed-rootfs",
+    "artifact_format": "tar.zst"
+  },
+  "install_allowed": false,
+  "reason": "Selection only."
+}
+EOF
+
+if "$REPO_ROOT/installer/scripts/cidre-wrapper-fetch-artifact" \
+  --selection "$TEST_TMPDIR/selected-bad-sha.json" \
+  --download-dir "$TEST_TMPDIR/downloads" \
+  --output "$TEST_TMPDIR/generated/verified-bad-sha.json" --force >/dev/null 2>&1; then
+  
+  echo "ERROR: Expected fetch tool to fail on checksum mismatch, but passed." >&2
+  exit 1
+fi
+echo "  [PASSED] Checksum mismatch successfully blocked."
+
+# Neg 2: 404 URL (expect fetch tool fail)
+echo "Neg 2: Testing 404 URLs..."
+cat <<EOF > "$TEST_TMPDIR/selected-404.json"
+{
+  "selection_version": "0.1",
+  "selected_id": "cidre-seed-aarch64",
+  "name": "Cidre Desktop Seed",
+  "version": "0.10.0",
+  "arch": "aarch64",
+  "platform": "apple-silicon",
+  "package": "cidre-seed-aarch64-v0.10.0.tar.zst",
+  "url": "http://127.0.0.1:8760/non-existent-file.tar.zst",
+  "manifest": "http://127.0.0.1:8760/cidre-seed-aarch64-v0.10.0.manifest",
+  "sha256": "$DUMMY_SHA",
+  "first_boot_mode": "desktop-welcome",
+  "asset_layout": {
+    "artifact_kind": "cidre-seed-rootfs",
+    "artifact_format": "tar.zst"
+  },
+  "install_allowed": false,
+  "reason": "Selection only."
+}
+EOF
+
+if "$REPO_ROOT/installer/scripts/cidre-wrapper-fetch-artifact" \
+  --selection "$TEST_TMPDIR/selected-404.json" \
+  --download-dir "$TEST_TMPDIR/downloads" \
+  --output "$TEST_TMPDIR/generated/verified-404.json" --force >/dev/null 2>&1; then
+  
+  echo "ERROR: Expected fetch tool to fail on 404, but passed." >&2
+  exit 1
+fi
+echo "  [PASSED] 404 URL successfully blocked."
+
+# Neg 3: install_allowed=true (expect fetch tool fail)
+echo "Neg 3: Rejection of install_allowed=true..."
+cat <<EOF > "$TEST_TMPDIR/selected-allowed.json"
+{
+  "selection_version": "0.1",
+  "selected_id": "cidre-seed-aarch64",
+  "name": "Cidre Desktop Seed",
+  "version": "0.10.0",
+  "arch": "aarch64",
+  "platform": "apple-silicon",
+  "package": "cidre-seed-aarch64-v0.10.0.tar.zst",
+  "url": "http://127.0.0.1:8760/cidre-seed-aarch64-v0.10.0.tar.zst",
+  "manifest": "http://127.0.0.1:8760/cidre-seed-aarch64-v0.10.0.manifest",
+  "sha256": "$DUMMY_SHA",
+  "first_boot_mode": "desktop-welcome",
+  "asset_layout": {
+    "artifact_kind": "cidre-seed-rootfs",
+    "artifact_format": "tar.zst"
+  },
+  "install_allowed": true,
+  "reason": "Illegal allow."
+}
+EOF
+
+if "$REPO_ROOT/installer/scripts/cidre-wrapper-fetch-artifact" \
+  --selection "$TEST_TMPDIR/selected-allowed.json" \
+  --download-dir "$TEST_TMPDIR/downloads" \
+  --output "$TEST_TMPDIR/generated/verified-allowed.json" --force >/dev/null 2>&1; then
+  
+  echo "ERROR: Expected fetch tool to fail on install_allowed=true, but passed." >&2
+  exit 1
+fi
+echo "  [PASSED] install_allowed=true restriction verified."
+
+# Safety Tests: Confirms forbidden commands are matched inside guard zones
+echo "Safety: Verifying safety guard blocks..."
+FORBIDDEN=(installer-bootstrap.sh alx.sh install.sh "curl | sh" diskutil bless nvram gpt fdisk dd mkfs parted asr "tar -x" "tar --extract")
+for cmd in "${FORBIDDEN[@]}"; do
+  if "$REPO_ROOT/installer/scripts/guard-installer-danger-zone" --command "$cmd" >/dev/null 2>&1; then
+    echo "ERROR: Safety guard failed to block forbidden command '$cmd'." >&2
+    exit 1
+  fi
+done
+echo "  [PASSED] All forbidden command blocks verified."
+
+echo "All Cidre Wrapper Artifact Tests completed successfully!"
+exit 0
