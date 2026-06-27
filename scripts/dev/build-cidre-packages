@@ -1,0 +1,83 @@
+#!/bin/bash
+# build-cidre-packages: Build and validate Cidre packages in expected dependency order
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PRINT_ONLY=0
+BUILD_PKG=0
+
+usage() {
+  echo "Usage: $0 [--printsrcinfo-only | --build]"
+  exit 1
+}
+
+if [ $# -eq 0 ]; then
+  usage
+fi
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --printsrcinfo-only)
+      PRINT_ONLY=1
+      shift
+      ;;
+    --build)
+      BUILD_PKG=1
+      shift
+      ;;
+    *)
+      echo "ERROR: Unknown option: $1" >&2
+      usage
+      ;;
+  esac
+done
+
+# Verify makepkg availability on host
+if ! command -v makepkg >/dev/null 2>&1; then
+  echo "ERROR: makepkg was not found." >&2
+  echo "This validation requires ALARM/Arch." >&2
+  echo "Run this later on the target environment." >&2
+  exit 1
+fi
+
+PACKAGES=(
+  "cidre-config"
+  "cidre-user-setup"
+  "cidre-welcome"
+  "cidre-healthcheck"
+  "cidre-firstboot"
+  "cidre-safe-session"
+  "cidre-seed"
+)
+
+PACKAGES_DIR="$REPO_ROOT/packages/arch"
+if [ ! -d "$PACKAGES_DIR" ]; then
+  echo "ERROR: Packages directory not found at $PACKAGES_DIR" >&2
+  exit 1
+fi
+
+for pkg in "${PACKAGES[@]}"; do
+  pkg_path="$PACKAGES_DIR/$pkg"
+  if [ ! -d "$pkg_path" ]; then
+    echo "ERROR: Package directory $pkg_path is missing!" >&2
+    exit 1
+  fi
+
+  echo "==> Validating package: $pkg"
+  cd "$pkg_path"
+
+  if [ "$PRINT_ONLY" -eq 1 ]; then
+    echo "  Generating .SRCINFO..."
+    makepkg --printsrcinfo > .SRCINFO
+  fi
+
+  if [ "$BUILD_PKG" -eq 1 ]; then
+    echo "  Building package..."
+    makepkg -f --noconfirm
+  fi
+
+  cd "$REPO_ROOT"
+done
+
+echo "Package integration validation complete successfully."

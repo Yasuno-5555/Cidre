@@ -37,18 +37,25 @@ if [ -z "$ROOTFS" ]; then
 fi
 
 # Fatal error if firstboot.done completion marker is already in the target
-# This check is executed even in dry-run if the file is physically present at the path
 MARKER_PATH="$ROOTFS/var/lib/cidre/firstboot.done"
 if [ -f "$MARKER_PATH" ]; then
-  echo "FATAL ERROR: Completion marker firstboot.done found in seed rootfs!" >&2
-  echo "A seed image must never contain /var/lib/cidre/firstboot.done." >&2
+  echo "Fatal:" >&2
+  echo "  firstboot.done exists inside the rootfs." >&2
+  echo "" >&2
+  echo "Why this matters:" >&2
+  echo "  cidre-firstboot.service will not run if this marker exists." >&2
+  echo "" >&2
+  echo "Next step:" >&2
+  echo "  Remove the marker from the rootfs and re-run validation." >&2
   exit 2
 fi
 
 if [ "$DRY_RUN" -eq 1 ]; then
   echo "  === Rootfs Validation [DRY-RUN SIMULATION] ==="
   echo "  [DRY-RUN] would verify: $ROOTFS/usr/bin/cidre-oobe exists"
+  echo "  [DRY-RUN] would verify: $ROOTFS/usr/bin/cidre-welcome exists"
   echo "  [DRY-RUN] would verify: $ROOTFS/usr/bin/cidre-user-setup exists"
+  echo "  [DRY-RUN] would verify: $ROOTFS/usr/bin/cidre-healthcheck exists"
   echo "  [DRY-RUN] would verify: $ROOTFS/usr/lib/systemd/system/cidre-firstboot.service exists"
   echo "  [DRY-RUN] would verify: $ROOTFS/usr/share/cidre/defaults exists"
   echo "  [DRY-RUN] would verify: NetworkManager service unit is active/enabled"
@@ -59,6 +66,49 @@ if [ "$DRY_RUN" -eq 1 ]; then
   exit 0
 fi
 
-# Real build validation (Future execution)
+# Real build validation (Actual target checks)
 echo "Running rootfs validation on $ROOTFS..."
-# Checks would be implemented here in a later phase.
+errors=0
+
+_check_file() {
+  local file_path="$1"
+  if [ -f "$file_path" ]; then
+    echo "  [OK] File exists: $file_path"
+  else
+    echo "  [FAIL] File missing: $file_path" >&2
+    errors=$((errors + 1))
+  fi
+}
+
+_check_dir() {
+  local dir_path="$1"
+  if [ -d "$dir_path" ]; then
+    echo "  [OK] Directory exists: $dir_path"
+  else
+    echo "  [FAIL] Directory missing: $dir_path" >&2
+    errors=$((errors + 1))
+  fi
+}
+
+_check_file "$ROOTFS/usr/bin/cidre-oobe"
+_check_file "$ROOTFS/usr/bin/cidre-welcome"
+_check_file "$ROOTFS/usr/bin/cidre-user-setup"
+_check_file "$ROOTFS/usr/bin/cidre-healthcheck"
+_check_file "$ROOTFS/usr/lib/systemd/system/cidre-firstboot.service"
+_check_dir "$ROOTFS/usr/share/cidre/defaults"
+_check_dir "$ROOTFS/var/lib/cidre"
+
+# NetworkManager systemd unit check
+if [ -f "$ROOTFS/usr/lib/systemd/system/NetworkManager.service" ] || [ -f "$ROOTFS/lib/systemd/system/NetworkManager.service" ]; then
+  echo "  [OK] NetworkManager service unit exists."
+else
+  echo "  [FAIL] NetworkManager service unit missing." >&2
+  errors=$((errors + 1))
+fi
+
+if [ $errors -gt 0 ]; then
+  echo "ERROR: Rootfs integration validation failed with $errors error(s)." >&2
+  exit 1
+fi
+
+echo "Rootfs validation completed successfully."

@@ -1,5 +1,91 @@
 #!/bin/bash
-# enable-firstboot: Skeleton script for firstboot targets enablement
+# enable-firstboot: Configures systemd enablement inside target rootfs
 set -euo pipefail
 
-echo "  [DRY-RUN] enable-firstboot skeleton executed."
+ROOTFS=""
+DRY_RUN=0
+APPLY=0
+
+usage() {
+  echo "Usage: $0 --rootfs <path> [--dry-run | --apply]"
+  exit 1
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --rootfs)
+      if [ $# -lt 2 ]; then
+        echo "ERROR: --rootfs requires an argument." >&2
+        exit 1
+      fi
+      ROOTFS="$2"
+      shift 2
+      ;;
+    --dry-run)
+      DRY_RUN=1
+      shift
+      ;;
+    --apply)
+      APPLY=1
+      shift
+      ;;
+    *)
+      echo "ERROR: Unknown option: $1" >&2
+      usage
+      ;;
+  esac
+done
+
+if [ -z "$ROOTFS" ]; then
+  echo "ERROR: --rootfs is required." >&2
+  usage
+fi
+
+if [ "$DRY_RUN" -eq 0 ] && [ "$APPLY" -eq 0 ]; then
+  echo "ERROR: Use --dry-run or --apply explicitly." >&2
+  exit 1
+fi
+
+# Validation: Rootfs must not contain firstboot.done completion marker
+MARKER_PATH="$ROOTFS/var/lib/cidre/firstboot.done"
+if [ -f "$MARKER_PATH" ]; then
+  echo "Invalid rootfs:" >&2
+  echo "  /var/lib/cidre/firstboot.done exists." >&2
+  echo "  A seed rootfs must not contain this marker." >&2
+  exit 2
+fi
+
+if [ "$DRY_RUN" -eq 1 ]; then
+  echo "  === Firstboot Enablement [DRY-RUN SIMULATION] ==="
+  echo "  Target rootfs: $ROOTFS"
+  echo "  [DRY-RUN] would execute: systemctl --root $ROOTFS enable NetworkManager.service"
+  echo "  [DRY-RUN] would execute: systemctl --root $ROOTFS enable cidre-firstboot.service"
+  echo "  [DRY-RUN] would execute: systemctl --root $ROOTFS disable greetd.service"
+  echo "  Simulation complete. No services started. No modifications performed."
+  exit 0
+fi
+
+# Apply mode (Requires systemctl on host/target context)
+echo "Enabling Cidre seed firstboot units inside $ROOTFS..."
+
+_enable_unit_root() {
+  local unit="$1"
+  if systemctl --root "$ROOTFS" enable "$unit" >/dev/null 2>&1; then
+    echo "  Enabled: $unit"
+  else
+    echo "  Warning: Failed to enable $unit in target rootfs." >&2
+  fi
+}
+
+_disable_unit_root() {
+  local unit="$1"
+  if systemctl --root "$ROOTFS" disable "$unit" >/dev/null 2>&1; then
+    echo "  Disabled: $unit"
+  else
+    echo "  Warning: Failed to disable $unit in target rootfs." >&2
+  fi
+}
+
+_enable_unit_root NetworkManager.service
+_enable_unit_root cidre-firstboot.service
+_disable_unit_root greetd.service

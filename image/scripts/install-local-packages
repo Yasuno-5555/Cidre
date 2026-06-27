@@ -1,5 +1,75 @@
 #!/bin/bash
-# install-local-packages: Skeleton script for package deployment
+# install-local-packages: Installs built local packages into target rootfs
 set -euo pipefail
 
-echo "  [DRY-RUN] install-local-packages skeleton executed."
+ROOTFS=""
+PACKAGES=""
+DRY_RUN=0
+APPLY=0
+
+usage() {
+  echo "Usage: $0 --rootfs <path> --packages <path> [--dry-run | --apply]"
+  exit 1
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --rootfs)
+      if [ $# -lt 2 ]; then
+        echo "ERROR: --rootfs requires an argument." >&2
+        exit 1
+      fi
+      ROOTFS="$2"
+      shift 2
+      ;;
+    --packages)
+      if [ $# -lt 2 ]; then
+        echo "ERROR: --packages requires an argument." >&2
+        exit 1
+      fi
+      PACKAGES="$2"
+      shift 2
+      ;;
+    --dry-run)
+      DRY_RUN=1
+      shift
+      ;;
+    --apply)
+      APPLY=1
+      shift
+      ;;
+    *)
+      echo "ERROR: Unknown option: $1" >&2
+      usage
+      ;;
+  esac
+done
+
+if [ -z "$ROOTFS" ] || [ -z "$PACKAGES" ]; then
+  echo "ERROR: Both --rootfs and --packages are required." >&2
+  usage
+fi
+
+if [ "$DRY_RUN" -eq 0 ] && [ "$APPLY" -eq 0 ]; then
+  echo "ERROR: Use --dry-run or --apply explicitly." >&2
+  exit 1
+fi
+
+if [ "$DRY_RUN" -eq 1 ]; then
+  echo "  === Local Packages Installation [DRY-RUN SIMULATION] ==="
+  echo "  Target rootfs: $ROOTFS"
+  echo "  Packages directory: $PACKAGES"
+  echo "  [DRY-RUN] would execute: pacman --root $ROOTFS -U $PACKAGES/*.pkg.tar.* --noconfirm"
+  echo "  Simulation complete. No modifications performed."
+  exit 0
+fi
+
+# Apply mode (Requires ALARM/Arch host context)
+echo "Installing local packages into target rootfs at $ROOTFS..."
+if ! command -v pacman >/dev/null 2>&1; then
+  echo "ERROR: pacman was not found. Cannot perform target installation." >&2
+  exit 1
+fi
+
+# Run chroot/rootfs-based pacman install
+pacman --root "$ROOTFS" -U "$PACKAGES"/*.pkg.tar.* --noconfirm
