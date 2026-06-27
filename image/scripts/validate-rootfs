@@ -50,6 +50,20 @@ if [ -f "$MARKER_PATH" ]; then
   exit 2
 fi
 
+# Fatal error if optimized.done exists in seed rootfs
+OPT_MARKER_PATH="$ROOTFS/var/lib/cidre/optimized.done"
+if [ -f "$OPT_MARKER_PATH" ]; then
+  echo "Fatal:" >&2
+  echo "  optimized.done exists inside the rootfs." >&2
+  echo "" >&2
+  echo "Why this matters:" >&2
+  echo "  A seed image must not be pre-marked as optimized-complete." >&2
+  echo "" >&2
+  echo "Next step:" >&2
+  echo "  Remove the optimized.done marker from the rootfs." >&2
+  exit 2
+fi
+
 if [ "$DRY_RUN" -eq 1 ]; then
   echo "  === Rootfs Validation [DRY-RUN SIMULATION] ==="
   echo "  [DRY-RUN] would verify: $ROOTFS/usr/bin/cidre-oobe exists"
@@ -70,7 +84,12 @@ if [ "$DRY_RUN" -eq 1 ]; then
   echo "  [DRY-RUN] would verify: $ROOTFS/usr/bin/cidre-session exists"
   echo "  [DRY-RUN] would verify: $ROOTFS/usr/share/wayland-sessions/cidre.desktop exists"
   echo "  [DRY-RUN] would verify: $ROOTFS/etc/xdg/autostart/cidre-welcome.desktop exists"
+  echo "  [DRY-RUN] would verify: $ROOTFS/usr/bin/cidre-experience-upgrade exists"
+  echo "  [DRY-RUN] would verify: $ROOTFS/usr/bin/cidre-build-ghostty exists"
+  echo "  [DRY-RUN] would verify: $ROOTFS/usr/bin/cidre-build-niri-cidre exists"
+  echo "  [DRY-RUN] would verify: $ROOTFS/usr/bin/cidre-setup-fish exists"
   echo "  [DRY-RUN] would verify: $ROOTFS/var/lib/cidre/firstboot.done does NOT exist (PASSED)"
+  echo "  [DRY-RUN] would verify: $ROOTFS/var/lib/cidre/optimized.done does NOT exist (PASSED)"
   echo "  Validation Simulation: PASSED"
   exit 0
 fi
@@ -126,6 +145,10 @@ _check_file "$ROOTFS/usr/bin/fcitx5" "Fcitx5 input method editor"
 _check_file "$ROOTFS/usr/bin/cidre-session" "Cidre session launcher wrapper"
 _check_file "$ROOTFS/usr/share/wayland-sessions/cidre.desktop" "Wayland session entry file"
 _check_file "$ROOTFS/etc/xdg/autostart/cidre-welcome.desktop" "Cidre Welcome autostart configuration entry"
+_check_file "$ROOTFS/usr/bin/cidre-experience-upgrade" "Cidre experience upgrade orchestrator"
+_check_file "$ROOTFS/usr/bin/cidre-build-ghostty" "Ghostty terminal compilation helper"
+_check_file "$ROOTFS/usr/bin/cidre-build-niri-cidre" "niri-cidre compositor compilation helper"
+_check_file "$ROOTFS/usr/bin/cidre-setup-fish" "Fish shell configuration helper"
 
 # NetworkManager systemd unit check
 if [ -f "$ROOTFS/usr/lib/systemd/system/NetworkManager.service" ] || [ -f "$ROOTFS/lib/systemd/system/NetworkManager.service" ]; then

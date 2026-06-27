@@ -1,0 +1,37 @@
+# Maintainer: Yasuno <yasuno@example.invalid>
+
+pkgname=cidre-experience-upgrade
+pkgver=1.0.0
+pkgrel=1
+pkgdesc='Cidre Welcome optimized desktop experience upgrade tooling'
+url='https://github.com/Yasuno-5555/Cidre'
+arch=('any')
+license=('custom')
+depends=(
+  'bash'
+  'git'
+  'base-devel'
+  'sudo'
+  'cidre-welcome'
+  'cidre-config'
+  'cidre-healthcheck'
+)
+optdepends=(
+  'ghostty: preferred Cidre terminal'
+  'fish: preferred Cidre shell'
+  'niri-cidre: preferred Cidre compositor'
+  'rust: build dependency for niri-cidre'
+  'zig: build dependency for ghostty'
+)
+source=()
+sha256sums=()
+
+# Monorepo-local packaging path.
+_repo_root="${startdir}/../../.."
+
+package() {
+  install -Dm755 "${_repo_root}/components/welcome/bin/cidre-experience-upgrade" "${pkgdir}/usr/bin/cidre-experience-upgrade"
+  install -Dm755 "${_repo_root}/components/welcome/bin/cidre-build-ghostty" "${pkgdir}/usr/bin/cidre-build-ghostty"
+  install -Dm755 "${_repo_root}/components/welcome/bin/cidre-build-niri-cidre" "${pkgdir}/usr/bin/cidre-build-niri-cidre"
+  install -Dm755 "${_repo_root}/components/welcome/bin/cidre-setup-fish" "${pkgdir}/usr/bin/cidre-setup-fish"
+}

@@ -313,6 +313,8 @@ action_optimized_experience() {
 
 first_run_flow() {
   local welcome_done="/var/lib/cidre/welcome.done"
+  local log_file="/var/log/cidre/experience-upgrade.log"
+
   # If already done, skip first run but check state
   if [ -f "$welcome_done" ]; then
     echo "Cidre Welcome setup already completed."
@@ -322,33 +324,67 @@ first_run_flow() {
   while true; do
     show_banner
     echo -e "${C_BOLD}=== Cidre Desktop First-Run Setup ===${C_RESET}"
-    echo "You are currently running on the baseline Cidre desktop:"
-    echo "  - Compositor: upstream niri (installed)"
-    echo "  - Terminal: foot (installed)"
-    echo "  - Launcher: fuzzel (installed)"
-    echo "  - Bar: waybar (installed)"
+    echo "Current desktop:"
+    echo "  Baseline Cidre Desktop"
+    echo "  - upstream niri"
+    echo "  - foot"
+    echo "  - fuzzel"
+    echo "  - waybar"
     echo ""
-    echo "Please configure your system or select optimized upgrade path."
+    echo "Recommended:"
+    echo "  Build Optimized Cidre Experience"
+    echo "  - Ghostty"
+    echo "  - fish"
+    echo "  - niri-cidre"
     echo ""
-    echo -e "  [1] ${C_GREEN}Upgrade to Optimized Cidre Experience${C_RESET} (Placeholder)"
-    echo "  [2] Configure Input Method"
-    echo "  [3] Test Audio"
-    echo "  [4] System Diagnostics"
-    echo "  [5] Finish Setup and Start Using Cidre"
+    echo "This upgrade process may take a while."
+    echo ""
+    echo "Options:"
+    echo "  [1] Build optimized experience"
+    echo "  [2] Skip for now"
+    echo "  [3] View optimized setup status"
+    echo "  [4] View logs"
+    echo "  [5] Open repair tools (diagnostics)"
+    echo "  [6] Finish Welcome"
     echo ""
     
-    read -r -p "Select option [1-5]: " opt
+    read -r -p "Select option [1-6]: " opt
     case "$opt" in
       1)
-        action_optimized_experience
+        echo "Launching upgrade pipeline..."
+        if command -v cidre-experience-upgrade >/dev/null 2>&1; then
+          sudo cidre-experience-upgrade --run || echo "Upgrade failed."
+        else
+          # Fallback to local script if not in path yet
+          sudo "$SCRIPT_DIR/cidre-experience-upgrade" --run || echo "Upgrade failed."
+        fi
+        read -r -p "Press Enter to return to menu..." _
         ;;
       2)
-        action_input_method
+        echo "Skipping upgrade for now."
+        exit 0
         ;;
       3)
-        action_test_audio
+        echo ""
+        if command -v cidre-experience-upgrade >/dev/null 2>&1; then
+          cidre-experience-upgrade --status
+        else
+          "$SCRIPT_DIR/cidre-experience-upgrade" --status
+        fi
+        echo ""
+        read -r -p "Press Enter to return to menu..." _
         ;;
       4)
+        echo ""
+        if [ -f "$log_file" ]; then
+          cat "$log_file"
+        else
+          echo "No upgrade log found at $log_file"
+        fi
+        echo ""
+        read -r -p "Press Enter to return to menu..." _
+        ;;
+      5)
         echo ""
         echo "Running quick diagnostics..."
         if [ -x "$SCRIPT_DIR/cidre-doctor" ]; then
@@ -357,14 +393,14 @@ first_run_flow() {
           echo "[WARN] cidre-doctor not found"
         fi
         echo ""
-        read -r -p "Press Enter to return to return..." _
+        read -r -p "Press Enter to return to menu..." _
         ;;
-      5)
+      6)
         # Create welcome.done completion marker
         mkdir -p /var/lib/cidre
         touch "$welcome_done"
         echo ""
-        echo "Cidre setup completed successfully!"
+        echo "Cidre Welcome setup completed successfully!"
         echo "Enjoy your Cidre Desktop Experience."
         echo ""
         sleep 2

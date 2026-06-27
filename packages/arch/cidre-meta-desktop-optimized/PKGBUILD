@@ -9,6 +9,7 @@ arch=('any')
 license=('custom')
 depends=(
   'cidre-meta-desktop-baseline'
+  'cidre-experience-upgrade'
 )
 optdepends=(
   'ghostty: preferred Cidre terminal'

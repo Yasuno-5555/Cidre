@@ -14,6 +14,7 @@ depends=(
   'cidre-config'
   'cidre-user-setup'
   'cidre-meta-desktop-baseline'
+  'cidre-experience-upgrade'
   'networkmanager'
   'sudo'
   'bash'

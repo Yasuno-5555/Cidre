@@ -36,3 +36,22 @@ This checklist details test scenarios designed to verify Cidre's OOBE error reco
 - **Expected Behavior**: Execution aborts immediately:
   `Fatal: firstboot.done exists inside the rootfs. Why this matters: cidre-firstboot.service will not run...`
 - **Recovery**: Run `rm <target-path>/var/lib/cidre/firstboot.done`.
+
+---
+
+## Test Case 7: Ghostty Build Dependency Missing
+- **Setup**: Purge build dependencies (like `zig`) or mock missing tools in validation.
+- **Action**: Run `cidre-experience-upgrade --run`.
+- **Expected Behavior**: Tool check flags missing tools, writes `ghostty=failed` to `/var/lib/cidre/experience-upgrade.state`, prints error indicating missing tools, and exits safely without mutating baseline config.
+
+## Test Case 8: niri-cidre Build Fails
+- **Setup**: Induce compiler error in niri-cidre checkout or select mock build failure mode.
+- **Action**: Run `cidre-experience-upgrade --run`.
+- **Expected Behavior**: Upgrade halts on niri-cidre, records `niri_cidre=failed` in `.state`, prints logs reference path (`/var/log/cidre/experience-upgrade.log`), and does NOT create `optimized.done`.
+- **Verification**: Session fallback wrapper `cidre-session` continues launching upstream `niri` successfully.
+
+## Test Case 9: fish Setup Fails
+- **Setup**: Mock fish configuration script failure.
+- **Action**: Run `cidre-experience-upgrade --run`.
+- **Expected Behavior**: Records `fish=failed` in `.state`. Standard shell environment fallback (`bash`) remains active and user shell defaults are unmodified.
+
