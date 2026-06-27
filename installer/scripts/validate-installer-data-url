@@ -82,5 +82,4 @@ echo "  No installer was invoked."
 echo "  No disk changes were made."
 echo "================================================="
 
-rm -rf "$DOWNLOAD_DIR"
 exit 0

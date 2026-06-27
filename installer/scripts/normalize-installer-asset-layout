@@ -1,0 +1,153 @@
+#!/bin/bash
+# normalize-installer-asset-layout: Normalizes package/url/manifest fields and injects layout blocks
+set -euo pipefail
+
+INPUT=""
+OUTPUT=""
+REPO_BASE=""
+POLICY=""
+FORCE=0
+
+usage() {
+  echo "Usage: $0 --input <path> --output <path> --repo-base <url> [--policy <path>] [--force]"
+  exit 1
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --input)
+      if [ $# -lt 2 ]; then
+        echo "ERROR: --input requires a path." >&2
+        exit 1
+      fi
+      INPUT="$2"
+      shift 2
+      ;;
+    --output)
+      if [ $# -lt 2 ]; then
+        echo "ERROR: --output requires a path." >&2
+        exit 1
+      fi
+      OUTPUT="$2"
+      shift 2
+      ;;
+    --repo-base)
+      if [ $# -lt 2 ]; then
+        echo "ERROR: --repo-base requires an argument." >&2
+        exit 1
+      fi
+      REPO_BASE="$2"
+      shift 2
+      ;;
+    --policy)
+      if [ $# -lt 2 ]; then
+        echo "ERROR: --policy requires a path." >&2
+        exit 1
+      fi
+      POLICY="$2"
+      shift 2
+      ;;
+    --force)
+      FORCE=1
+      shift
+      ;;
+    *)
+      echo "ERROR: Unknown option: $1" >&2
+      usage
+      ;;
+  esac
+done
+
+if [ -z "$INPUT" ] || [ -z "$OUTPUT" ] || [ -z "$REPO_BASE" ]; then
+  echo "ERROR: --input, --output, and --repo-base are required." >&2
+  usage
+fi
+
+if [ ! -f "$INPUT" ]; then
+  echo "ERROR: Input file not found: $INPUT" >&2
+  exit 1
+fi
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+if [ -z "$POLICY" ]; then
+  POLICY="$REPO_ROOT/installer/metadata/asset-layout-policy.json"
+fi
+
+if [ ! -f "$POLICY" ]; then
+  echo "ERROR: Policy file not found: $POLICY" >&2
+  exit 1
+fi
+
+if [ -f "$OUTPUT" ] && [ "$FORCE" -eq 0 ]; then
+  echo "ERROR: Output file already exists: $OUTPUT. Use --force to overwrite." >&2
+  exit 1
+fi
+
+# Clean repo_base trailing slash
+REPO_BASE="${REPO_BASE%/}"
+
+# Read accepted extensions from policy
+accepted_exts=$(jq -r '.accepted_extensions[]' "$POLICY")
+
+echo "Normalizing generated installer data..."
+
+# Verify inputs first
+if ! jq -e '.os_list' "$INPUT" >/dev/null 2>&1; then
+  echo "ERROR: Invalid metadata shape. 'os_list' missing." >&2
+  exit 1
+fi
+
+# Extract and rebuild json with jq
+tmp_json=$(mktemp)
+trap 'rm -f "$tmp_json"' EXIT
+
+# Copy input
+cp "$INPUT" "$tmp_json"
+
+# Iterate over os_list entries and normalize
+length=$(jq '.os_list | length' "$tmp_json")
+
+for ((i=0; i<length; i++)); do
+  pkg=$(jq -r ".os_list[$i].package" "$tmp_json")
+  if [ "$pkg" = "null" ] || [ -z "$pkg" ]; then
+    echo "ERROR: Missing package field for entry $i." >&2
+    exit 1
+  fi
+
+  # Get filename from package path
+  filename=$(basename "$pkg")
+
+  # Validate extension
+  matched=0
+  for ext in $accepted_exts; do
+    if [[ "$filename" == *"$ext" ]]; then
+      matched=1
+      break
+    fi
+  done
+
+  if [ $matched -eq 0 ]; then
+    echo "ERROR: Unsupported extension for package '$filename'." >&2
+    exit 1
+  fi
+
+  # Update package to clean filename
+  # Update url to REPO_BASE + filename
+  # Update manifest to REPO_BASE + filename_without_ext.manifest
+  clean_pkg_no_ext="${filename%.tar.zst}"
+  
+  jq_cmd=".os_list[$i].package = \"$filename\" |
+          .os_list[$i].url = \"$REPO_BASE/$filename\" |
+          .os_list[$i].manifest = \"$REPO_BASE/$clean_pkg_no_ext.manifest\""
+  
+  updated_json=$(jq "$jq_cmd" "$tmp_json")
+  echo "$updated_json" > "$tmp_json"
+done
+
+# Add _cidre_asset_layout block
+layout_block=$(jq -r '.' "$POLICY")
+final_json=$(jq --argjson layout "$layout_block" '._cidre_asset_layout = $layout' "$tmp_json")
+
+echo "$final_json" > "$OUTPUT"
+echo "Normalization completed successfully. Saved to $OUTPUT"
+exit 0

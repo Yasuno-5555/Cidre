@@ -116,7 +116,12 @@ for ((i=0; i<os_count; i++)); do
 
   # Warnings
   if [[ "$os_pkg" =~ \.tar\.zst$ ]]; then
-    echo "  [WARN] package format is .tar.zst. Upstream installer might enforce package.zip layers."
+    layout_present=$(jq -e '._cidre_asset_layout' "$FILE" >/dev/null 2>&1 && echo 1 || echo 0)
+    if [ "$layout_present" -eq 1 ]; then
+      echo "  [WARN] .tar.zst accepted for Cidre boundary probing. upstream installer compatibility is unproven."
+    else
+      echo "  [WARN] package format is .tar.zst. Upstream installer might enforce package.zip layers."
+    fi
   fi
 
   # Strict rules

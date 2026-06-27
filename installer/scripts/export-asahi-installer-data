@@ -2,15 +2,18 @@
 # export-asahi-installer-data: Converts Cidre metadata into Asahi-like candidate formats
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INPUT=""
 OUTPUT=""
 CHANNEL=""
 ID="cidre-seed-aarch64"
 REPO_BASE=""
 STRICT=0
+ASSET_POLICY=""
+NORMALIZE_LAYOUT=0
 
 usage() {
-  echo "Usage: $0 --input <path> --output <path> --channel <channel> [--id <id>] [--repo-base <url>] [--strict]"
+  echo "Usage: $0 --input <path> --output <path> --channel <channel> [--id <id>] [--repo-base <url>] [--strict] [--asset-layout-policy <path>] [--normalize-asset-layout]"
   exit 1
 }
 
@@ -58,6 +61,18 @@ while [ $# -gt 0 ]; do
       ;;
     --strict)
       STRICT=1
+      shift
+      ;;
+    --asset-layout-policy)
+      if [ $# -lt 2 ]; then
+        echo "ERROR: --asset-layout-policy requires a path." >&2
+        exit 1
+      fi
+      ASSET_POLICY="$2"
+      shift 2
+      ;;
+    --normalize-asset-layout)
+      NORMALIZE_LAYOUT=1
       shift
       ;;
     *)
@@ -183,6 +198,15 @@ jq -n \
        }
      ]
    }' > "$OUTPUT"
+
+if [ "$NORMALIZE_LAYOUT" -eq 1 ]; then
+  echo "Normalizing layout after export..."
+  norm_args=("--input" "$OUTPUT" "--output" "$OUTPUT" "--repo-base" "$derived_repo_base" "--force")
+  if [ -n "$ASSET_POLICY" ]; then
+    norm_args+=("--policy" "$ASSET_POLICY")
+  fi
+  "$SCRIPT_DIR/normalize-installer-asset-layout" "${norm_args[@]}"
+fi
 
 echo "Export completed successfully to $OUTPUT"
 exit 0

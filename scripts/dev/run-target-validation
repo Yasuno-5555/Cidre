@@ -29,6 +29,7 @@ usage() {
   echo "  --bootstrap-inspection-only Run bootstrap override static inspections"
   echo "  --bootstrap-report-only     Run bootstrap compatibility report tests"
   echo "  --installer-boundary-probe-only Run installer boundary probe tests"
+  echo "  --installer-asset-layout-only   Run installer asset layout normalization tests"
   exit 1
 }
 
@@ -100,6 +101,10 @@ while [ $# -gt 0 ]; do
       ;;
     --installer-boundary-probe-only)
       INSTALLER_BOUNDARY_PROBE_ONLY=1
+      shift
+      ;;
+    --installer-asset-layout-only)
+      INSTALLER_ASSET_LAYOUT_ONLY=1
       shift
       ;;
     *)
@@ -182,6 +187,12 @@ fi
 if [ "${INSTALLER_BOUNDARY_PROBE_ONLY:-0}" -eq 1 ]; then
   echo "Running installer boundary probe tests only..."
   "$REPO_ROOT/installer/scripts/run-controlled-installer-boundary-probe-tests"
+  exit 0
+fi
+
+if [ "${INSTALLER_ASSET_LAYOUT_ONLY:-0}" -eq 1 ]; then
+  echo "Running installer asset layout normalization tests only..."
+  "$REPO_ROOT/installer/scripts/run-installer-asset-layout-tests"
   exit 0
 fi
 

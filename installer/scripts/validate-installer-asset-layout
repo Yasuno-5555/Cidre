@@ -1,0 +1,172 @@
+#!/bin/bash
+# validate-installer-asset-layout: Validates generated metadata fields against layout policies
+set -euo pipefail
+
+METADATA=""
+REPO_BASE=""
+POLICY=""
+STRICT=0
+
+usage() {
+  echo "Usage: $0 --metadata <path> --repo-base <url> [--policy <path>] [--strict]"
+  exit 1
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --metadata)
+      if [ $# -lt 2 ]; then
+        echo "ERROR: --metadata requires a path." >&2
+        exit 1
+      fi
+      METADATA="$2"
+      shift 2
+      ;;
+    --repo-base)
+      if [ $# -lt 2 ]; then
+        echo "ERROR: --repo-base requires an argument." >&2
+        exit 1
+      fi
+      REPO_BASE="$2"
+      shift 2
+      ;;
+    --policy)
+      if [ $# -lt 2 ]; then
+        echo "ERROR: --policy requires a path." >&2
+        exit 1
+      fi
+      POLICY="$2"
+      shift 2
+      ;;
+    --strict)
+      STRICT=1
+      shift
+      ;;
+    *)
+      echo "ERROR: Unknown option: $1" >&2
+      usage
+      ;;
+  esac
+done
+
+if [ -z "$METADATA" ] || [ -z "$REPO_BASE" ]; then
+  echo "ERROR: Both --metadata and --repo-base are required." >&2
+  usage
+fi
+
+if [ ! -f "$METADATA" ]; then
+  echo "ERROR: Metadata file not found at $METADATA" >&2
+  exit 1
+fi
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+if [ -z "$POLICY" ]; then
+  POLICY="$REPO_ROOT/installer/metadata/asset-layout-policy.json"
+fi
+
+if [ ! -f "$POLICY" ]; then
+  echo "ERROR: Policy file not found at $POLICY" >&2
+  exit 1
+fi
+
+REPO_BASE="${REPO_BASE%/}"
+
+# Policy checks
+accepted_exts=$(jq -r '.accepted_extensions[]' "$POLICY")
+
+echo "Validating installer asset layout against policy..."
+
+# Check existence of _cidre_asset_layout
+if ! jq -e '._cidre_asset_layout' "$METADATA" >/dev/null 2>&1; then
+  echo "ERROR: Missing '_cidre_asset_layout' metadata section." >&2
+  exit 1
+fi
+
+# Ensure boundary_probe_supported=true
+probe_support=$(jq -r '._cidre_asset_layout.boundary_probe_support' "$METADATA")
+if [ "$probe_support" != "true" ]; then
+  echo "ERROR: Policy does not support boundary probing." >&2
+  exit 1
+fi
+
+# Ensure upstream_installer_compatibility is not claimed as proven
+upstream_compat=$(jq -r '._cidre_asset_layout.upstream_installer_compatibility' "$METADATA")
+if [ "$upstream_compat" = "proven" ]; then
+  echo "ERROR: Safety violation. Upstream compatibility must not be claimed as proven." >&2
+  exit 1
+fi
+
+# Validate os_list entries
+length=$(jq '.os_list | length' "$METADATA")
+if [ "$length" -eq 0 ]; then
+  echo "ERROR: os_list is empty." >&2
+  exit 1
+fi
+
+for ((i=0; i<length; i++)); do
+  pkg=$(jq -r ".os_list[$i].package" "$METADATA")
+  url=$(jq -r ".os_list[$i].url" "$METADATA")
+  manifest=$(jq -r ".os_list[$i].manifest" "$METADATA")
+  sha256=$(jq -r ".os_list[$i].sha256" "$METADATA")
+
+  if [ "$pkg" = "null" ] || [ -z "$pkg" ]; then
+    echo "ERROR: Entry $i missing package." >&2
+    exit 1
+  fi
+  if [ "$url" = "null" ] || [ -z "$url" ]; then
+    echo "ERROR: Entry $i missing url." >&2
+    exit 1
+  fi
+  if [ "$manifest" = "null" ] || [ -z "$manifest" ]; then
+    echo "ERROR: Entry $i missing manifest." >&2
+    exit 1
+  fi
+  if [ "$sha256" = "null" ] || [ -z "$sha256" ]; then
+    echo "ERROR: Entry $i missing sha256." >&2
+    exit 1
+  fi
+
+  # Validate url starts with REPO_BASE
+  if [[ "$url" != "$REPO_BASE"* ]]; then
+    echo "ERROR: URL '$url' does not align with REPO_BASE '$REPO_BASE'." >&2
+    exit 1
+  fi
+
+  # Validate manifest starts with REPO_BASE
+  if [[ "$manifest" != "$REPO_BASE"* ]]; then
+    echo "ERROR: Manifest URL '$manifest' does not align with REPO_BASE '$REPO_BASE'." >&2
+    exit 1
+  fi
+
+  # Validate package resolves to url filename
+  filename=$(basename "$pkg")
+  if [[ "$url" != *"$filename" ]]; then
+    echo "ERROR: package '$pkg' filename does not match URL endpoint '$url'." >&2
+    exit 1
+  fi
+
+  # Check extension against policy
+  matched=0
+  for ext in $accepted_exts; do
+    if [[ "$filename" == *"$ext" ]]; then
+      matched=1
+      break
+    fi
+  done
+
+  if [ $matched -eq 0 ]; then
+    echo "ERROR: Mismatched/unsupported extension for package '$filename'." >&2
+    exit 1
+  fi
+
+  # Strict mode validation
+  if [ "$STRICT" -eq 1 ]; then
+    if [ "$sha256" = "PLACEHOLDER_SHA256" ]; then
+      echo "ERROR: Strict validation fail. Found PLACEHOLDER_SHA256." >&2
+      exit 1
+    fi
+  fi
+done
+
+echo "Installer asset layout validated successfully."
+exit 0

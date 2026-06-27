@@ -1,0 +1,12 @@
+{
+  "policy_version": "0.1",
+  "artifact_kind": "cidre-seed-rootfs",
+  "accepted_extensions": [".tar.zst"],
+  "repo_base_mode": "absolute-url-or-derived",
+  "package_mode": "filename-or-relative-path",
+  "manifest_required": true,
+  "sha256_required": true,
+  "boundary_probe_support": true,
+  "upstream_installer_compatibility": "unproven",
+  "warning": ".tar.zst is Cidre-supported for boundary probing. This does not prove upstream installer compatibility."
+}
