@@ -1,0 +1,82 @@
+#!/bin/sh
+set -eu
+
+_firstboot_done="/var/lib/cidre/firstboot.done"
+
+_enable_unit() {
+  local unit="$1"
+  if command -v systemctl >/dev/null 2>&1; then
+    if systemctl enable "$unit" >/dev/null 2>&1; then
+      echo "  enabled: $unit"
+    else
+      echo "  warning: failed to enable $unit"
+      echo "           please run: systemctl enable $unit"
+    fi
+  else
+    echo "  warning: systemctl not found; cannot enable $unit"
+  fi
+}
+
+_disable_unit() {
+  local unit="$1"
+  if command -v systemctl >/dev/null 2>&1; then
+    if systemctl disable "$unit" >/dev/null 2>&1; then
+      echo "  disabled: $unit"
+    else
+      echo "  warning: failed to disable $unit"
+      echo "           please run: systemctl disable $unit"
+    fi
+  else
+    echo "  warning: systemctl not found; cannot disable $unit"
+  fi
+}
+
+_prepare_firstboot_environment() {
+  install -d -m 0755 /var/lib/cidre
+
+  _enable_unit NetworkManager.service
+  _enable_unit cidre-firstboot.service
+  _disable_unit greetd.service
+
+  if command -v passwd >/dev/null 2>&1; then
+    passwd -l root >/dev/null 2>&1 || true
+    echo "  root password login locked"
+    echo "  Root password login has been locked for firstboot safety."
+    echo "  A normal sudo user must be created through Cidre OOBE."
+  else
+    echo "  warning: passwd not found; root lock not applied"
+  fi
+}
+
+_print_seed_report() {
+  echo ""
+  echo "=== Cidre Seed Configuration Report ==="
+  if [ -e "$_firstboot_done" ]; then
+    echo "  Status: Firstboot OOBE already completed. System is active."
+  else
+    echo "  Status: Firstboot OOBE is pending."
+    echo "  Next boot target: tty1 Cidre OOBE flow."
+    echo "  Security notice: Root password login is locked."
+  fi
+  echo "======================================="
+  echo ""
+}
+
+post_install() {
+  echo "==> Preparing Cidre seed firstboot environment..."
+  _prepare_firstboot_environment
+  _print_seed_report
+}
+
+post_upgrade() {
+  echo "==> Checking Cidre seed firstboot environment..."
+
+  if [ ! -e "$_firstboot_done" ]; then
+    echo "  firstboot is still pending; repairing seed service state."
+    _prepare_firstboot_environment
+  else
+    echo "  firstboot already completed; leaving login and root policy unchanged."
+  fi
+
+  _print_seed_report
+}
