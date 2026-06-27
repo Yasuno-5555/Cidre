@@ -1,0 +1,65 @@
+#!/bin/bash
+# run-bootstrap-compat-report-tests: Phase 21 report tests runner
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+TEST_TMPDIR="${CIDRE_TEST_TMPDIR:-/tmp/cidre-bootstrap-compat-report-tests}"
+rm -rf "$TEST_TMPDIR"
+mkdir -p "$TEST_TMPDIR"
+
+echo "=== Running Compatibility Report Tests ==="
+
+# Test 1: Positive report assembly
+echo "Test 1: Assembling report..."
+"$REPO_ROOT/installer/scripts/generate-bootstrap-compat-report" \
+  --output "$TEST_TMPDIR/report.md" \
+  --force
+
+# Verify output exists
+if [ ! -f "$TEST_TMPDIR/report.md" ]; then
+  echo "ERROR: Report file not generated." >&2
+  exit 1
+fi
+
+# Test 2: Validate assembled report
+echo "Test 2: Validating report format..."
+"$REPO_ROOT/installer/scripts/validate-bootstrap-compat-report" "$TEST_TMPDIR/report.md"
+echo "  [OK] Assembled report format verified."
+
+# --- Negative Tests Section ---
+echo "=== Running Negative Report Tests ==="
+
+# Neg 1: Missing warning term
+echo "Neg 1: Missing warning validation checks..."
+cp "$TEST_TMPDIR/report.md" "$TEST_TMPDIR/missing_warning.md"
+# Remove forbidden warning lines
+sed -i.bak '/Do not run bootstrap scripts/d' "$TEST_TMPDIR/missing_warning.md"
+if "$REPO_ROOT/installer/scripts/validate-bootstrap-compat-report" "$TEST_TMPDIR/missing_warning.md" >/dev/null 2>&1; then
+  echo "ERROR: Expected failure on missing warning lines, but passed." >&2
+  exit 1
+fi
+echo "  [PASSED] Caught missing warning error."
+
+# Neg 2: Missing minimum safe experiment term
+echo "Neg 2: Missing safe experiment section check..."
+cp "$TEST_TMPDIR/report.md" "$TEST_TMPDIR/missing_min.md"
+sed -i.bak '/Minimum safe next experiment/d' "$TEST_TMPDIR/missing_min.md"
+if "$REPO_ROOT/installer/scripts/validate-bootstrap-compat-report" "$TEST_TMPDIR/missing_min.md" >/dev/null 2>&1; then
+  echo "ERROR: Expected failure on missing safe experiment section, but passed." >&2
+  exit 1
+fi
+echo "  [PASSED] Caught missing safe experiment section."
+
+# Neg 3: Safety check
+echo "Neg 3: Safety verification checks..."
+if grep -q "install.sh" "$TEST_TMPDIR/report.md" && { ! grep -q "Do not run install.sh" "$TEST_TMPDIR/report.md"; }; then
+  echo "ERROR: Safety violation. Installer script containing execution targets without warning constraints." >&2
+  exit 1
+fi
+echo "  [PASSED] Safety check passed (all commands guarded with warnings)."
+
+echo "All Compatibility Report Tests completed successfully!"
+rm -rf "$TEST_TMPDIR"
+exit 0

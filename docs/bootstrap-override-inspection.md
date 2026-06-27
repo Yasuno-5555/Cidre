@@ -26,3 +26,10 @@ Variable overrides allow custom data redirection:
 Dangerous boundaries are located where:
 - Partition commands (`gpt`, `fdisk`) are triggered.
 - System setups (`bless`, `nvram`) modify macOS variables.
+
+---
+
+## 4. Relationship to Compatibility Report
+
+Phase 20 collects static inspection evidence.
+Phase 21 turns that evidence into a decision report and minimum-safe-experiment definition.

@@ -1,0 +1,153 @@
+#!/bin/bash
+# generate-bootstrap-compat-report: Assembles compatibility notes into a consolidated report
+set -euo pipefail
+
+OUTPUT=""
+DOCS_OUT=""
+FORCE=0
+
+usage() {
+  echo "Usage: $0 --output <path> [--docs-output <path>] [--force]"
+  exit 1
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --output)
+      if [ $# -lt 2 ]; then
+        echo "ERROR: --output requires a path." >&2
+        exit 1
+      fi
+      OUTPUT="$2"
+      shift 2
+      ;;
+    --docs-output)
+      if [ $# -lt 2 ]; then
+        echo "ERROR: --docs-output requires a path." >&2
+        exit 1
+      fi
+      DOCS_OUT="$2"
+      shift 2
+      ;;
+    --force)
+      FORCE=1
+      shift
+      ;;
+    *)
+      echo "ERROR: Unknown option: $1" >&2
+      usage
+      ;;
+  esac
+done
+
+if [ -z "$OUTPUT" ]; then
+  echo "ERROR: --output is required." >&2
+  usage
+fi
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+NOTES_DIR="$REPO_ROOT/installer/bootstrap/notes"
+
+REQUIRED_NOTES=(
+  "bootstrap-variable-map.md"
+  "bootstrap-fetch-flow.md"
+  "bootstrap-execution-boundary.md"
+  "mutation-boundary.md"
+  "cidre-override-entrypoints.md"
+  "minimum-safe-override-experiment.md"
+  "bootstrap-risk-register.md"
+  "cidre-installer-entry-strategy.md"
+)
+
+# Verify preconditions
+for note in "${REQUIRED_NOTES[@]}"; do
+  if [ ! -f "$NOTES_DIR/$note" ]; then
+    echo "ERROR: Required compatibility note not found: $note" >&2
+    exit 1
+  fi
+done
+
+if [ -f "$OUTPUT" ] && [ "$FORCE" -eq 0 ]; then
+  echo "ERROR: Output file already exists at $OUTPUT. Use --force to overwrite." >&2
+  exit 1
+fi
+
+echo "Assembling compatibility notes..."
+
+report_body=$(cat <<EOF
+# Bootstrap Override Compatibility Report
+
+Cidre can currently generate, serve, fetch, and validate installer_data-shaped metadata, but it has not executed the real Asahi/ALARM installer. The next safe step is a controlled non-executing bootstrap override probe, not a real install.
+
+> [!WARNING]
+> Do not run bootstrap scripts yet.
+> Do not run install.sh.
+> Do not execute curl | sh.
+> No real installer execution.
+
+---
+
+## 1. Variables Discovered
+
+\$(cat "$NOTES_DIR/bootstrap-variable-map.md")
+
+---
+
+## 2. Fetch Flow Summary
+
+\$(cat "$NOTES_DIR/bootstrap-fetch-flow.md")
+
+---
+
+## 3. Execution Boundary Summary
+
+\$(cat "$NOTES_DIR/bootstrap-execution-boundary.md")
+
+---
+
+## 4. Mutation Boundary Summary
+
+\$(cat "$NOTES_DIR/mutation-boundary.md")
+
+---
+
+## 5. Override Strategy
+
+\$(cat "$NOTES_DIR/cidre-installer-entry-strategy.md")
+
+---
+
+## 6. Risk Register Summary
+
+\$(cat "$NOTES_DIR/bootstrap-risk-register.md")
+
+---
+
+## 7. Minimum Safe Next Experiment
+
+\$(cat "$NOTES_DIR/minimum-safe-override-experiment.md")
+
+---
+
+## 8. Open Questions / Recommendation for Phase 22
+- Recommend proceeding to Phase 22 (Controlled Bootstrap Override Probe) to test environment variables validation checks.
+- Do not authorize installer execution.
+EOF
+)
+
+# Evaluate nested cats
+eval "assembled_content=\"$report_body\""
+
+echo "$assembled_content" > "$OUTPUT"
+echo "Report generated successfully at $OUTPUT"
+
+if [ -n "$DOCS_OUT" ]; then
+  if [ -f "$DOCS_OUT" ] && [ "$FORCE" -eq 0 ]; then
+    echo "ERROR: Docs output file already exists at $DOCS_OUT. Use --force to overwrite." >&2
+    exit 1
+  fi
+  echo "$assembled_content" > "$DOCS_OUT"
+  echo "Docs report synchronized successfully at $DOCS_OUT"
+fi
+
+exit 0

@@ -1,0 +1,63 @@
+#!/bin/bash
+# validate-bootstrap-compat-report: Checks report files for required warnings and boundary sections
+set -euo pipefail
+
+FILE=""
+
+usage() {
+  echo "Usage: $0 <report.md>"
+  exit 1
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -*)
+      echo "ERROR: Unknown option: $1" >&2
+      usage
+      ;;
+    *)
+      if [ -n "$FILE" ]; then
+        echo "ERROR: Multiple files specified." >&2
+        exit 1
+      fi
+      FILE="$1"
+      shift
+      ;;
+  esac
+done
+
+if [ -z "$FILE" ]; then
+  echo "ERROR: File path is required." >&2
+  usage
+fi
+
+if [ ! -f "$FILE" ]; then
+  echo "ERROR: File not found at $FILE" >&2
+  exit 1
+fi
+
+echo "Validating compatibility report format..."
+
+REQUIRED_STRINGS=(
+  "Do not run bootstrap scripts"
+  "Do not run install.sh"
+  "Do not execute curl | sh"
+  "No real installer execution"
+  "Minimum safe next experiment"
+)
+
+errors=0
+for term in "${REQUIRED_STRINGS[@]}"; do
+  if ! grep -q "$term" "$FILE"; then
+    echo "  [FAIL] Missing required warning or section: '$term'" >&2
+    errors=$((errors + 1))
+  fi
+done
+
+if [ $errors -gt 0 ]; then
+  echo "Validation failed with $errors error(s)." >&2
+  exit 2
+fi
+
+echo "Compatibility report validation successful."
+exit 0
