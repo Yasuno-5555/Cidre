@@ -1,0 +1,5 @@
+#!/bin/bash
+# install-local-packages: Skeleton script for package deployment
+set -euo pipefail
+
+echo "  [DRY-RUN] install-local-packages skeleton executed."

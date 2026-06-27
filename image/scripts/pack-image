@@ -1,0 +1,5 @@
+#!/bin/bash
+# pack-image: Skeleton script for archiving target rootfs image
+set -euo pipefail
+
+echo "  [DRY-RUN] pack-image skeleton executed."

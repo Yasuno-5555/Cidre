@@ -1,0 +1,5 @@
+#!/bin/bash
+# prepare-rootfs: Skeleton script for rootfs workdir preparations
+set -euo pipefail
+
+echo "  [DRY-RUN] prepare-rootfs skeleton executed."

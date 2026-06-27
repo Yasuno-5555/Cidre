@@ -1,0 +1,64 @@
+#!/bin/bash
+# validate-rootfs: Validates seed rootfs sanity
+set -euo pipefail
+
+ROOTFS=""
+DRY_RUN=0
+
+usage() {
+  echo "Usage: $0 --rootfs <path> [--dry-run]"
+  exit 1
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --rootfs)
+      if [ $# -lt 2 ]; then
+        echo "ERROR: --rootfs requires an argument." >&2
+        exit 1
+      fi
+      ROOTFS="$2"
+      shift 2
+      ;;
+    --dry-run)
+      DRY_RUN=1
+      shift
+      ;;
+    *)
+      echo "ERROR: Unknown option: $1" >&2
+      usage
+      ;;
+  esac
+done
+
+if [ -z "$ROOTFS" ]; then
+  echo "ERROR: --rootfs is required." >&2
+  usage
+fi
+
+# Fatal error if firstboot.done completion marker is already in the target
+# This check is executed even in dry-run if the file is physically present at the path
+MARKER_PATH="$ROOTFS/var/lib/cidre/firstboot.done"
+if [ -f "$MARKER_PATH" ]; then
+  echo "FATAL ERROR: Completion marker firstboot.done found in seed rootfs!" >&2
+  echo "A seed image must never contain /var/lib/cidre/firstboot.done." >&2
+  exit 2
+fi
+
+if [ "$DRY_RUN" -eq 1 ]; then
+  echo "  === Rootfs Validation [DRY-RUN SIMULATION] ==="
+  echo "  [DRY-RUN] would verify: $ROOTFS/usr/bin/cidre-oobe exists"
+  echo "  [DRY-RUN] would verify: $ROOTFS/usr/bin/cidre-user-setup exists"
+  echo "  [DRY-RUN] would verify: $ROOTFS/usr/lib/systemd/system/cidre-firstboot.service exists"
+  echo "  [DRY-RUN] would verify: $ROOTFS/usr/share/cidre/defaults exists"
+  echo "  [DRY-RUN] would verify: NetworkManager service unit is active/enabled"
+  echo "  [DRY-RUN] would verify: root password policy is locked"
+  echo "  [DRY-RUN] would verify: $ROOTFS/var/lib/cidre directory exists"
+  echo "  [DRY-RUN] would verify: $ROOTFS/var/lib/cidre/firstboot.done does NOT exist (PASSED)"
+  echo "  Validation Simulation: PASSED"
+  exit 0
+fi
+
+# Real build validation (Future execution)
+echo "Running rootfs validation on $ROOTFS..."
+# Checks would be implemented here in a later phase.

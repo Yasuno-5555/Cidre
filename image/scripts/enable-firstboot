@@ -1,0 +1,5 @@
+#!/bin/bash
+# enable-firstboot: Skeleton script for firstboot targets enablement
+set -euo pipefail
+
+echo "  [DRY-RUN] enable-firstboot skeleton executed."

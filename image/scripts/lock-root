@@ -1,0 +1,5 @@
+#!/bin/bash
+# lock-root: Skeleton script for root login locking rules
+set -euo pipefail
+
+echo "  [DRY-RUN] lock-root skeleton executed."
