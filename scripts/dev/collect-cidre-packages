@@ -7,6 +7,30 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 OUT_DIR="$REPO_ROOT/packages/out"
 ARCH_DIR="$REPO_ROOT/packages/arch"
+CLEAN=0
+
+usage() {
+  echo "Usage: $0 [--clean]"
+  exit 1
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --clean)
+      CLEAN=1
+      shift
+      ;;
+    *)
+      echo "ERROR: Unknown option: $1" >&2
+      usage
+      ;;
+  esac
+done
+
+if [ "$CLEAN" -eq 1 ]; then
+  echo "Clearing packages/out/ directory..."
+  rm -rf "${OUT_DIR:?}"/* || true
+fi
 
 mkdir -p "$OUT_DIR"
 

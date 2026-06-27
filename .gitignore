@@ -16,3 +16,10 @@
 /.local/test-system/
 /state/macos-bootstrap/
 m1n1/
+
+# Target Validation Logs & Output Staging
+/logs/target-validation/*.log
+/packages/out/*.pkg.tar.*
+/work/
+/out/
+

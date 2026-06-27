@@ -36,8 +36,12 @@ done
 # Verify makepkg availability on host
 if ! command -v makepkg >/dev/null 2>&1; then
   echo "ERROR: makepkg was not found." >&2
-  echo "This validation requires ALARM/Arch." >&2
-  echo "Run this later on the target environment." >&2
+  echo "" >&2
+  echo "What happened:" >&2
+  echo "  Package validation requires an Arch/ALARM target." >&2
+  echo "" >&2
+  echo "Next step:" >&2
+  echo "  Run this validation later on an ALARM/Arch environment." >&2
   exit 1
 fi
 
@@ -61,23 +65,32 @@ for pkg in "${PACKAGES[@]}"; do
   pkg_path="$PACKAGES_DIR/$pkg"
   if [ ! -d "$pkg_path" ]; then
     echo "ERROR: Package directory $pkg_path is missing!" >&2
+    echo "Next step: Re-clone or verify repo integrity." >&2
     exit 1
   fi
 
-  echo "==> Validating package: $pkg"
+  echo "==> Processing package: $pkg"
   cd "$pkg_path"
 
   if [ "$PRINT_ONLY" -eq 1 ]; then
-    echo "  Generating .SRCINFO..."
-    makepkg --printsrcinfo > .SRCINFO
+    echo "  Generating .SRCINFO for $pkg..."
+    if ! makepkg --printsrcinfo > .SRCINFO; then
+      echo "ERROR: failed to generate .SRCINFO for $pkg." >&2
+      echo "Next step: Check PKGBUILD syntax." >&2
+      exit 1
+    fi
   fi
 
   if [ "$BUILD_PKG" -eq 1 ]; then
-    echo "  Building package..."
-    makepkg -f --noconfirm
+    echo "  Building package: $pkg..."
+    if ! makepkg -f --noconfirm; then
+      echo "ERROR: failed to build package $pkg." >&2
+      echo "Next step: Check package dependencies and compile logs." >&2
+      exit 1
+    fi
   fi
 
   cd "$REPO_ROOT"
 done
 
-echo "Package integration validation complete successfully."
+echo "Package integration validation completed successfully."

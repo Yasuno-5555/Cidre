@@ -1,0 +1,130 @@
+#!/bin/bash
+# run-target-validation: Phase 7 target package/rootfs validation orchestrator
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+DRY_RUN=0
+PACKAGES_ONLY=0
+ROOTFS_PATH=""
+APPLY=0
+
+usage() {
+  echo "Usage: $0 [options]"
+  echo "Options:"
+  echo "  --dry-run           Perform dry-run simulation of the pipeline"
+  echo "  --packages-only     Only build and collect packages"
+  echo "  --rootfs <path>     Path to test rootfs to validate"
+  echo "  --apply             Perform real package install and firstboot enable (requires --rootfs)"
+  exit 1
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --dry-run)
+      DRY_RUN=1
+      shift
+      ;;
+    --packages-only)
+      PACKAGES_ONLY=1
+      shift
+      ;;
+    --rootfs)
+      if [ $# -lt 2 ]; then
+        echo "ERROR: --rootfs requires a path argument." >&2
+        exit 1
+      fi
+      ROOTFS_PATH="$2"
+      shift 2
+      ;;
+    --apply)
+      APPLY=1
+      shift
+      ;;
+    *)
+      echo "ERROR: Unknown option: $1" >&2
+      usage
+      ;;
+  esac
+done
+
+# Prerequisite: verify host environment contains required tools
+echo "Checking target environment prerequisites..."
+REQUIRED_TOOLS=(bash makepkg pacman systemctl grep awk sed find tar)
+missing=0
+for tool in "${REQUIRED_TOOLS[@]}"; do
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    echo "  Missing tool: $tool" >&2
+    missing=$((missing + 1))
+  fi
+done
+
+if [ $missing -gt 0 ]; then
+  echo "" >&2
+  echo "makepkg/target-tools was not found." >&2
+  echo "" >&2
+  echo "What happened:" >&2
+  echo "  Package validation requires an Arch/ALARM target." >&2
+  echo "" >&2
+  echo "Next step:" >&2
+  echo "  Run this validation later on an ALARM/Arch environment." >&2
+  exit 1
+fi
+
+echo "All required tools verified."
+echo ""
+
+# Stage 1: Build Packages
+echo "=== Stage 1/4: Building Cidre Packages ==="
+if [ "$DRY_RUN" -eq 1 ]; then
+  echo "  [DRY-RUN] would validate PKGBUILDs via build-cidre-packages --printsrcinfo-only"
+else
+  "$REPO_ROOT/scripts/dev/build-cidre-packages" --build
+fi
+echo ""
+
+# Stage 2: Collect Packages
+echo "=== Stage 2/4: Collecting Built Packages ==="
+if [ "$DRY_RUN" -eq 1 ]; then
+  echo "  [DRY-RUN] would collect package archives using collect-cidre-packages"
+else
+  "$REPO_ROOT/scripts/dev/collect-cidre-packages"
+fi
+echo ""
+
+if [ "$PACKAGES_ONLY" -eq 1 ]; then
+  echo "Validation completed (packages only)."
+  exit 0
+fi
+
+# Stage 3: Rootfs Integration (if rootfs is provided)
+if [ -n "$ROOTFS_PATH" ]; then
+  echo "=== Stage 3/4: Rootfs Integration ==="
+  if [ "$DRY_RUN" -eq 1 ]; then
+    "$REPO_ROOT/image/scripts/install-local-packages" --rootfs "$ROOTFS_PATH" --packages "$REPO_ROOT/packages/out" --dry-run
+    "$REPO_ROOT/image/scripts/enable-firstboot" --rootfs "$ROOTFS_PATH" --dry-run
+  else
+    if [ "$APPLY" -eq 1 ]; then
+      "$REPO_ROOT/image/scripts/install-local-packages" --rootfs "$ROOTFS_PATH" --packages "$REPO_ROOT/packages/out" --apply
+      "$REPO_ROOT/image/scripts/enable-firstboot" --rootfs "$ROOTFS_PATH" --apply
+    else
+      echo "ERROR: Use --apply to perform mutation or --dry-run." >&2
+      exit 1
+    fi
+  fi
+  echo ""
+
+  # Stage 4: Sanity Validation
+  echo "=== Stage 4/4: Rootfs Sanity Check ==="
+  if [ "$DRY_RUN" -eq 1 ]; then
+    "$REPO_ROOT/image/scripts/validate-rootfs" --rootfs "$ROOTFS_PATH" --dry-run
+  else
+    "$REPO_ROOT/image/scripts/validate-rootfs" --rootfs "$ROOTFS_PATH"
+  fi
+  echo ""
+else
+  echo "Skipped Stage 3 & 4 (No --rootfs provided)."
+fi
+
+echo "=== Target Validation Finished Successfully ==="

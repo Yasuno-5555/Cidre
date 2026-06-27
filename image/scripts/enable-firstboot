@@ -46,6 +46,12 @@ if [ "$DRY_RUN" -eq 0 ] && [ "$APPLY" -eq 0 ]; then
   exit 1
 fi
 
+# Safety Rules: Refuse if target is root / or empty
+if [ "$ROOTFS" = "/" ] || [ -z "$ROOTFS" ]; then
+  echo "ERROR: Refusing to enable firstboot targets on live host root '/' or empty path." >&2
+  exit 1
+fi
+
 # Validation: Rootfs must not contain firstboot.done completion marker
 MARKER_PATH="$ROOTFS/var/lib/cidre/firstboot.done"
 if [ -f "$MARKER_PATH" ]; then
@@ -73,7 +79,14 @@ _enable_unit_root() {
   if systemctl --root "$ROOTFS" enable "$unit" >/dev/null 2>&1; then
     echo "  Enabled: $unit"
   else
-    echo "  Warning: Failed to enable $unit in target rootfs." >&2
+    echo "" >&2
+    echo "What happened:" >&2
+    echo "  systemctl --root failed to enable $unit." >&2
+    echo "" >&2
+    echo "Next step:" >&2
+    echo "  Verify the unit exists in the rootfs:" >&2
+    echo "    $ROOTFS/usr/lib/systemd/system/$unit" >&2
+    exit 1
   fi
 }
 
