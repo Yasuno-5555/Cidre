@@ -1628,7 +1628,7 @@ elif [ "$RC_READINESS_MODE" = true ]; then
     print_result OK "Cidre repository tree found at $REPO_ROOT."
 
     # Verify all commands exist and are executable in tree
-    for cmd in install install-macos scripts/cidre-installer scripts/cidre-macos-installer scripts/cidre-macos-check scripts/cidre-macos-seed scripts/cidre-macos-handoff scripts/cidre-seed scripts/cidre-seed-verify scripts/cidre-seed-import scripts/cidre-resume scripts/cidre-downstream-check scripts/cidre-upstream-status scripts/cidre-image-layout-check scripts/cidre-installer-metadata-check scripts/cidre-firstboot-root scripts/cidre-oobe scripts/cidre-firstboot-state scripts/cidre-firstboot-handoff scripts/cidre-image-build scripts/cidre-image-inspect scripts/cidre-image-checksum scripts/cidre-image-manifest scripts/cidre-image-clean scripts/cidre-user-setup scripts/cidre-doctor scripts/cidre-recovery scripts/cidre-snapshot scripts/cidre-update scripts/cidre-maintenance scripts/cidre-firstboot scripts/cidre-welcome scripts/cidre-audio scripts/check-packages; do
+    for cmd in install install-macos scripts/cidre-installer scripts/cidre-macos-installer scripts/cidre-macos-check scripts/cidre-macos-seed scripts/cidre-macos-handoff scripts/cidre-seed scripts/cidre-seed-verify scripts/cidre-seed-import scripts/cidre-resume scripts/cidre-downstream-check scripts/cidre-upstream-status scripts/cidre-image-layout-check scripts/cidre-installer-metadata-check scripts/cidre-firstboot-root components/welcome/bin/cidre-oobe scripts/cidre-firstboot-state scripts/cidre-firstboot-handoff scripts/cidre-image-build scripts/cidre-image-inspect scripts/cidre-image-checksum scripts/cidre-image-manifest scripts/cidre-image-clean components/config/bin/cidre-user-setup scripts/cidre-doctor scripts/cidre-recovery scripts/cidre-snapshot scripts/cidre-update scripts/cidre-maintenance components/healthcheck/bin/cidre-healthcheck components/welcome/bin/cidre-welcome scripts/cidre-audio scripts/check-packages components/firstboot/bin/cidre-firstboot-finish; do
       if [ -f "${REPO_ROOT}/${cmd}" ]; then
         print_result OK "Command tree file '${cmd}' exists."
         if [ -x "${REPO_ROOT}/${cmd}" ] || [[ "$cmd" == *.py ]]; then
@@ -1640,6 +1640,7 @@ elif [ "$RC_READINESS_MODE" = true ]; then
         print_result FAIL "Command tree file '${cmd}' is missing."
       fi
     done
+
 
     # Boot validation scripts (v0.17.0)
     for cmd in scripts/cidre-builder-status scripts/cidre-image-mount scripts/cidre-image-unmount scripts/cidre-rootfs-inspect scripts/cidre-image-boot-readiness scripts/cidre-boot-checklist scripts/cidre-boot-log-collect; do
@@ -1851,13 +1852,14 @@ elif [ "$RC_READINESS_MODE" = true ]; then
   fi
 
   # 2. Check globally installed commands
-  for cmd in install cidre-installer cidre-user-setup cidre-doctor cidre-recovery cidre-snapshot cidre-update cidre-maintenance cidre-firstboot cidre-welcome cidre-audio; do
+  for cmd in install cidre-installer cidre-user-setup cidre-doctor cidre-recovery cidre-snapshot cidre-update cidre-maintenance cidre-welcome cidre-audio cidre-healthcheck cidre-oobe cidre-firstboot-finish; do
     if command -v "$cmd" >/dev/null 2>&1; then
       print_result OK "Globally installed command '$cmd' is available in PATH."
     else
       print_result WARN "Globally installed command '$cmd' is missing from PATH."
     fi
   done
+
 
   # 3. State directory layout checks
   if [ -d "$STATE_DIR" ]; then

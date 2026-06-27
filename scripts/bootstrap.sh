@@ -412,12 +412,28 @@ EOF
   fi
 
   # --- Install cidre scripts to /usr/bin ---
-  for script in cidre-user-setup cidre-welcome cidre-audio cidre-recovery cidre-doctor cidre-firstboot cidre-snapshot cidre-repair; do
-    if [ -f "$CIDRE_ROOT/scripts/$script" ]; then
-      run_cmd "Installing $script" cp "$CIDRE_ROOT/scripts/$script" "/usr/bin/$script"
+  for script in cidre-user-setup cidre-welcome cidre-oobe cidre-healthcheck cidre-firstboot-finish cidre-audio cidre-recovery cidre-doctor cidre-snapshot cidre-repair; do
+    local src_path=""
+    case "$script" in
+      cidre-user-setup)        src_path="$CIDRE_ROOT/components/config/bin/cidre-user-setup" ;;
+      cidre-welcome)           src_path="$CIDRE_ROOT/components/welcome/bin/cidre-welcome" ;;
+      cidre-oobe)              src_path="$CIDRE_ROOT/components/welcome/bin/cidre-oobe" ;;
+      cidre-healthcheck)       src_path="$CIDRE_ROOT/components/healthcheck/bin/cidre-healthcheck" ;;
+      cidre-firstboot-finish)  src_path="$CIDRE_ROOT/components/firstboot/bin/cidre-firstboot-finish" ;;
+      *)                       src_path="$CIDRE_ROOT/scripts/$script" ;;
+    esac
+
+    if [ -f "$src_path" ]; then
+      run_cmd "Installing $script" cp "$src_path" "/usr/bin/$script"
       run_cmd "Making $script executable" chmod +x "/usr/bin/$script"
     fi
   done
+
+  # Install firstboot systemd unit
+  if [ -f "$CIDRE_ROOT/components/firstboot/systemd/cidre-firstboot.service" ]; then
+    run_cmd "Installing firstboot systemd unit" cp "$CIDRE_ROOT/components/firstboot/systemd/cidre-firstboot.service" "/usr/lib/systemd/system/cidre-firstboot.service"
+  fi
+
 
   # Also install lib/ if present
   if [ -d "$CIDRE_ROOT/lib" ]; then
