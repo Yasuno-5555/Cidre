@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+out_dir="${1:-.jackrose-audit}"
+repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+scan_roots=(
+  install
+  install-macos
+  preinstall
+  README.md
+  installer
+  image
+  rescue
+  uninstaller
+  scripts
+  apps/macos
+  components
+  downstream
+  resources
+  docs
+)
+
+cd "$repo_root"
+mkdir -p "$out_dir"
+
+echo "[audit] writing to $out_dir"
+
+git ls-files > "$out_dir/tracked-files.txt"
+git status --short > "$out_dir/git-status.txt"
+
+git grep -n -i -E \
+  'cidre|jackrose|installer|install|firstboot|welcome|recovery|stage|staging|target|handoff|calamares|m1n1|grub|efi|esp|partition|disk|mount|apfs|nvram|boot|payload|plan|doctor|readiness|wrapper|apply|confirmation|verify' \
+  -- "${scan_roots[@]}" \
+  ':(exclude).jackrose-audit/**' \
+  > "$out_dir/installer-related-grep.txt" || true
+
+find "${scan_roots[@]}" \
+  \( -path 'apps/macos/JackroseApp/.build' -o -path 'apps/macos/JackroseApp/.swiftpm' \) -prune -o \
+  -type f \( \
+    -iname '*install*' -o \
+    -iname '*installer*' -o \
+    -iname '*firstboot*' -o \
+    -iname '*welcome*' -o \
+    -iname '*recovery*' -o \
+    -iname '*stage*' -o \
+    -iname '*staging*' -o \
+    -iname '*handoff*' -o \
+    -iname '*target*' -o \
+    -iname '*boot*' -o \
+    -iname '*doctor*' -o \
+    -iname '*readiness*' -o \
+    -iname '*wrapper*' \
+  \) -print \
+  | LC_ALL=C sort \
+  > "$out_dir/installish-files.txt"
+
+{
+  echo "# Jackrose Installer Asset Audit"
+  echo
+  echo "Generated: $(date -Iseconds)"
+  echo
+  echo "## Counts"
+  echo
+  echo "- tracked files: $(wc -l < "$out_dir/tracked-files.txt")"
+  echo "- install-ish files: $(wc -l < "$out_dir/installish-files.txt")"
+  echo "- grep hits: $(wc -l < "$out_dir/installer-related-grep.txt")"
+  echo
+  echo "## Install-ish files"
+  echo
+  sed 's/^/- `/' "$out_dir/installish-files.txt" | sed 's/$/`/'
+} > "$out_dir/README.md"
+
+echo "[audit] done"
+echo "[audit] see $out_dir/README.md"

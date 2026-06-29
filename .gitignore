@@ -28,5 +28,5 @@ m1n1/
 /out/*.manifest
 /out/
 /installer/metadata/backups/*.json
-
+.jackrose-audit/
 

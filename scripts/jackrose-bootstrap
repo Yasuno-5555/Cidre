@@ -1,0 +1,533 @@
+#!/bin/sh
+set -eu
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+REPO_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+
+VERSION=1
+MODE="check"
+JSON_MODE=0
+DRY_RUN=0
+RESET_STATE=0
+
+DEFAULT_STATE_ROOT="/var/lib/jackrose/bootstrap"
+DEFAULT_LOG_ROOT="/var/log/jackrose"
+LOCAL_STATE_ROOT="$REPO_ROOT/.local/state/jackrose/bootstrap"
+LOCAL_LOG_ROOT="$REPO_ROOT/.local/state/jackrose/logs"
+
+STATE_ROOT="${JACKROSE_BOOTSTRAP_STATE_ROOT:-$DEFAULT_STATE_ROOT}"
+LOG_ROOT="${JACKROSE_BOOTSTRAP_LOG_ROOT:-$DEFAULT_LOG_ROOT}"
+
+RESULTS_FILE=""
+STATE_FILE=""
+REPORT_TEXT=""
+REPORT_JSON=""
+
+steps="
+environment_check
+user_check
+network_check
+pacman_check
+disk_space_check
+repo_setup
+keyring_setup
+package_install
+config_deploy
+input_setup
+session_setup
+service_enable
+firstboot_enable
+doctor
+final_report
+"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  jackrose-bootstrap [options]
+
+Options:
+  --check         Run non-destructive readiness checks
+  --apply         Run safe mock bootstrap flow and write state/report artifacts
+  --resume        Resume from existing bootstrap state in safe mock mode
+  --report        Print the latest bootstrap report
+  --reset-state   Remove bootstrap state and reports
+  --json          Emit machine-readable output where supported
+  --dry-run       Preview planned apply actions without changing state
+  -h, --help      Show this help
+EOF
+}
+
+say() {
+  printf '%s\n' "$*"
+}
+
+warn() {
+  printf 'WARN: %s\n' "$*" >&2
+}
+
+init_paths() {
+  if [ ! -d "$STATE_ROOT" ] && [ ! -w "$(dirname "$STATE_ROOT")" ] 2>/dev/null; then
+    STATE_ROOT="$LOCAL_STATE_ROOT"
+  fi
+  if [ ! -d "$LOG_ROOT" ] && [ ! -w "$(dirname "$LOG_ROOT")" ] 2>/dev/null; then
+    LOG_ROOT="$LOCAL_LOG_ROOT"
+  fi
+
+  STATE_FILE="$STATE_ROOT/state.json"
+  REPORT_TEXT="$LOG_ROOT/bootstrap-report.txt"
+  REPORT_JSON="$LOG_ROOT/bootstrap-report.json"
+  RESULTS_FILE="$(mktemp)"
+  trap 'rm -f "$RESULTS_FILE"' EXIT HUP INT TERM
+}
+
+ensure_dirs() {
+  mkdir -p "$STATE_ROOT" "$LOG_ROOT"
+}
+
+emit_result() {
+  level="$1"
+  key="$2"
+  summary="$3"
+  detail="${4:-}"
+  printf '%s|%s|%s|%s\n' "$level" "$key" "$summary" "$detail" >> "$RESULTS_FILE"
+}
+
+has_failures() {
+  grep -Eq '^(FAIL|BLOCKED)\|' "$RESULTS_FILE"
+}
+
+command_exists() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+check_linux() {
+  if [ "$(uname -s)" = "Linux" ]; then
+    emit_result OK running_on_linux "running on Linux"
+  else
+    emit_result FAIL running_on_linux "not running on Linux" "current kernel is $(uname -s)"
+  fi
+}
+
+check_arch() {
+  arch="$(uname -m 2>/dev/null || printf 'unknown')"
+  if [ "$arch" = "aarch64" ] || [ "$arch" = "arm64" ]; then
+    emit_result OK architecture "architecture is $arch"
+  else
+    emit_result WARN architecture "architecture is $arch" "expected aarch64 for supported Apple Silicon bootstrap"
+  fi
+}
+
+check_asahi_alarm() {
+  model="$(cat /proc/device-tree/model 2>/dev/null || true)"
+  release="$(uname -r 2>/dev/null || true)"
+  os_release="$(cat /etc/os-release 2>/dev/null || true)"
+  if printf '%s\n%s\n%s\n' "$model" "$release" "$os_release" | grep -Eiq 'asahi|arch linux arm|alarm'; then
+    emit_result OK asahi_alarm "Asahi or ALARM environment detected"
+  else
+    emit_result WARN asahi_alarm "Asahi or ALARM environment not confidently detected" "manual verification recommended"
+  fi
+}
+
+check_normal_user() {
+  if [ "$(id -u)" -eq 0 ]; then
+    if awk -F: '$3 >= 1000 && $1 != "nobody" { found=1 } END { exit found ? 0 : 1 }' /etc/passwd 2>/dev/null; then
+      emit_result OK normal_user "normal user exists"
+    else
+      emit_result WARN normal_user "normal user not detected" "bootstrap may need to create or prepare one later"
+    fi
+  else
+    emit_result OK normal_user "current user is $(id -un)"
+  fi
+}
+
+check_network() {
+  if command_exists ip && ip route get 1.1.1.1 >/dev/null 2>&1; then
+    emit_result OK network "network appears reachable"
+  else
+    emit_result WARN network "network reachability not confirmed" "connect using nmcli or equivalent"
+  fi
+}
+
+check_dns() {
+  if command_exists getent && getent hosts archlinuxarm.org >/dev/null 2>&1; then
+    emit_result OK dns "DNS lookup works"
+  elif command_exists ping && ping -c 1 -W 2 archlinuxarm.org >/dev/null 2>&1; then
+    emit_result OK dns "DNS lookup works"
+  else
+    emit_result WARN dns "DNS lookup failed" "package sync may fail until DNS is fixed"
+  fi
+}
+
+check_pacman() {
+  if ! command_exists pacman; then
+    emit_result FAIL pacman "pacman is not available"
+    return
+  fi
+  if pacman -Sup --print-format '%n' bash >/dev/null 2>&1; then
+    emit_result OK pacman "pacman package metadata query succeeded"
+  else
+    emit_result WARN pacman "pacman package metadata query failed" "sync database or network may be unavailable"
+  fi
+}
+
+check_privilege() {
+  if [ "$(id -u)" -eq 0 ]; then
+    emit_result OK privilege "running as root"
+  elif command_exists sudo; then
+    emit_result OK privilege "sudo is available"
+  else
+    emit_result WARN privilege "sudo is not available" "root mode will be required for later bootstrap stages"
+  fi
+}
+
+check_disk_space() {
+  free_kb="$(df -Pk / 2>/dev/null | awk 'NR==2 {print $4}')"
+  if [ -z "${free_kb:-}" ]; then
+    emit_result WARN disk_space "disk space could not be determined"
+    return
+  fi
+  if [ "$free_kb" -ge 5242880 ]; then
+    emit_result OK disk_space "enough disk space is available" "free_kb=$free_kb"
+  else
+    emit_result WARN disk_space "disk space may be too low" "free_kb=$free_kb, recommended >= 5242880"
+  fi
+}
+
+check_clock() {
+  year="$(date +%Y 2>/dev/null || printf '0')"
+  if [ "$year" -ge 2024 ] && [ "$year" -le 2035 ]; then
+    emit_result OK clock "system clock is sane"
+  else
+    emit_result WARN clock "system clock may be wrong" "current year is $year"
+  fi
+}
+
+check_japanese_locale() {
+  if locale -a 2>/dev/null | grep -Eq 'ja_JP\.utf8|ja_JP\.UTF-8'; then
+    emit_result OK japanese_locale "Japanese locale is available"
+  else
+    emit_result WARN japanese_locale "Japanese locale not configured"
+  fi
+}
+
+check_tty() {
+  if [ -n "${WAYLAND_DISPLAY:-}" ] || [ -n "${DISPLAY:-}" ]; then
+    emit_result OK session_context "graphical session detected"
+  else
+    emit_result WARN session_context "running from TTY"
+  fi
+}
+
+run_checks() {
+  : > "$RESULTS_FILE"
+  check_linux
+  check_arch
+  check_asahi_alarm
+  check_normal_user
+  check_network
+  check_dns
+  check_pacman
+  check_privilege
+  check_disk_space
+  check_clock
+  check_japanese_locale
+  check_tty
+}
+
+print_human_results() {
+  while IFS='|' read -r level key summary detail; do
+    case "$level" in
+      OK) prefix='[OK]' ;;
+      WARN) prefix='[WARN]' ;;
+      FAIL) prefix='[FAIL]' ;;
+      BLOCKED) prefix='[BLOCKED]' ;;
+      *) prefix='[INFO]' ;;
+    esac
+    if [ -n "$detail" ]; then
+      say "$prefix $summary ($detail)"
+    else
+      say "$prefix $summary"
+    fi
+  done < "$RESULTS_FILE"
+}
+
+print_json_results() {
+  python3 - "$RESULTS_FILE" <<'PY'
+import json, sys
+path = sys.argv[1]
+items = []
+overall = "ok"
+with open(path, "r", encoding="utf-8") as fh:
+    for raw in fh:
+        level, key, summary, detail = raw.rstrip("\n").split("|", 3)
+        items.append({
+            "level": level.lower(),
+            "key": key,
+            "summary": summary,
+            "detail": detail or None,
+        })
+        if level in {"FAIL", "BLOCKED"}:
+            overall = "fail"
+        elif level == "WARN" and overall == "ok":
+            overall = "warn"
+print(json.dumps({
+    "schema_version": 1,
+    "command": "jackrose-bootstrap",
+    "mode": "check",
+    "status": overall,
+    "results": items,
+}, ensure_ascii=False, indent=2))
+PY
+}
+
+iso_now() {
+  date -Iseconds
+}
+
+write_state() {
+  status="$1"
+  last_error="$2"
+  python3 - "$STATE_FILE" "$status" "$last_error" "$(iso_now)" <<'PY'
+import json, os, sys
+state_file, status, last_error, now = sys.argv[1:5]
+steps = [
+    "environment_check",
+    "user_check",
+    "network_check",
+    "pacman_check",
+    "disk_space_check",
+    "repo_setup",
+    "keyring_setup",
+    "package_install",
+    "config_deploy",
+    "input_setup",
+    "session_setup",
+    "service_enable",
+    "firstboot_enable",
+    "doctor",
+    "final_report",
+]
+data = {
+    "version": 1,
+    "status": status,
+    "started_at": now,
+    "updated_at": now,
+    "steps": {step: "pending" for step in steps},
+    "last_error": None if last_error == "null" else last_error,
+}
+if os.path.exists(state_file):
+    with open(state_file, "r", encoding="utf-8") as fh:
+        current = json.load(fh)
+    data.update(current)
+    data["status"] = status
+    data["updated_at"] = now
+    data["last_error"] = None if last_error == "null" else last_error
+with open(state_file, "w", encoding="utf-8") as fh:
+    json.dump(data, fh, ensure_ascii=False, indent=2)
+PY
+}
+
+update_step() {
+  step="$1"
+  value="$2"
+  python3 - "$STATE_FILE" "$step" "$value" "$(iso_now)" <<'PY'
+import json, sys
+state_file, step, value, now = sys.argv[1:5]
+with open(state_file, "r", encoding="utf-8") as fh:
+    data = json.load(fh)
+data.setdefault("steps", {})[step] = value
+data["updated_at"] = now
+with open(state_file, "w", encoding="utf-8") as fh:
+    json.dump(data, fh, ensure_ascii=False, indent=2)
+PY
+}
+
+build_report() {
+  failed_step="$1"
+  last_error="$2"
+  installed=""
+  if command_exists pacman; then
+    installed="$(pacman -Qq 2>/dev/null | grep '^jackrose' | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
+  fi
+  [ -n "$installed" ] || installed="none detected"
+  next_cmd="scripts/jackrose-bootstrap --check"
+  if [ -f "$STATE_FILE" ]; then
+    next_cmd="sudo scripts/jackrose-bootstrap --resume"
+  fi
+  {
+    echo "Jackrose Bootstrap Report"
+    echo
+    echo "timestamp: $(iso_now)"
+    echo "hostname: $(hostname 2>/dev/null || printf unknown)"
+    echo "kernel: $(uname -sr 2>/dev/null || printf unknown)"
+    echo "architecture: $(uname -m 2>/dev/null || printf unknown)"
+    echo "detected distro: $(grep '^PRETTY_NAME=' /etc/os-release 2>/dev/null | cut -d= -f2- | tr -d '\"' || printf unknown)"
+    echo "current user: $(id -un 2>/dev/null || printf unknown)"
+    echo "network status: $(awk -F'|' '$2 == "network" {print $3}' "$RESULTS_FILE" | tail -n 1)"
+    echo "pacman status: $(awk -F'|' '$2 == "pacman" {print $3}' "$RESULTS_FILE" | tail -n 1)"
+    echo "installed Jackrose packages: $installed"
+    echo "failed step: $failed_step"
+    echo "last error: $last_error"
+    echo "state file: $STATE_FILE"
+    echo "next suggested command: $next_cmd"
+  } > "$REPORT_TEXT"
+
+  python3 - "$REPORT_JSON" "$STATE_FILE" "$REPORT_TEXT" "$failed_step" "$last_error" <<'PY'
+import json, os, sys
+report_json, state_file, report_text, failed_step, last_error = sys.argv[1:6]
+payload = {
+    "schema_version": 1,
+    "command": "jackrose-bootstrap",
+    "state_file": state_file,
+    "report_text": report_text,
+    "failed_step": None if failed_step == "none" else failed_step,
+    "last_error": None if last_error == "none" else last_error,
+}
+if os.path.exists(state_file):
+    with open(state_file, "r", encoding="utf-8") as fh:
+        payload["state"] = json.load(fh)
+with open(report_json, "w", encoding="utf-8") as fh:
+    json.dump(payload, fh, ensure_ascii=False, indent=2)
+PY
+}
+
+run_check_mode() {
+  run_checks
+  if [ "$JSON_MODE" -eq 1 ]; then
+    print_json_results
+  else
+    say "Jackrose Bootstrap"
+    say
+    say "This tool converts an Asahi ALARM minimal system into a Jackrose desktop environment."
+    say
+    print_human_results
+  fi
+}
+
+run_apply_mode() {
+  ensure_dirs
+  if [ "$DRY_RUN" -eq 1 ]; then
+    run_checks
+    say "Jackrose Bootstrap"
+    say
+    say "Dry-run only. Planned steps:"
+    for step in $steps; do
+      say "- $step"
+    done
+    say
+    print_human_results
+    return
+  fi
+
+  write_state "in_progress" "null"
+  run_checks
+
+  if has_failures; then
+    update_step environment_check failed
+    write_state "failed" "readiness checks failed"
+    build_report "environment_check" "readiness checks failed"
+    if [ "$JSON_MODE" -eq 1 ]; then
+      cat "$REPORT_JSON"
+    else
+      say "Bootstrap failed at: environment_check"
+      say
+      say "Reason:"
+      say "readiness checks failed"
+      say
+      say "Try:"
+      say "sudo scripts/jackrose-bootstrap --resume"
+      say
+      say "Report:"
+      say "$REPORT_TEXT"
+    fi
+    return 1
+  fi
+
+  update_step environment_check done
+  update_step user_check done
+  update_step network_check done
+  update_step pacman_check done
+  update_step disk_space_check done
+
+  for step in repo_setup keyring_setup package_install config_deploy input_setup session_setup service_enable firstboot_enable doctor; do
+    update_step "$step" "safe_mock_pending"
+  done
+  update_step final_report done
+  write_state "ready_for_manual_apply" "null"
+  build_report "none" "none"
+
+  if [ "$JSON_MODE" -eq 1 ]; then
+    cat "$REPORT_JSON"
+  else
+    say "Jackrose Bootstrap"
+    say
+    say "Safe mock apply completed."
+    say "No destructive or package-changing actions were executed."
+    say
+    say "State:"
+    say "$STATE_FILE"
+    say "Report:"
+    say "$REPORT_TEXT"
+  fi
+}
+
+run_resume_mode() {
+  ensure_dirs
+  if [ ! -f "$STATE_FILE" ]; then
+    warn "no bootstrap state found at $STATE_FILE"
+    return 1
+  fi
+  run_apply_mode
+}
+
+run_report_mode() {
+  ensure_dirs
+  if [ ! -f "$REPORT_TEXT" ] || [ ! -f "$REPORT_JSON" ]; then
+    run_checks
+    build_report "none" "none"
+  fi
+  if [ "$JSON_MODE" -eq 1 ]; then
+    cat "$REPORT_JSON"
+  else
+    cat "$REPORT_TEXT"
+  fi
+}
+
+run_reset_state() {
+  rm -f "$STATE_FILE" "$REPORT_TEXT" "$REPORT_JSON"
+  say "Reset bootstrap state and reports."
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --check) MODE="check"; shift ;;
+    --apply) MODE="apply"; shift ;;
+    --resume) MODE="resume"; shift ;;
+    --report) MODE="report"; shift ;;
+    --reset-state) RESET_STATE=1; shift ;;
+    --json) JSON_MODE=1; shift ;;
+    --dry-run) DRY_RUN=1; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *)
+      printf 'ERROR: unknown option: %s\n' "$1" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+done
+
+init_paths
+
+if [ "$RESET_STATE" -eq 1 ]; then
+  ensure_dirs
+  run_reset_state
+  exit 0
+fi
+
+case "$MODE" in
+  check) run_check_mode ;;
+  apply) run_apply_mode ;;
+  resume) run_resume_mode ;;
+  report) run_report_mode ;;
+esac
