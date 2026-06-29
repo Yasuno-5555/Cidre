@@ -1,0 +1,13 @@
+[Unit]
+Description=Jackrose Emergency Banner
+DefaultDependencies=no
+After=rescue.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/jackrose/jackrose-emergency-banner --reason emergency-target
+StandardOutput=tty
+TTYPath=/dev/tty1
+
+[Install]
+WantedBy=rescue.target

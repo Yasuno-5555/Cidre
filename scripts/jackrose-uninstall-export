@@ -1,0 +1,170 @@
+#!/bin/sh
+set -eu
+
+JACKROSE_REPO_ROOT="${JACKROSE_REPO_ROOT:-/home/yasuno/Projects/Jackrose}"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  jackrose-uninstall-export [options]
+
+Options:
+  --output <dir>
+  --include-logs
+  --include-reports
+  --dry-run
+  --json
+  --help
+EOF
+}
+
+output_dir=""
+include_logs=false
+include_reports=false
+dry_run=false
+json_mode=false
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --output) output_dir="$2"; shift 2 ;;
+    --include-logs) include_logs=true; shift ;;
+    --include-reports) include_reports=true; shift ;;
+    --dry-run) dry_run=true; shift ;;
+    --json) json_mode=true; shift ;;
+    --help|-h|help) usage; exit 0 ;;
+    *) printf 'ERROR: Unknown option: %s\n' "$1" >&2; usage; exit 1 ;;
+  esac
+done
+
+# If output_dir is specified, make sure it is absolute
+if [ -n "$output_dir" ]; then
+  mkdir -p "$output_dir"
+  # Convert to absolute path
+  output_dir="$(cd "$output_dir" && pwd)"
+fi
+
+# Determine export files paths/destinations
+export_opts=""
+if [ "$include_logs" = "true" ]; then
+  export_opts="$export_opts --include-logs"
+fi
+if [ "$include_reports" = "true" ]; then
+  export_opts="$export_opts --include-reports"
+fi
+if [ "$dry_run" = "true" ]; then
+  export_opts="$export_opts --dry-run"
+fi
+
+if [ -n "$output_dir" ]; then
+  export_opts="$export_opts --output $output_dir/jackrose-state-export.tar.gz"
+fi
+
+# Run the tools
+if [ "$json_mode" = "true" ]; then
+  printf '{\n  "dry_run": %s,\n' "$([ "$dry_run" = "true" ] && echo "true" || echo "false")"
+fi
+
+# Set stage to running
+if [ "$dry_run" = "false" ]; then
+  "$JACKROSE_REPO_ROOT/scripts/jackrose-uninstall-state" --set-stage state-export --set-status running --set-next-command "jackrose-uninstall-export" --set-next-stage "partition-audit"
+fi
+
+# 1. State export
+if [ "$json_mode" = "true" ]; then
+  printf '  "state_export": '
+  if [ "$dry_run" = "true" ]; then
+    printf '{"status": "dry-run"}'
+  else
+    if "$JACKROSE_REPO_ROOT/scripts/jackrose-state-export" $export_opts >/dev/null; then
+      printf '{"status": "success"}'
+    else
+      printf '{"status": "failed"}'
+    fi
+  fi
+  printf ',\n'
+else
+  echo ">>> Exporting Jackrose State..."
+  # shellcheck disable=SC2086
+  "$JACKROSE_REPO_ROOT/scripts/jackrose-state-export" $export_opts
+fi
+
+# 2. Exit plan
+exit_plan_opts=""
+if [ -n "$output_dir" ]; then
+  exit_plan_opts="--output $output_dir/exit-plan.md"
+fi
+if [ "$json_mode" = "true" ]; then
+  printf '  "exit_plan": '
+  if [ "$dry_run" = "true" ]; then
+    printf '{"status": "dry-run"}'
+  else
+    if "$JACKROSE_REPO_ROOT/scripts/jackrose-exit-plan" $exit_plan_opts >/dev/null; then
+      printf '{"status": "success"}'
+    else
+      printf '{"status": "failed"}'
+    fi
+  fi
+  printf ',\n'
+else
+  echo ">>> Generating Exit Plan..."
+  # shellcheck disable=SC2086
+  "$JACKROSE_REPO_ROOT/scripts/jackrose-exit-plan" $exit_plan_opts
+fi
+
+# 3. Partition audit
+audit_opts=""
+if [ -n "$output_dir" ]; then
+  audit_opts="--output $output_dir"
+fi
+if [ "$json_mode" = "true" ]; then
+  printf '  "partition_audit": '
+  if [ "$dry_run" = "true" ]; then
+    printf '{"status": "dry-run"}'
+  else
+    if "$JACKROSE_REPO_ROOT/scripts/jackrose-partition-audit" $audit_opts >/dev/null; then
+      printf '{"status": "success"}'
+    else
+      printf '{"status": "failed"}'
+    fi
+  fi
+  printf ',\n'
+else
+  echo ">>> Performing Partition Audit..."
+  # shellcheck disable=SC2086
+  "$JACKROSE_REPO_ROOT/scripts/jackrose-partition-audit" $audit_opts
+fi
+
+# 4. Goodbye banner
+if [ "$json_mode" = "true" ]; then
+  printf '  "goodbye": '
+  if [ "$dry_run" = "true" ]; then
+    printf '{"status": "dry-run"}'
+  else
+    if "$JACKROSE_REPO_ROOT/scripts/jackrose-goodbye" >/dev/null 2>&1; then
+      printf '{"status": "success"}'
+    else
+      printf '{"status": "failed"}'
+    fi
+  fi
+  printf '\n}\n'
+else
+  echo ">>> Saying Goodbye..."
+  if [ "$dry_run" = "false" ]; then
+    "$JACKROSE_REPO_ROOT/scripts/jackrose-goodbye" || true
+  fi
+fi
+
+# If not dry-run, mark complete
+if [ "$dry_run" = "false" ]; then
+  # Write state flags
+  if [ "$(id -u)" -eq 0 ] && [ "$(uname)" = "Linux" ]; then
+    mkdir -p /var/lib/jackrose/uninstall
+    touch /var/lib/jackrose/uninstall/export-completed
+  fi
+  
+  user_uninstall_dir="${HOME}/.local/state/jackrose/uninstall/current"
+  mkdir -p "$user_uninstall_dir"
+  touch "$user_uninstall_dir/uninstall-export-report.md"
+  
+  "$JACKROSE_REPO_ROOT/scripts/jackrose-uninstall-state" --set-stage state-export --set-status passed --set-next-command "jackrose-uninstall-target-scan" --set-next-stage "target-scan"
+fi

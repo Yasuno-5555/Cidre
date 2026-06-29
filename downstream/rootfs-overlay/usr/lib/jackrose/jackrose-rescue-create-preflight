@@ -1,0 +1,107 @@
+#!/bin/sh
+set -eu
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+REPO_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+STATE_ROOT="${JACKROSE_RESCUE_CREATE_STATE_ROOT:-$REPO_ROOT/.local/state/jackrose/rescue-create}"
+CURRENT_DIR="$STATE_ROOT/current"
+target=""
+artifact="$REPO_ROOT/.local/state/jackrose/rescue/artifacts/jackrose-rescue-rootfs.tar.gz"
+metadata="$REPO_ROOT/.local/state/jackrose/rescue-boot/current/rescue-slot-metadata.json"
+state_export="$REPO_ROOT/.local/state/jackrose/exit/current/jackrose-state-export.tar.gz"
+json_output=false
+output_file="$CURRENT_DIR/create-preflight.json"
+
+usage() {
+  cat <<EOF
+Usage: jackrose-rescue-create-preflight [options]
+
+Options:
+  --target <target>
+  --artifact <path>
+  --metadata <path>
+  --json
+  --help
+EOF
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --target) target="$2"; shift 2 ;;
+    --artifact) artifact="$2"; shift 2 ;;
+    --metadata) metadata="$2"; shift 2 ;;
+    --json) json_output=true; shift ;;
+    --help) usage; exit 0 ;;
+    *) printf 'ERROR: unknown option: %s\n' "$1" >&2; usage >&2; exit 1 ;;
+  esac
+done
+
+mkdir -p "$CURRENT_DIR"
+
+tools_ok=true
+for tool in tar mount findmnt lsblk blkid; do
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    tools_ok=false
+  fi
+done
+
+state_export_exists=false
+artifact_exists=false
+metadata_exists=false
+target_provided=false
+target_protected=false
+target_summary="not-checked"
+status="ready"
+
+[ -n "$target" ] && target_provided=true
+[ -f "$state_export" ] && state_export_exists=true
+[ -f "$artifact" ] && artifact_exists=true
+[ -f "$metadata" ] && metadata_exists=true
+
+if [ -n "$target" ] && [ -x "$SCRIPT_DIR/jackrose-rescue-target-check" ]; then
+  target_json="$("$SCRIPT_DIR/jackrose-rescue-target-check" --target "$target" --json 2>/dev/null || true)"
+  if printf '%s' "$target_json" | grep -q '"classification": "blocked-'; then
+    target_protected=true
+  fi
+  target_summary="$(printf '%s' "$target_json" | sed -n 's/.*"classification": "\([^"]*\)".*/\1/p' | head -n 1)"
+  [ -n "$target_summary" ] || target_summary="unknown"
+fi
+
+if [ "$tools_ok" != "true" ] || [ "$target_provided" != "true" ] || \
+   [ "$state_export_exists" != "true" ] || [ "$artifact_exists" != "true" ] || \
+   [ "$metadata_exists" != "true" ] || [ "$target_protected" = "true" ]; then
+  status="blocked"
+fi
+
+cat > "$output_file" <<EOF
+{
+  "schema_version": 1,
+  "status": "$status",
+  "dry_run_default": true,
+  "target": "$(printf '%s' "$target" | sed 's/"/\\"/g')",
+  "target_provided": $target_provided,
+  "target_summary": "$target_summary",
+  "target_protected": $target_protected,
+  "state_export_exists": $state_export_exists,
+  "artifact_exists": $artifact_exists,
+  "metadata_exists": $metadata_exists,
+  "required_tools_ok": $tools_ok
+}
+EOF
+
+if [ "$json_output" = "true" ]; then
+  cat "$output_file"
+else
+  printf 'Jackrose rescue create preflight\n\n'
+  if [ "$status" = "ready" ]; then
+    printf '[OK] preflight ready\n'
+  else
+    printf '[BLOCKED] creation preflight is not ready\n'
+  fi
+  printf '[%s] state export: %s\n' "$( [ "$state_export_exists" = "true" ] && printf OK || printf WARN )" "$state_export"
+  printf '[%s] rescue artifact: %s\n' "$( [ "$artifact_exists" = "true" ] && printf OK || printf WARN )" "$artifact"
+  printf '[%s] rescue metadata: %s\n' "$( [ "$metadata_exists" = "true" ] && printf OK || printf WARN )" "$metadata"
+  printf '[%s] target: %s (%s)\n' "$( [ "$target_provided" = "true" ] && printf OK || printf WARN )" "${target:-missing}" "$target_summary"
+  printf '[%s] dry-run default\n' "$( [ "$status" = "ready" ] && printf OK || printf OK )"
+  printf '%s\n' "$output_file"
+fi

@@ -1,0 +1,32 @@
+#!/bin/sh
+set -eu
+
+json_mode=false
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --json) json_mode=true; shift ;;
+    --help|-h) echo "Usage: jackrose-app-terminal-free-check [--json]"; exit 0 ;;
+    *) echo "ERROR: unknown option: $1" >&2; exit 2 ;;
+  esac
+done
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+REPO_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+python3 - "$json_mode" "$REPO_ROOT" <<'PY'
+import json, pathlib, sys
+json_mode = sys.argv[1] == "true"
+repo_root = pathlib.Path(sys.argv[2])
+docs = [
+    repo_root / "docs/jackrose-app-terminal-free-policy.md",
+    repo_root / "apps/macos/JackroseApp/Sources/JackroseApp/Views/SetupWizardRootView.swift",
+]
+passed = all(path.exists() for path in docs)
+payload = {
+    "schema_version": 1,
+    "command": "jackrose-app-terminal-free-check",
+    "status": "pass" if passed else "fail",
+    "summary": "Terminal-free policy assets checked.",
+    "checks": [{"path": str(path.relative_to(repo_root)), "passed": path.exists()} for path in docs]
+}
+print(json.dumps(payload, indent=2) if json_mode else payload["summary"])
+PY

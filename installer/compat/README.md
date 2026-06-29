@@ -1,4 +1,4 @@
-# Cidre Installer Compatibility Study Workspace
+# Jackrose Installer Compatibility Study Workspace
 
 This directory performs metadata shape research and fields mappings comparisons against upstream Asahi/ALARM installer definitions.
 

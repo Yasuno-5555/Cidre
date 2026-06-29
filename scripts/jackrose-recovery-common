@@ -1,0 +1,66 @@
+#!/bin/sh
+set -eu
+
+jackrose_recovery_timestamp() {
+  date -u +%Y-%m-%dT%H:%M:%SZ
+}
+
+jackrose_recovery_user_root() {
+  printf '%s\n' "${JACKROSE_RECOVERY_USER_STATE_ROOT:-$HOME/.local/state/jackrose/recovery-screen}"
+}
+
+jackrose_recovery_user_current_dir() {
+  printf '%s/current\n' "$(jackrose_recovery_user_root)"
+}
+
+jackrose_recovery_user_history_dir() {
+  printf '%s/history\n' "$(jackrose_recovery_user_root)"
+}
+
+jackrose_recovery_system_root() {
+  printf '%s\n' "${JACKROSE_RECOVERY_SYSTEM_ROOT:-/var/lib/jackrose/recovery-screen}"
+}
+
+jackrose_recovery_prepare_dirs() {
+  mkdir -p "$(jackrose_recovery_user_current_dir)" "$(jackrose_recovery_user_history_dir)"
+  mkdir -p "$(jackrose_recovery_system_root)" 2>/dev/null || true
+}
+
+jackrose_recovery_current_path() {
+  printf '%s/%s\n' "$(jackrose_recovery_user_current_dir)" "$1"
+}
+
+jackrose_recovery_system_path() {
+  printf '%s/%s\n' "$(jackrose_recovery_system_root)" "$1"
+}
+
+jackrose_recovery_write_state() {
+  name="$1"
+  value="$2"
+  system_root="$(jackrose_recovery_system_root)"
+  jackrose_recovery_prepare_dirs
+  printf '%s\n' "$value" > "$(jackrose_recovery_current_path "$name")"
+  if [ -d "$system_root" ] && [ -w "$system_root" ]; then
+    printf '%s\n' "$value" > "$system_root/$name"
+  fi
+}
+
+jackrose_recovery_read_state() {
+  name="$1"
+  if [ -f "$(jackrose_recovery_current_path "$name")" ]; then
+    cat "$(jackrose_recovery_current_path "$name")"
+  elif [ -f "$(jackrose_recovery_system_path "$name")" ]; then
+    cat "$(jackrose_recovery_system_path "$name")"
+  fi
+}
+
+jackrose_recovery_append_log() {
+  file_name="$1"
+  shift
+  jackrose_recovery_prepare_dirs
+  printf '[%s] %s\n' "$(jackrose_recovery_timestamp)" "$*" >> "$(jackrose_recovery_current_path "$file_name")"
+}
+
+jackrose_recovery_json_escape() {
+  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}

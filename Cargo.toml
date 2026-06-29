@@ -7,11 +7,11 @@ members = [
 
 [workspace.package]
 version = "26.4.0"
-description = "Cidre desktop component based on niri"
+description = "Jackrose desktop component based on niri"
 authors = ["Ivan Molodetskikh <yalterz@gmail.com>"]
 license = "GPL-3.0-or-later"
 edition = "2021"
-repository = "https://github.com/Yasuno-5555/Cidre"
+repository = "https://github.com/Yasuno-5555/Jackrose"
 rust-version = "1.85"
 
 [workspace.dependencies]
@@ -39,7 +39,7 @@ rev = "ff5fa7df392cecfba049ffed55cdaa4e98a8e7ef"
 # path = "../smithay/smithay-drm-extras"
 
 [package]
-name = "niri-cidre"
+name = "niri-jackrose"
 version.workspace = true
 description.workspace = true
 authors.workspace = true
@@ -55,7 +55,7 @@ keywords = ["wayland", "compositor", "tiling", "smithay", "wm"]
 name = "niri"
 
 [[bin]]
-name = "niri-cidre"
+name = "niri-jackrose"
 path = "src/main.rs"
 
 [dependencies]
@@ -179,12 +179,12 @@ similar.opt-level = 3
 [package.metadata.generate-rpm]
 version = "26.04"
 assets = [
-    { source = "target/release/niri-cidre", dest = "/usr/bin/", mode = "755" },
-    { source = "resources/cidre-session", dest = "/usr/bin/", mode = "755" },
-    { source = "resources/cidre.desktop", dest = "/usr/share/wayland-sessions/", mode = "644" },
+    { source = "target/release/niri-jackrose", dest = "/usr/bin/", mode = "755" },
+    { source = "resources/jackrose-session", dest = "/usr/bin/", mode = "755" },
+    { source = "resources/jackrose.desktop", dest = "/usr/share/wayland-sessions/", mode = "644" },
     { source = "resources/niri-portals.conf", dest = "/usr/share/xdg-desktop-portal/", mode = "644" },
-    { source = "resources/cidre.service", dest = "/usr/lib/systemd/user/", mode = "644" },
-    { source = "resources/cidre-shutdown.target", dest = "/usr/lib/systemd/user/", mode = "644" },
+    { source = "resources/jackrose.service", dest = "/usr/lib/systemd/user/", mode = "644" },
+    { source = "resources/jackrose-shutdown.target", dest = "/usr/lib/systemd/user/", mode = "644" },
 ]
 [package.metadata.generate-rpm.requires]
 ghostty = "*"
@@ -193,10 +193,10 @@ fuzzel = "*"
 [package.metadata.deb]
 depends = "ghostty, fuzzel"
 assets = [
-    ["target/release/niri-cidre", "usr/bin/", "755"],
-    ["resources/cidre-session", "usr/bin/", "755"],
-    ["resources/cidre.desktop", "/usr/share/wayland-sessions/", "644"],
+    ["target/release/niri-jackrose", "usr/bin/", "755"],
+    ["resources/jackrose-session", "usr/bin/", "755"],
+    ["resources/jackrose.desktop", "/usr/share/wayland-sessions/", "644"],
     ["resources/niri-portals.conf", "/usr/share/xdg-desktop-portal/", "644"],
-    ["resources/cidre.service", "/usr/lib/systemd/user/", "644"],
-    ["resources/cidre-shutdown.target", "/usr/lib/systemd/user/", "644"],
+    ["resources/jackrose.service", "/usr/lib/systemd/user/", "644"],
+    ["resources/jackrose-shutdown.target", "/usr/lib/systemd/user/", "644"],
 ]

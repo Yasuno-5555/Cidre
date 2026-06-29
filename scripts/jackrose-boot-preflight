@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+# jackrose-boot-preflight: Check preconditions before controlled boot testing
+set -euo pipefail
+
+artifact_path=""
+manifest_path=""
+profile="developer"
+strict_mode=false
+output_dir=""
+
+usage() {
+  cat <<EOF
+Usage: jackrose-boot-preflight [options]
+
+Verify preconditions before launching controlled boot tests.
+
+Options:
+  --artifact <path>   Path to the registered image artifact
+  --manifest <path>   Path to the manifest file
+  --profile <name>    Profile name (default: developer)
+  --strict            Strict validation mode
+  --output <dir>      Output directory for preflight logs
+  --help              Show this help
+EOF
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --artifact) artifact_path="$2"; shift 2 ;;
+    --manifest) manifest_path="$2"; shift 2 ;;
+    --profile) profile="$2"; shift 2 ;;
+    --strict) strict_mode=true; shift ;;
+    --output) output_dir="$2"; shift 2 ;;
+    --help) usage; exit 0 ;;
+    *) echo "ERROR: unknown option: $1" >&2; usage >&2; exit 1 ;;
+  esac
+done
+
+if [ -z "$artifact_path" ]; then
+  echo "ERROR: --artifact is required" >&2
+  exit 1
+fi
+
+if [ -z "$output_dir" ]; then
+  output_dir="$(dirname "$artifact_path")"
+fi
+
+mkdir -p "$output_dir/logs"
+preflight_log="$output_dir/logs/preflight.log"
+: > "$preflight_log"
+
+log() {
+  echo "$*" | tee -a "$preflight_log"
+}
+
+log "Jackrose Boot Preflight Validation"
+log "Artifact: $artifact_path"
+log "Profile: $profile"
+log "Strict: $strict_mode"
+log ""
+
+result_fail=0
+
+check_file() {
+  local path="$1" label="$2"
+  if [ -f "$path" ]; then
+    log "[OK]   $label: $path"
+  else
+    log "[FAIL] $label is missing: $path"
+    result_fail=$((result_fail+1))
+  fi
+}
+
+check_file "$artifact_path" "Image artifact"
+
+# Check checksum
+checksum_path="${artifact_path}.sha256"
+if [ -f "$checksum_path" ]; then
+  log "[OK]   Checksum file exists: $checksum_path"
+  pushd "$(dirname "$checksum_path")" >/dev/null
+  if sha256sum -c "$(basename "$checksum_path")" >> "$preflight_log" 2>&1; then
+    log "[OK]   Checksum validation passed"
+  else
+    log "[FAIL] Checksum mismatch"
+    result_fail=$((result_fail+1))
+  fi
+  popd >/dev/null
+else
+  log "[FAIL] Checksum file is missing: $checksum_path"
+  result_fail=$((result_fail+1))
+fi
+
+if [ -n "$manifest_path" ]; then
+  check_file "$manifest_path" "Manifest file"
+fi
+
+if [ "$result_fail" -gt 0 ]; then
+  log ""
+  log "Preflight status: FAILED with $result_fail issues"
+  exit 1
+fi
+
+log ""
+log "Preflight status: PASSED"
+exit 0

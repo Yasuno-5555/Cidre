@@ -110,7 +110,7 @@ fi
 
 # Step 3: Check package layout format validation warning matching
 if [ "$decision" = "A_SAFE_METADATA_PATH" ]; then
-  # If validation warning suggests mismatched format layouts without cidre layout policy blocks
+  # If validation warning suggests mismatched format layouts without jackrose layout policy blocks
   if [ -f "$tmp_log_dir/validation.log" ] && grep -q "package format is .tar.zst" "$tmp_log_dir/validation.log"; then
     decision="C_ADAPTER_OR_LAYOUT_MISMATCH"
     rationale="Asahi candidate validator reported format mismatch warnings (.tar.zst vs .zip). Adapter mappings require correction."

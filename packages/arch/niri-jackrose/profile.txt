@@ -1,0 +1,8 @@
+Jackrose v1.0 compositor package
+
+This package owns the niri-jackrose compositor binary.
+
+It does not own:
+- jackrose-session
+- jackrose-config
+- the Jackrose wayland session entry

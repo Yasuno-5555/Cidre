@@ -1,0 +1,81 @@
+#!/bin/sh
+set -eu
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+REPO_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+STATE_ROOT="${JACKROSE_RESCUE_CREATE_STATE_ROOT:-$REPO_ROOT/.local/state/jackrose/rescue-create}"
+CURRENT_DIR="$STATE_ROOT/current"
+artifact=""
+target=""
+dry_run=false
+deploy=false
+log_file="$CURRENT_DIR/deployment.log"
+
+usage() {
+  cat <<EOF
+Usage: jackrose-rescue-deploy-rootfs [options]
+
+Options:
+  --artifact <path>
+  --target <mountpoint>
+  --dry-run
+  --deploy
+  --help
+EOF
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --artifact) artifact="$2"; shift 2 ;;
+    --target) target="$2"; shift 2 ;;
+    --dry-run) dry_run=true; shift ;;
+    --deploy) deploy=true; shift ;;
+    --help) usage; exit 0 ;;
+    *) printf 'ERROR: unknown option: %s\n' "$1" >&2; usage >&2; exit 1 ;;
+  esac
+done
+
+[ -n "$artifact" ] || { printf 'ERROR: --artifact is required\n' >&2; exit 1; }
+[ -n "$target" ] || { printf 'ERROR: --target is required\n' >&2; exit 1; }
+[ -f "$artifact" ] || { printf 'ERROR: artifact not found: %s\n' "$artifact" >&2; exit 1; }
+[ -d "$target" ] || { printf 'ERROR: target mountpoint not found: %s\n' "$target" >&2; exit 1; }
+
+mkdir -p "$CURRENT_DIR"
+
+case "$target" in
+  /)
+    printf 'ERROR: refusing to deploy to /\n' >&2
+    exit 1
+    ;;
+esac
+
+if [ "$dry_run" = "true" ] || [ "$deploy" != "true" ]; then
+  printf 'Jackrose rescue rootfs deploy (dry-run)\n\n'
+  printf 'Artifact: %s\n' "$artifact"
+  printf 'Target: %s\n' "$target"
+  printf 'Would deploy files.\n'
+  printf 'No file extraction executed.\n'
+  exit 0
+fi
+
+case "$artifact" in
+  *.tar.gz|*.tgz)
+    tar -C "$target" -xzf "$artifact"
+    ;;
+  *.tar.zst)
+    tar --zstd -C "$target" -xf "$artifact"
+    ;;
+  *)
+    printf 'ERROR: unsupported artifact format: %s\n' "$artifact" >&2
+    exit 1
+    ;;
+esac
+
+cat > "$log_file" <<EOF
+Jackrose rescue rootfs deployment
+artifact=$artifact
+target=$target
+deployed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+EOF
+
+printf '%s\n' "$log_file"

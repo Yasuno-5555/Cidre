@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# jackrose-boot-result: Machine-readable boot test results writer
+set -euo pipefail
+
+status=""
+stage="unknown"
+reason=""
+output_file=""
+
+usage() {
+  cat <<EOF
+Usage: jackrose-boot-result [options]
+
+Write structured machine-readable boot test results.
+
+Options:
+  --status success|partial|failed|blocked
+  --stage <stage>
+  --reason <text>
+  --output <file>
+  --help
+EOF
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --status) status="$2"; shift 2 ;;
+    --stage) stage="$2"; shift 2 ;;
+    --reason) reason="$2"; shift 2 ;;
+    --output) output_file="$2"; shift 2 ;;
+    --help) usage; exit 0 ;;
+    *) echo "ERROR: unknown option: $1" >&2; usage >&2; exit 1 ;;
+  esac
+done
+
+if [ -z "$status" ] || [ -z "$output_file" ]; then
+  echo "ERROR: --status and --output are required" >&2
+  exit 1
+fi
+
+mkdir -p "$(dirname "$output_file")"
+
+# JSON escape logic
+escape_json() {
+  printf '%s' "$1" | sed 's/\\/\\\\/g;s/"/\\"/g'
+}
+
+cat > "$output_file" <<EOF
+{
+  "schema_version": 1,
+  "status": "$(escape_json "$status")",
+  "stage": "$(escape_json "$stage")",
+  "reason": "$(escape_json "$reason")",
+  "image_boot_tested": true,
+  "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+}
+EOF
+
+echo "Boot result JSON saved at: $output_file"
+EOF

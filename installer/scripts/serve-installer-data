@@ -61,9 +61,9 @@ fi
 
 abs_dir=$(cd "$DIR" && pwd)
 
-echo "Cidre Installer Data URL targets:"
-echo "  http://$HOST:$PORT/asahi-installer-data.cidre.dev.json"
-echo "  http://$HOST:$PORT/asahi-installer-data.cidre.local.json"
+echo "Jackrose Installer Data URL targets:"
+echo "  http://$HOST:$PORT/asahi-installer-data.jackrose.dev.json"
+echo "  http://$HOST:$PORT/asahi-installer-data.jackrose.local.json"
 
 if [ "$PRINT_ONLY" -eq 1 ]; then
   exit 0

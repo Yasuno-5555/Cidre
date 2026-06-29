@@ -1,0 +1,22 @@
+#!/bin/sh
+set -eu
+
+ok() {
+  printf '[OK] %s\n' "$*"
+}
+
+fail() {
+  printf '[FAIL] %s\n' "$*" >&2
+  exit 1
+}
+
+check_dir() {
+  [ -d "$1" ] && ok "$1" || fail "missing directory: $1"
+}
+
+printf 'Jackrose image layout check\n\n'
+check_dir downstream/rootfs-overlay
+check_dir downstream/rootfs-overlay/usr/lib/jackrose
+check_dir downstream/rootfs-overlay/etc/systemd/system
+check_dir downstream/rootfs-overlay/var/lib/jackrose
+ok "rootfs overlay layout looks complete"

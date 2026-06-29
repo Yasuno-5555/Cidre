@@ -1,0 +1,37 @@
+# Maintainer: Yasuno <yasuno@example.invalid>
+
+pkgname=jackrose-experience-upgrade
+pkgver=1.0.0
+pkgrel=1
+pkgdesc='Jackrose Welcome optimized desktop experience upgrade tooling'
+url='https://github.com/Yasuno-5555/Jackrose'
+arch=('any')
+license=('custom')
+depends=(
+  'bash'
+  'git'
+  'base-devel'
+  'sudo'
+  'jackrose-welcome'
+  'jackrose-config'
+  'jackrose-healthcheck'
+)
+optdepends=(
+  'ghostty: preferred Jackrose terminal'
+  'fish: preferred Jackrose shell'
+  'niri-jackrose: preferred Jackrose compositor'
+  'rust: build dependency for niri-jackrose'
+  'zig: build dependency for ghostty'
+)
+source=()
+sha256sums=()
+
+# Monorepo-local packaging path.
+_repo_root="${startdir}/../../.."
+
+package() {
+  install -Dm755 "${_repo_root}/components/welcome/bin/jackrose-experience-upgrade" "${pkgdir}/usr/bin/jackrose-experience-upgrade"
+  install -Dm755 "${_repo_root}/components/welcome/bin/jackrose-build-ghostty" "${pkgdir}/usr/bin/jackrose-build-ghostty"
+  install -Dm755 "${_repo_root}/components/welcome/bin/jackrose-build-niri-jackrose" "${pkgdir}/usr/bin/jackrose-build-niri-jackrose"
+  install -Dm755 "${_repo_root}/components/welcome/bin/jackrose-setup-fish" "${pkgdir}/usr/bin/jackrose-setup-fish"
+}

@@ -1,0 +1,57 @@
+#!/bin/sh
+set -eu
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+REPO_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+STATE_ROOT="${JACKROSE_RESCUE_CREATE_STATE_ROOT:-$REPO_ROOT/.local/state/jackrose/rescue-create}"
+CURRENT_DIR="$STATE_ROOT/current"
+dry_run=false
+clean_state=false
+clean_mounts=false
+failed_target=""
+yes=false
+
+usage() {
+  cat <<EOF
+Usage: jackrose-rescue-create-clean [options]
+
+Options:
+  --dry-run
+  --state
+  --mounts
+  --failed-target <path>
+  --yes
+  --help
+EOF
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --dry-run) dry_run=true; shift ;;
+    --state) clean_state=true; shift ;;
+    --mounts) clean_mounts=true; shift ;;
+    --failed-target) failed_target="$2"; shift 2 ;;
+    --yes) yes=true; shift ;;
+    --help) usage; exit 0 ;;
+    *) printf 'ERROR: unknown option: %s\n' "$1" >&2; usage >&2; exit 1 ;;
+  esac
+done
+
+[ "$clean_state" = "true" ] || clean_state=true
+
+if [ "$dry_run" = "true" ] || [ "$yes" != "true" ]; then
+  printf 'Jackrose rescue create clean (dry-run)\n\n'
+  [ "$clean_state" = "true" ] && printf 'Would clean state: %s\n' "$CURRENT_DIR"
+  [ "$clean_mounts" = "true" ] && printf 'Would inspect temporary mounts only; no busy mount removed.\n'
+  [ -n "$failed_target" ] && printf 'Would not automatically remove failed target rootfs: %s\n' "$failed_target"
+  exit 0
+fi
+
+if [ "$clean_mounts" = "true" ]; then
+  printf 'ERROR: mount cleanup requires manual review in this release.\n' >&2
+  exit 1
+fi
+
+if [ "$clean_state" = "true" ]; then
+  rm -rf "$CURRENT_DIR"
+fi

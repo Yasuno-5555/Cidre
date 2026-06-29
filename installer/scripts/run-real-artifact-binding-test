@@ -66,7 +66,7 @@ if [ ! -f "$IMAGE" ]; then
   echo "ERROR: Real seed image file is missing at $IMAGE" >&2
   echo "Why this matters: Phase 13 tests verification of real image artifact bindings." >&2
   echo "Next step: Run the Phase 10 image builder first:" >&2
-  echo "  image/build-cidre-seed-image.sh --profile cidre-seed --apply" >&2
+  echo "  image/build-jackrose-seed-image.sh --profile jackrose-seed --apply" >&2
   exit 2
 fi
 

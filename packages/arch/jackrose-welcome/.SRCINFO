@@ -1,0 +1,12 @@
+pkgbase = jackrose-welcome
+	pkgdesc = Jackrose first-login welcome dashboard screen
+	pkgver = 1.0.0
+	pkgrel = 1
+	url = https://github.com/Yasuno-5555/Jackrose
+	arch = any
+	license = custom
+	depends = bash
+	source = jackrose-welcome
+	sha256sums = SKIP
+
+pkgname = jackrose-welcome

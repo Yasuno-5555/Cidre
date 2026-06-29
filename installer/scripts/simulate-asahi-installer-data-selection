@@ -3,7 +3,7 @@
 set -euo pipefail
 
 DATA=""
-ID="cidre-seed-aarch64"
+ID="jackrose-seed-aarch64"
 ARCH="aarch64"
 PLATFORM="apple-silicon"
 CHANNEL=""

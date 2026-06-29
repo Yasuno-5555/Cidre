@@ -1,0 +1,59 @@
+#!/bin/sh
+set -eu
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+. "$SCRIPT_DIR/jackrose-macos-restore-common"
+
+audit_path=""
+output_file="$(jackrose_macos_restore_path "uninstall-guide.md")"
+
+usage() {
+  cat <<EOF
+Usage: jackrose-macos-uninstall-guide [options]
+
+Options:
+  --from-audit <path>
+  --output <file>
+  --help
+EOF
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --from-audit) audit_path="$2"; shift 2 ;;
+    --output) output_file="$2"; shift 2 ;;
+    --help) usage; exit 0 ;;
+    *) echo "ERROR: unknown option: $1" >&2; usage >&2; exit 1 ;;
+  esac
+done
+
+jackrose_macos_restore_require_macos
+jackrose_macos_restore_prepare_dirs
+mkdir -p "$(dirname "$output_file")"
+[ -n "$audit_path" ] || audit_path="$(jackrose_macos_restore_path "partition-audit.json")"
+
+cat > "$output_file" <<EOF
+# Jackrose macOS Uninstall Guide
+
+Status:
+- read-only guide
+- no destructive command executed
+
+Before deleting anything:
+1. Confirm macOS boots.
+2. Confirm your data is backed up.
+3. Confirm macOS is selected as startup disk.
+4. Review \`diskutil list\`.
+5. Identify candidate Linux/Asahi/Jackrose partitions carefully.
+6. Do not touch Apple_APFS_Recovery or macOS system/data volumes.
+7. Keep the Jackrose state export if available.
+
+Inputs:
+- Partition audit: \`$audit_path\`
+- Startup disk check: \`$(jackrose_macos_restore_path "startup-disk-check.txt")\`
+
+Future guided uninstaller:
+v0.25.0 will use this audit/report as input for dry-run guided deletion.
+EOF
+
+printf '%s\n' "$output_file"

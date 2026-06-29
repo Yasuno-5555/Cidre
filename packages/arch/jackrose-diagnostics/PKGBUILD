@@ -1,0 +1,21 @@
+# Maintainer: Yasuno <yasuno@example.invalid>
+
+pkgname=jackrose-diagnostics
+pkgver=1.0.0
+pkgrel=1
+pkgdesc='Jackrose environment diagnostic tools'
+url='https://github.com/Yasuno-5555/Jackrose'
+arch=('any')
+license=('custom')
+depends=('bash')
+source=()
+sha256sums=()
+
+# Monorepo-local packaging path.
+# This will be replaced by source=() when packages move to jackrose-packages.
+_repo_root="${startdir}/../../.."
+
+package() {
+  install -Dm755 "${_repo_root}/scripts/jackrose-doctor" "${pkgdir}/usr/bin/jackrose-doctor"
+}
+

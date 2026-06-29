@@ -1,9 +1,9 @@
 {
-  "name": "Cidre",
-  "default_os_name": "Cidre",
+  "name": "Jackrose",
+  "default_os_name": "Jackrose",
   "description": "A flowing Linux workspace for Apple Silicon MacBooks.",
-  "image": "cidre-rootfs.img.zst",
-  "icon": "cidre",
+  "image": "jackrose-rootfs.img.zst",
+  "icon": "jackrose",
   "variant": "developer",
   "experimental": true
 }

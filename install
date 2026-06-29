@@ -1,8 +1,8 @@
 #!/bin/bash
-# install — Cidre single-entry installer
+# install — Jackrose single-entry installer
 #
 # Two modes:
-#   1. Local repo:  cd Cidre && ./install.sh --desktop
+#   1. Local repo:  cd Jackrose && ./install.sh --desktop
 #   2. Remote:      curl -fsSL https://.../install.sh | bash
 #
 # In remote mode, auto-clones the repo and re-execs.
@@ -16,42 +16,42 @@ export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
 
 # ----- Detect execution mode -----
 # Piped from curl: BASH_SOURCE is /dev/fd/N, pipe:N, or "-"
-CIDRE_STDIN_MODE=0
+JACKROSE_STDIN_MODE=0
 if [[ "${BASH_SOURCE[0]:-}" == "/dev/fd/"* || "${BASH_SOURCE[0]:-}" == "-" || "${BASH_SOURCE[0]:-}" == pipe* ]]; then
-  CIDRE_STDIN_MODE=1
+  JACKROSE_STDIN_MODE=1
 fi
 
 # ----- Resolve script directory -----
-if [ "$CIDRE_STDIN_MODE" -eq 1 ]; then
+if [ "$JACKROSE_STDIN_MODE" -eq 1 ]; then
   SCRIPT_DIR="$PWD"
 else
   SCRIPT_DIR="$(CDPATH="" cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 fi
 
-CIDRE_ROOT="$SCRIPT_DIR"
-CIDRE_INSTALLER="$CIDRE_ROOT/scripts/cidre-installer"
+JACKROSE_ROOT="$SCRIPT_DIR"
+JACKROSE_INSTALLER="$JACKROSE_ROOT/scripts/jackrose-installer"
 
 # ----- Configuration -----
-CIDRE_REPO_URL="${CIDRE_REPO_URL:-https://github.com/Yasuno-5555/Cidre.git}"
-CIDRE_BRANCH="${CIDRE_BRANCH:-main}"
-CIDRE_CACHE_DIR="${CIDRE_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/cidre/source}"
+JACKROSE_REPO_URL="${JACKROSE_REPO_URL:-https://github.com/Yasuno-5555/Jackrose.git}"
+JACKROSE_BRANCH="${JACKROSE_BRANCH:-main}"
+JACKROSE_CACHE_DIR="${JACKROSE_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/jackrose/source}"
 
 # ----- Auto-clone if installer is missing -----
-if [[ ! -x "$CIDRE_INSTALLER" ]]; then
+if [[ ! -x "$JACKROSE_INSTALLER" ]]; then
   echo "============================================="
-  echo "  Cidre Installer Bootstrap"
+  echo "  Jackrose Installer Bootstrap"
   echo "============================================="
   echo ""
   echo "Installer not found locally. Bootstrapping from:"
-  echo "  $CIDRE_REPO_URL"
+  echo "  $JACKROSE_REPO_URL"
   echo ""
 
   # Preferred: git (gets full repo, supports updates)
   if command -v git >/dev/null 2>&1; then
     echo "Using git..."
-    mkdir -p "$(dirname "$CIDRE_CACHE_DIR")"
-    rm -rf "$CIDRE_CACHE_DIR"
-    git clone --depth=1 --branch "$CIDRE_BRANCH" "$CIDRE_REPO_URL" "$CIDRE_CACHE_DIR" || {
+    mkdir -p "$(dirname "$JACKROSE_CACHE_DIR")"
+    rm -rf "$JACKROSE_CACHE_DIR"
+    git clone --depth=1 --branch "$JACKROSE_BRANCH" "$JACKROSE_REPO_URL" "$JACKROSE_CACHE_DIR" || {
       echo "" >&2
       echo "ERROR: Failed to clone repository." >&2
       echo "Check your network connection and try again." >&2
@@ -59,49 +59,49 @@ if [[ ! -x "$CIDRE_INSTALLER" ]]; then
       exit 1
     }
     echo ""
-    exec bash "$CIDRE_CACHE_DIR/install.sh" "$@"
+    exec bash "$JACKROSE_CACHE_DIR/install.sh" "$@"
   fi
 
   # Fallback: curl + tar (no git required)
   if command -v curl >/dev/null 2>&1 && command -v tar >/dev/null 2>&1; then
     echo "git not found. Using curl+tar..."
-    mkdir -p "$(dirname "$CIDRE_CACHE_DIR")"
-    rm -rf "$CIDRE_CACHE_DIR"
-    TARBALL_URL="${CIDRE_REPO_URL%.git}/archive/refs/heads/${CIDRE_BRANCH}.tar.gz"
-    curl -fsSL "$TARBALL_URL" -o /tmp/cidre-bootstrap.tar.gz || {
+    mkdir -p "$(dirname "$JACKROSE_CACHE_DIR")"
+    rm -rf "$JACKROSE_CACHE_DIR"
+    TARBALL_URL="${JACKROSE_REPO_URL%.git}/archive/refs/heads/${JACKROSE_BRANCH}.tar.gz"
+    curl -fsSL "$TARBALL_URL" -o /tmp/jackrose-bootstrap.tar.gz || {
       echo "" >&2
       echo "ERROR: Failed to download repository archive." >&2
       echo "Check your network connection and try again." >&2
       echo "If GitHub is unreachable, consider using a VPN." >&2
       exit 1
     }
-    mkdir -p "$CIDRE_CACHE_DIR"
-    tar -xzf /tmp/cidre-bootstrap.tar.gz -C "$CIDRE_CACHE_DIR" --strip-components=1 || {
+    mkdir -p "$JACKROSE_CACHE_DIR"
+    tar -xzf /tmp/jackrose-bootstrap.tar.gz -C "$JACKROSE_CACHE_DIR" --strip-components=1 || {
       echo "" >&2
       echo "ERROR: Failed to extract repository archive." >&2
-      rm -f /tmp/cidre-bootstrap.tar.gz
+      rm -f /tmp/jackrose-bootstrap.tar.gz
       exit 1
     }
-    rm -f /tmp/cidre-bootstrap.tar.gz
+    rm -f /tmp/jackrose-bootstrap.tar.gz
     echo ""
-    exec bash "$CIDRE_CACHE_DIR/install.sh" "$@"
+    exec bash "$JACKROSE_CACHE_DIR/install.sh" "$@"
   fi
 
   # Neither git nor curl+tar available
   echo "" >&2
-  echo "ERROR: Cidre requires git or curl+tar for remote bootstrap." >&2
+  echo "ERROR: Jackrose requires git or curl+tar for remote bootstrap." >&2
   echo "" >&2
   echo "On Arch/ALARM:" >&2
   echo "  sudo pacman -S git" >&2
   echo "" >&2
   echo "Or clone manually:" >&2
-  echo "  git clone $CIDRE_REPO_URL" >&2
-  echo "  cd Cidre" >&2
+  echo "  git clone $JACKROSE_REPO_URL" >&2
+  echo "  cd Jackrose" >&2
   echo "  ./install.sh" >&2
   exit 1
 fi
 
 # ----- Delegate to main installer -----
-exec "$CIDRE_INSTALLER" "$@"
+exec "$JACKROSE_INSTALLER" "$@"
 
 fi # truncation guard — ensures incomplete downloads fail safely

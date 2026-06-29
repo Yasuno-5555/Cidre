@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# jackrose-boot-test-report: Summary report builder for controlled boot validation runs
+set -euo pipefail
+
+state_dir=""
+output_file=""
+
+usage() {
+  cat <<EOF
+Usage: jackrose-boot-test-report [options]
+
+Compile controlled boot test reports.
+
+Options:
+  --state <dir>     Path to boot-test/current directory
+  --output <file>   Output markdown file path
+  --help            Show this help
+EOF
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --state) state_dir="$2"; shift 2 ;;
+    --output) output_file="$2"; shift 2 ;;
+    --help) usage; exit 0 ;;
+    *) echo "ERROR: unknown option: $1" >&2; usage >&2; exit 1 ;;
+  esac
+done
+
+if [ -z "$state_dir" ] || [ -z "$output_file" ]; then
+  echo "ERROR: --state and --output are required" >&2
+  exit 1
+fi
+
+mkdir -p "$(dirname "$output_file")"
+
+status="unknown"
+stage="unknown"
+reason=""
+if [ -f "$state_dir/result.json" ] && command -v python3 >/dev/null 2>&1; then
+  status=$(python3 -c "import json; d=json.load(open('$state_dir/result.json')); print(d.get('status', 'unknown'))")
+  stage=$(python3 -c "import json; d=json.load(open('$state_dir/result.json')); print(d.get('stage', 'unknown'))")
+  reason=$(python3 -c "import json; d=json.load(open('$state_dir/result.json')); print(d.get('reason', ''))")
+fi
+
+cat > "$output_file" <<EOF
+# Jackrose Controlled Boot Test Report
+
+Generated on: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+## Executive Summary
+- **Overall Status**: $status
+- **Failed Stage**: $stage
+- **Reason**: $reason
+
+## Log Collections Checked
+- Preflight Log: $([ -f "$state_dir/preflight.log" ] && echo "Present" || echo "Missing")
+- Observation Checklist: $([ -f "$state_dir/observation.md" ] && echo "Present" || echo "Missing")
+- Failure Classification: $([ -f "$state_dir/failure-classification.md" ] && echo "Present" || echo "Missing")
+
+## User Phase Handoff (v0.22.0)
+- **User Phase State**: $([ -f "$state_dir/user-phase/completed" ] && echo "completed" || ([ -f "$state_dir/user-phase/failed" ] && echo "failed" || echo "incomplete"))
+- **Handoff Imported**: $([ -f "$state_dir/user-phase/handoff-imported" ] && echo "Yes" || echo "No")
+- **Last Stage**: $([ -f "$state_dir/user-phase/last-stage" ] && cat "$state_dir/user-phase/last-stage" || echo "none")
+- **Last Error**: $([ -f "$state_dir/user-phase/last-error" ] && cat "$state_dir/user-phase/last-error" || echo "none")
+- **Install Resume Log**: $([ -f "$state_dir/user-phase/install.log" ] && echo "Collected" || echo "Missing")
+
+## Exit Path Reminder (v0.23.0)
+- Generate uninstall readiness: \`scripts/jackrose-uninstall-check\`
+- Export Jackrose state: \`scripts/jackrose-state-export --include-logs --include-reports\`
+- Record partition layout read-only: \`scripts/jackrose-partition-audit\`
+- Classify uninstall risk before cleanup: \`scripts/jackrose-uninstall-risk\`
+EOF
+
+echo "Boot test report compiled successfully at: $output_file"

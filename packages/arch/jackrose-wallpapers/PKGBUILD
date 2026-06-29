@@ -1,0 +1,16 @@
+# Maintainer: Yasuno <yasuno@example.invalid>
+
+pkgname=jackrose-wallpapers
+pkgver=1.0.0
+pkgrel=1
+pkgdesc='Official premium wallpapers for Jackrose desktop environment'
+url='https://github.com/Yasuno-5555/Jackrose'
+arch=('any')
+license=('custom')
+depends=()
+source=('jackrose-wallpaper.png')
+sha256sums=('SKIP')
+
+package() {
+  install -Dm644 "${srcdir}/jackrose-wallpaper.png" "${pkgdir}/usr/share/backgrounds/jackrose-wallpaper.png"
+}

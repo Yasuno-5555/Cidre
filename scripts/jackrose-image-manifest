@@ -1,0 +1,164 @@
+#!/bin/sh
+set -eu
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+REPO_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+OUTPUT_PATH="${REPO_ROOT}/.local/state/jackrose/image-build/jackrose-image-manifest.json"
+IMAGE_NAME="${JACKROSE_IMAGE_NAME:-jackrose-prototype}"
+IMAGE_PROFILE="${JACKROSE_IMAGE_PROFILE:-developer}"
+IMAGE_VERSION="${JACKROSE_IMAGE_VERSION:-}"
+BUILDER_PATH="${JACKROSE_ALARM_BUILDER_DIR:-}"
+OVERLAY_ARTIFACT="jackrose-rootfs-overlay.tar.gz"
+IMAGE_ARTIFACT="${IMAGE_NAME}-rootfs.img.zst"
+CHECKSUM_ARTIFACT="${OVERLAY_ARTIFACT}.sha256"
+OVERLAY_INSPECTED=false
+IMAGE_BOOT_TESTED=false
+INSTALLER_INTEGRATED=false
+ROOTFS_INSPECTED=false
+BOOT_READINESS_CHECKED=false
+FIRSTBOOT_SERVICE_ENABLED=true
+FIRSTBOOT_OOBE=true
+FIRSTBOOT_AUTOLOGIN=false
+SEED_RESUME=true
+PUBLIC_IMAGE=false
+BOOT_TESTED=false
+
+usage() {
+  cat <<'EOF'
+Usage:
+  jackrose-image-manifest [options]
+
+Options:
+  --output <file>
+  --image-name <name>
+  --profile <name>
+  --version <version>
+  --builder <path>
+  --overlay <artifact-name>
+  --image <artifact-name>
+  --checksum <artifact-name>
+  --overlay-inspected <true|false>
+  --image-boot-tested <true|false>
+  --installer-integrated <true|false>
+  --rootfs-inspected <true|false>
+  --boot-readiness-checked <true|false>
+  --firstboot-service-enabled <true|false>
+  --firstboot-oobe <true|false>
+  --firstboot-autologin <true|false>
+  --seed-resume <true|false>
+  --public-image <true|false>
+  --boot-tested <true|false>
+  -h, --help
+EOF
+}
+
+validate_profile() {
+  case "$1" in
+    desktop|developer|minimal|recovery) return 0 ;;
+    *) printf 'ERROR: unknown profile: %s\n' "$1" >&2; exit 1 ;;
+  esac
+}
+
+json_escape() {
+  printf '%s' "$1" | sed \
+    -e 's/\\/\\\\/g' \
+    -e 's/"/\\"/g' \
+    -e 's/\t/\\t/g' \
+    -e 's/\r/\\r/g' \
+    -e ':a;N;$!ba;s/\n/\\n/g'
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --output) OUTPUT_PATH="$2"; shift 2 ;;
+    --image-name) IMAGE_NAME="$2"; shift 2 ;;
+    --profile) IMAGE_PROFILE="$2"; validate_profile "$IMAGE_PROFILE"; shift 2 ;;
+    --version) IMAGE_VERSION="$2"; shift 2 ;;
+    --builder) BUILDER_PATH="$2"; shift 2 ;;
+    --overlay) OVERLAY_ARTIFACT="$2"; shift 2 ;;
+    --image) IMAGE_ARTIFACT="$2"; shift 2 ;;
+    --registered-image) IMAGE_ARTIFACT="$2"; shift 2 ;;
+    --checksum) CHECKSUM_ARTIFACT="$2"; shift 2 ;;
+    --overlay-inspected) OVERLAY_INSPECTED="$2"; shift 2 ;;
+    --image-boot-tested) IMAGE_BOOT_TESTED="$2"; shift 2 ;;
+    --installer-integrated) INSTALLER_INTEGRATED="$2"; shift 2 ;;
+    --rootfs-inspected) ROOTFS_INSPECTED="$2"; shift 2 ;;
+    --boot-readiness-checked) BOOT_READINESS_CHECKED="$2"; shift 2 ;;
+    --firstboot-service-enabled) FIRSTBOOT_SERVICE_ENABLED="$2"; shift 2 ;;
+    --firstboot-oobe) FIRSTBOOT_OOBE="$2"; shift 2 ;;
+    --firstboot-autologin) FIRSTBOOT_AUTOLOGIN="$2"; shift 2 ;;
+    --seed-resume) SEED_RESUME="$2"; shift 2 ;;
+    --public-image) PUBLIC_IMAGE="$2"; shift 2 ;;
+    --boot-tested) BOOT_TESTED="$2"; shift 2 ;;
+    -h|--help) usage; exit 0 ;;
+    *) printf 'ERROR: unknown option: %s\n' "$1" >&2; usage; exit 1 ;;
+  esac
+done
+
+validate_profile "$IMAGE_PROFILE"
+
+if [ -z "$IMAGE_VERSION" ]; then
+  IMAGE_VERSION="$(git -C "$REPO_ROOT" describe --tags --always 2>/dev/null || git -C "$REPO_ROOT" rev-parse --short HEAD 2>/dev/null || printf 'unknown')"
+fi
+
+COMMIT_ID="$(git -C "$REPO_ROOT" rev-parse --short HEAD 2>/dev/null || printf 'unknown')"
+BRANCH_NAME="$(git -C "$REPO_ROOT" branch --show-current 2>/dev/null || printf 'unknown')"
+if [ -n "$(git -C "$REPO_ROOT" status --porcelain 2>/dev/null)" ]; then
+  DIRTY_STATE=true
+else
+  DIRTY_STATE=false
+fi
+
+BUILDER_REV="unknown"
+if [ -n "$BUILDER_PATH" ] && [ -d "$BUILDER_PATH/.git" ]; then
+  BUILDER_REV="$(git -C "$BUILDER_PATH" rev-parse --short HEAD 2>/dev/null || printf 'unknown')"
+fi
+
+mkdir -p "$(dirname "$OUTPUT_PATH")"
+
+cat > "$OUTPUT_PATH" <<EOF
+{
+  "schema_version": 1,
+  "jackrose_version": "0.19.0",
+  "image_name": "$(json_escape "$IMAGE_NAME")",
+  "image_profile": "$(json_escape "$IMAGE_PROFILE")",
+  "image_version": "$(json_escape "$IMAGE_VERSION")",
+  "source": {
+    "repository": "https://github.com/Yasuno-5555/Jackrose",
+    "commit": "$(json_escape "$COMMIT_ID")",
+    "branch": "$(json_escape "$BRANCH_NAME")",
+    "dirty": $DIRTY_STATE
+  },
+  "base": {
+    "distribution": "ALARM",
+    "builder": "asahi-alarm-builder",
+    "builder_path": "$(json_escape "$BUILDER_PATH")",
+    "builder_revision": "$(json_escape "$BUILDER_REV")"
+  },
+  "artifacts": {
+    "overlay": "$(json_escape "$OVERLAY_ARTIFACT")",
+    "image": "$(json_escape "$IMAGE_ARTIFACT")",
+    "checksum": "$(json_escape "$CHECKSUM_ARTIFACT")",
+    "registered_image": "$(json_escape "$IMAGE_ARTIFACT")"
+  },
+  "features": {
+    "firstboot_oobe": $FIRSTBOOT_OOBE,
+    "firstboot_autologin": $FIRSTBOOT_AUTOLOGIN,
+    "seed_resume": $SEED_RESUME,
+    "public_image": $PUBLIC_IMAGE,
+    "boot_tested": $BOOT_TESTED
+  },
+  "validation": {
+    "overlay_inspected": $OVERLAY_INSPECTED,
+    "rootfs_inspected": $ROOTFS_INSPECTED,
+    "boot_readiness_checked": $BOOT_READINESS_CHECKED,
+    "image_boot_tested": $IMAGE_BOOT_TESTED,
+    "firstboot_oobe_included": $FIRSTBOOT_OOBE,
+    "firstboot_service_enabled": $FIRSTBOOT_SERVICE_ENABLED,
+    "installer_integrated": $INSTALLER_INTEGRATED
+  }
+}
+EOF
+
+printf '[OK] wrote %s\n' "$OUTPUT_PATH"
+

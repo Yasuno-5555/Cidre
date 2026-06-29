@@ -1,0 +1,17 @@
+[Unit]
+Description=Jackrose Firstboot Root Setup
+Documentation=file:/usr/share/doc/jackrose/firstboot-oobe.md
+After=basic.target
+Wants=network-online.target
+ConditionPathExists=!/var/lib/jackrose/firstboot-root/completed
+ConditionPathExists=!/var/lib/jackrose/firstboot-root/skipped
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/jackrose/jackrose-firstboot-root --non-interactive
+RemainAfterExit=yes
+StandardOutput=journal+console
+StandardError=journal+console
+
+[Install]
+WantedBy=multi-user.target

@@ -3,10 +3,10 @@ if status is-interactive
     set fish_greeting
 
     # Show welcome dialog on first shell launch
-    if not test -f ~/.config/cidre-welcome-done
-        if type -q cidre-welcome
-            cidre-welcome
-            touch ~/.config/cidre-welcome-done
+    if not test -f ~/.config/jackrose-welcome-done
+        if type -q jackrose-welcome
+            jackrose-welcome
+            touch ~/.config/jackrose-welcome-done
         end
     end
 

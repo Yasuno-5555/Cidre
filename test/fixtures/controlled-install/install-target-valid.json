@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "command": "cidre-app-disposable-target-check",
+  "command": "jackrose-app-disposable-target-check",
   "status": "passed",
   "summary": "Selected target is disposable and allowed for mutation testing.",
   "exit_code": 0,

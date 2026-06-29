@@ -1,0 +1,47 @@
+# Maintainer: Yasuno <yasuno@example.invalid>
+
+pkgname=niri-jackrose
+pkgver=26.4.0
+pkgrel=1
+pkgdesc='Jackrose desktop compositor component based on niri'
+url='https://github.com/Yasuno-5555/Jackrose'
+arch=('aarch64')
+license=('GPL-3.0-or-later')
+depends=(
+  'libdisplay-info'
+  'libinput'
+  'libxkbcommon'
+  'pango'
+  'cairo'
+  'pipewire'
+  'dbus'
+  'systemd'
+  'mesa'
+  'seatd'
+)
+optdepends=(
+  'xwayland-satellite: on-demand X11 compatibility bridge'
+  'power-profiles-daemon: desktop power profile integration'
+)
+makedepends=(
+  'cargo'
+  'rust'
+  'git'
+  'clang'
+  'llvm'
+  'pkgconf'
+)
+source=("git+https://github.com/Yasuno-5555/niri-jackrose.git")
+sha256sums=('SKIP')
+
+build() {
+  cd "niri-jackrose"
+  cargo build --release --locked --bin niri-jackrose
+}
+
+package() {
+  cd "niri-jackrose"
+  install -Dm755 "target/release/niri-jackrose" "${pkgdir}/usr/bin/niri-jackrose"
+  install -Dm644 "README.md" "${pkgdir}/usr/share/doc/${pkgname}/README.md"
+  install -Dm644 "LICENSE" "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+}

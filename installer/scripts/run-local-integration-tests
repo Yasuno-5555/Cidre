@@ -5,15 +5,15 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-TEST_TMPDIR="${CIDRE_TEST_TMPDIR:-/tmp/cidre-installer-tests}"
+TEST_TMPDIR="${JACKROSE_TEST_TMPDIR:-/tmp/jackrose-installer-tests}"
 rm -rf "$TEST_TMPDIR"
 mkdir -p "$TEST_TMPDIR"
 
 echo "=== Running Installer Local Integration Tests ==="
 echo "Staging tests files under $TEST_TMPDIR..."
 
-FIXTURE="$REPO_ROOT/installer/fixtures/cidre-seed-v0.integration.json"
-PRIMARY_METADATA="$REPO_ROOT/installer/metadata/cidre-seed.local.json"
+FIXTURE="$REPO_ROOT/installer/fixtures/jackrose-seed-v0.integration.json"
+PRIMARY_METADATA="$REPO_ROOT/installer/metadata/jackrose-seed.local.json"
 
 # Test 1: Positive validations checks
 echo "Test 1: Metadata Schema Validation..."
@@ -26,15 +26,15 @@ echo "Test 2: Listing available entries..."
 
 # Test 3: Resolve entries checks
 echo "Test 3: Resolving target entry ID..."
-"$REPO_ROOT/installer/scripts/resolve-installer-entry" --metadata "$FIXTURE" --id cidre-seed-aarch64
+"$REPO_ROOT/installer/scripts/resolve-installer-entry" --metadata "$FIXTURE" --id jackrose-seed-aarch64
 
 # Test 4: Simulation runs
 echo "Test 4: Selection simulation checks..."
-"$REPO_ROOT/installer/scripts/simulate-installer-selection" --metadata "$FIXTURE" --id cidre-seed-aarch64
+"$REPO_ROOT/installer/scripts/simulate-installer-selection" --metadata "$FIXTURE" --id jackrose-seed-aarch64
 
 # Test 5: Checksum bypass for local channel if file is missing
 echo "Test 5: Checksum check bypass on missing local image..."
-"$REPO_ROOT/installer/scripts/verify-local-image-artifact" --metadata "$FIXTURE" --id cidre-seed-aarch64
+"$REPO_ROOT/installer/scripts/verify-local-image-artifact" --metadata "$FIXTURE" --id jackrose-seed-aarch64
 
 # --- Negative Tests Section ---
 echo "=== Running Negative Failure Tests ==="
@@ -58,7 +58,7 @@ echo "  [PASSED] Caught missing ID."
 # Neg 3: Duplicate entry IDs
 echo "Neg 3: Duplicate entry IDs check..."
 jq '.entries += .entries' "$FIXTURE" > "$TEST_TMPDIR/dup.json"
-if "$REPO_ROOT/installer/scripts/resolve-installer-entry" --metadata "$TEST_TMPDIR/dup.json" --id cidre-seed-aarch64 >/dev/null 2>&1; then
+if "$REPO_ROOT/installer/scripts/resolve-installer-entry" --metadata "$TEST_TMPDIR/dup.json" --id jackrose-seed-aarch64 >/dev/null 2>&1; then
   echo "ERROR: Expected failure on duplicate ID, but passed." >&2
   exit 1
 fi
@@ -67,7 +67,7 @@ echo "  [PASSED] Caught duplicate IDs."
 # Neg 4: Incorrect firstboot mode
 echo "Neg 4: Invalid firstboot mode check..."
 jq '.entries[0].first_boot.mode = "tty-firstboot"' "$FIXTURE" > "$TEST_TMPDIR/fb_mode.json"
-if "$REPO_ROOT/installer/scripts/resolve-installer-entry" --metadata "$TEST_TMPDIR/fb_mode.json" --id cidre-seed-aarch64 >/dev/null 2>&1; then
+if "$REPO_ROOT/installer/scripts/resolve-installer-entry" --metadata "$TEST_TMPDIR/fb_mode.json" --id jackrose-seed-aarch64 >/dev/null 2>&1; then
   echo "ERROR: Expected failure on unsupported firstboot mode, but passed." >&2
   exit 1
 fi
@@ -84,7 +84,7 @@ echo "  [PASSED] Caught release channel placeholder."
 
 # Neg 6: Non-tar.zst image filename suffix
 echo "Neg 6: Invalid image filename suffix check..."
-jq '.entries[0].image.filename = "cidre-seed.tar.gz"' "$FIXTURE" > "$TEST_TMPDIR/suffix.json"
+jq '.entries[0].image.filename = "jackrose-seed.tar.gz"' "$FIXTURE" > "$TEST_TMPDIR/suffix.json"
 if "$REPO_ROOT/installer/scripts/validate-installer-metadata" "$TEST_TMPDIR/suffix.json" >/dev/null 2>&1; then
   echo "ERROR: Expected failure on invalid filename suffix, but passed." >&2
   exit 1
@@ -100,8 +100,8 @@ mock_manifest="$TEST_TMPDIR/mock-image.manifest"
 echo "mock tar contents" > "$mock_img"
 # Write basic manifest parameters
 {
-  echo "profile_name=cidre-seed"
-  echo "image_name=cidre-seed-aarch64"
+  echo "profile_name=jackrose-seed"
+  echo "image_name=jackrose-seed-aarch64"
   echo "version=local"
   echo "arch=aarch64"
   echo "build_date=date"
@@ -117,7 +117,7 @@ jq --arg url "file://${mock_img}" --arg manifest "file://${mock_manifest}" \
   '.entries[0].image.url = $url | .entries[0].image.manifest = $manifest' \
   "$TEST_TMPDIR/checksum.json" > "$TEST_TMPDIR/checksum_ready.json"
 
-if "$REPO_ROOT/installer/scripts/verify-local-image-artifact" --metadata "$TEST_TMPDIR/checksum_ready.json" --id cidre-seed-aarch64 >/dev/null 2>&1; then
+if "$REPO_ROOT/installer/scripts/verify-local-image-artifact" --metadata "$TEST_TMPDIR/checksum_ready.json" --id jackrose-seed-aarch64 >/dev/null 2>&1; then
   echo "ERROR: Expected failure on checksum mismatch, but passed." >&2
   exit 1
 fi

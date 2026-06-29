@@ -1,5 +1,0 @@
-#!/bin/sh
-set -eu
-
-# Wrapper that runs the report generator
-exec "$(dirname "$0")/cidre-install-report" "$@"

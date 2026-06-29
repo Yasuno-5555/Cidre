@@ -32,16 +32,16 @@ usage() {
   echo "  --installer-asset-layout-only   Run installer asset layout normalization tests"
   echo "  --metadata-only-override-harness-only Run metadata-only override harness tests"
   echo "  --bootstrap-safe-mode-probe-only      Run bootstrap safe-mode probe tests"
-  echo "  --cidre-wrapper-strategy-only         Run Cidre installer wrapper strategy tests"
-  echo "  --cidre-wrapper-selection-only        Run Cidre installer wrapper selection tests"
-  echo "  --cidre-wrapper-artifact-only         Run Cidre installer wrapper artifact fetch tests"
-  echo "  --cidre-wrapper-extraction-only       Run Cidre installer wrapper sandbox extraction tests"
-  echo "  --cidre-rootfs-plan-only              Run Cidre installer wrapper rootfs plan tests"
-  echo "  --cidre-target-discovery-only         Run Cidre installer wrapper target discovery tests"
-  echo "  --cidre-target-selection-only         Run Cidre installer wrapper target selection tests"
-  echo "  --cidre-final-contract-only           Run Cidre installer wrapper final contract tests"
-  echo "  --cidre-installer-mvp-only            Run Cidre installer wrapper MVP tests"
-  echo "  --cidre-gui-integration-only          Run Cidre installer wrapper GUI integration tests"
+  echo "  --jackrose-wrapper-strategy-only         Run Jackrose installer wrapper strategy tests"
+  echo "  --jackrose-wrapper-selection-only        Run Jackrose installer wrapper selection tests"
+  echo "  --jackrose-wrapper-artifact-only         Run Jackrose installer wrapper artifact fetch tests"
+  echo "  --jackrose-wrapper-extraction-only       Run Jackrose installer wrapper sandbox extraction tests"
+  echo "  --jackrose-rootfs-plan-only              Run Jackrose installer wrapper rootfs plan tests"
+  echo "  --jackrose-target-discovery-only         Run Jackrose installer wrapper target discovery tests"
+  echo "  --jackrose-target-selection-only         Run Jackrose installer wrapper target selection tests"
+  echo "  --jackrose-final-contract-only           Run Jackrose installer wrapper final contract tests"
+  echo "  --jackrose-installer-mvp-only            Run Jackrose installer wrapper MVP tests"
+  echo "  --jackrose-gui-integration-only          Run Jackrose installer wrapper GUI integration tests"
   exit 1
 }
 
@@ -127,44 +127,44 @@ while [ $# -gt 0 ]; do
       BOOTSTRAP_SAFE_MODE_PROBE_ONLY=1
       shift
       ;;
-    --cidre-wrapper-strategy-only)
-      CIDRE_WRAPPER_STRATEGY_ONLY=1
+    --jackrose-wrapper-strategy-only)
+      JACKROSE_WRAPPER_STRATEGY_ONLY=1
       shift
       ;;
-    --cidre-wrapper-selection-only)
-      CIDRE_WRAPPER_SELECTION_ONLY=1
+    --jackrose-wrapper-selection-only)
+      JACKROSE_WRAPPER_SELECTION_ONLY=1
       shift
       ;;
-    --cidre-wrapper-artifact-only)
-      CIDRE_WRAPPER_ARTIFACT_ONLY=1
+    --jackrose-wrapper-artifact-only)
+      JACKROSE_WRAPPER_ARTIFACT_ONLY=1
       shift
       ;;
-    --cidre-wrapper-extraction-only)
-      CIDRE_WRAPPER_EXTRACTION_ONLY=1
+    --jackrose-wrapper-extraction-only)
+      JACKROSE_WRAPPER_EXTRACTION_ONLY=1
       shift
       ;;
-    --cidre-rootfs-plan-only)
-      CIDRE_ROOTFS_PLAN_ONLY=1
+    --jackrose-rootfs-plan-only)
+      JACKROSE_ROOTFS_PLAN_ONLY=1
       shift
       ;;
-    --cidre-target-discovery-only)
-      CIDRE_TARGET_DISCOVERY_ONLY=1
+    --jackrose-target-discovery-only)
+      JACKROSE_TARGET_DISCOVERY_ONLY=1
       shift
       ;;
-    --cidre-target-selection-only)
-      CIDRE_TARGET_SELECTION_ONLY=1
+    --jackrose-target-selection-only)
+      JACKROSE_TARGET_SELECTION_ONLY=1
       shift
       ;;
-    --cidre-final-contract-only)
-      CIDRE_FINAL_CONTRACT_ONLY=1
+    --jackrose-final-contract-only)
+      JACKROSE_FINAL_CONTRACT_ONLY=1
       shift
       ;;
-    --cidre-installer-mvp-only)
-      CIDRE_INSTALLER_MVP_ONLY=1
+    --jackrose-installer-mvp-only)
+      JACKROSE_INSTALLER_MVP_ONLY=1
       shift
       ;;
-    --cidre-gui-integration-only)
-      CIDRE_GUI_INTEGRATION_ONLY=1
+    --jackrose-gui-integration-only)
+      JACKROSE_GUI_INTEGRATION_ONLY=1
       shift
       ;;
     *)
@@ -176,7 +176,7 @@ done
 
 if [ "${METADATA_ONLY:-0}" -eq 1 ]; then
   echo "Running metadata validation only..."
-  "$REPO_ROOT/installer/scripts/validate-installer-metadata" "$REPO_ROOT/installer/metadata/cidre-seed.local.json"
+  "$REPO_ROOT/installer/scripts/validate-installer-metadata" "$REPO_ROOT/installer/metadata/jackrose-seed.local.json"
   exit 0
 fi
 
@@ -189,10 +189,10 @@ fi
 if [ "${REAL_ARTIFACT_ONLY:-0}" -eq 1 ]; then
   echo "Running real artifact binding integration validation tests only..."
   "$REPO_ROOT/installer/scripts/run-real-artifact-binding-test" \
-    --metadata "$REPO_ROOT/installer/metadata/cidre-seed.local.json" \
-    --id cidre-seed-aarch64 \
-    --image "$REPO_ROOT/out/cidre-seed-aarch64-v0.10.0.tar.zst" \
-    --manifest "$REPO_ROOT/out/cidre-seed-aarch64-v0.10.0.manifest"
+    --metadata "$REPO_ROOT/installer/metadata/jackrose-seed.local.json" \
+    --id jackrose-seed-aarch64 \
+    --image "$REPO_ROOT/out/jackrose-seed-aarch64-v0.10.0.tar.zst" \
+    --manifest "$REPO_ROOT/out/jackrose-seed-aarch64-v0.10.0.manifest"
   exit 0
 fi
 
@@ -268,67 +268,67 @@ if [ "${BOOTSTRAP_SAFE_MODE_PROBE_ONLY:-0}" -eq 1 ]; then
   exit 0
 fi
 
-if [ "${CIDRE_WRAPPER_STRATEGY_ONLY:-0}" -eq 1 ]; then
-  echo "Running Cidre installer wrapper strategy tests only..."
-  "$REPO_ROOT/installer/scripts/run-cidre-wrapper-strategy-tests"
+if [ "${JACKROSE_WRAPPER_STRATEGY_ONLY:-0}" -eq 1 ]; then
+  echo "Running Jackrose installer wrapper strategy tests only..."
+  "$REPO_ROOT/installer/scripts/run-jackrose-wrapper-strategy-tests"
   exit 0
 fi
 
-if [ "${CIDRE_WRAPPER_SELECTION_ONLY:-0}" -eq 1 ]; then
-  echo "Running Cidre installer wrapper selection tests only..."
-  "$REPO_ROOT/installer/scripts/run-cidre-wrapper-selection-tests"
+if [ "${JACKROSE_WRAPPER_SELECTION_ONLY:-0}" -eq 1 ]; then
+  echo "Running Jackrose installer wrapper selection tests only..."
+  "$REPO_ROOT/installer/scripts/run-jackrose-wrapper-selection-tests"
   exit 0
 fi
 
-if [ "${CIDRE_WRAPPER_ARTIFACT_ONLY:-0}" -eq 1 ]; then
-  echo "Running Cidre installer wrapper artifact fetch tests only..."
-  "$REPO_ROOT/installer/scripts/run-cidre-wrapper-artifact-tests"
+if [ "${JACKROSE_WRAPPER_ARTIFACT_ONLY:-0}" -eq 1 ]; then
+  echo "Running Jackrose installer wrapper artifact fetch tests only..."
+  "$REPO_ROOT/installer/scripts/run-jackrose-wrapper-artifact-tests"
   exit 0
 fi
 
-if [ "${CIDRE_WRAPPER_EXTRACTION_ONLY:-0}" -eq 1 ]; then
-  echo "Running Cidre installer wrapper sandbox extraction tests only..."
-  "$REPO_ROOT/installer/scripts/run-cidre-wrapper-extraction-tests"
+if [ "${JACKROSE_WRAPPER_EXTRACTION_ONLY:-0}" -eq 1 ]; then
+  echo "Running Jackrose installer wrapper sandbox extraction tests only..."
+  "$REPO_ROOT/installer/scripts/run-jackrose-wrapper-extraction-tests"
   exit 0
 fi
 
-if [ "${CIDRE_ROOTFS_PLAN_ONLY:-0}" -eq 1 ]; then
-  echo "Running Cidre installer wrapper rootfs plan tests only..."
-  "$REPO_ROOT/installer/scripts/run-cidre-rootfs-plan-tests"
+if [ "${JACKROSE_ROOTFS_PLAN_ONLY:-0}" -eq 1 ]; then
+  echo "Running Jackrose installer wrapper rootfs plan tests only..."
+  "$REPO_ROOT/installer/scripts/run-jackrose-rootfs-plan-tests"
   exit 0
 fi
 
-if [ "${CIDRE_TARGET_DISCOVERY_ONLY:-0}" -eq 1 ]; then
-  echo "Running Cidre installer wrapper target discovery tests only..."
-  "$REPO_ROOT/installer/scripts/run-cidre-target-discovery-tests"
+if [ "${JACKROSE_TARGET_DISCOVERY_ONLY:-0}" -eq 1 ]; then
+  echo "Running Jackrose installer wrapper target discovery tests only..."
+  "$REPO_ROOT/installer/scripts/run-jackrose-target-discovery-tests"
   exit 0
 fi
 
-if [ "${CIDRE_TARGET_SELECTION_ONLY:-0}" -eq 1 ]; then
-  echo "Running Cidre installer wrapper target selection tests only..."
-  "$REPO_ROOT/installer/scripts/run-cidre-target-selection-tests"
+if [ "${JACKROSE_TARGET_SELECTION_ONLY:-0}" -eq 1 ]; then
+  echo "Running Jackrose installer wrapper target selection tests only..."
+  "$REPO_ROOT/installer/scripts/run-jackrose-target-selection-tests"
   exit 0
 fi
 
-if [ "${CIDRE_FINAL_CONTRACT_ONLY:-0}" -eq 1 ]; then
-  echo "Running Cidre installer wrapper final contract tests only..."
-  "$REPO_ROOT/installer/scripts/run-cidre-final-contract-tests"
+if [ "${JACKROSE_FINAL_CONTRACT_ONLY:-0}" -eq 1 ]; then
+  echo "Running Jackrose installer wrapper final contract tests only..."
+  "$REPO_ROOT/installer/scripts/run-jackrose-final-contract-tests"
   exit 0
 fi
 
-if [ "${CIDRE_INSTALLER_MVP_ONLY:-0}" -eq 1 ]; then
-  echo "Running Cidre installer wrapper MVP tests only..."
-  "$REPO_ROOT/installer/scripts/run-cidre-installer-mvp-tests"
+if [ "${JACKROSE_INSTALLER_MVP_ONLY:-0}" -eq 1 ]; then
+  echo "Running Jackrose installer wrapper MVP tests only..."
+  "$REPO_ROOT/installer/scripts/run-jackrose-installer-mvp-tests"
   exit 0
 fi
 
-if [ "${CIDRE_GUI_INTEGRATION_ONLY:-0}" -eq 1 ]; then
-  echo "Running Cidre installer wrapper GUI integration tests only..."
-  "$REPO_ROOT/installer/scripts/run-cidre-gui-integration-smoke-tests"
+if [ "${JACKROSE_GUI_INTEGRATION_ONLY:-0}" -eq 1 ]; then
+  echo "Running Jackrose installer wrapper GUI integration tests only..."
+  "$REPO_ROOT/installer/scripts/run-jackrose-gui-integration-smoke-tests"
   
   # Also verify Swift package builds successfully
   echo "Verifying Swift application compilation..."
-  (cd "$REPO_ROOT/apps/macos/CidreApp" && swift build)
+  (cd "$REPO_ROOT/apps/macos/JackroseApp" && swift build)
   
   exit 0
 fi
@@ -360,20 +360,20 @@ echo "All required tools verified."
 echo ""
 
 # Stage 1: Build Packages
-echo "=== Stage 1/4: Building Cidre Packages ==="
+echo "=== Stage 1/4: Building Jackrose Packages ==="
 if [ "$DRY_RUN" -eq 1 ]; then
-  echo "  [DRY-RUN] would validate PKGBUILDs via build-cidre-packages --printsrcinfo-only"
+  echo "  [DRY-RUN] would validate PKGBUILDs via build-jackrose-packages --printsrcinfo-only"
 else
-  "$REPO_ROOT/scripts/dev/build-cidre-packages" --build
+  "$REPO_ROOT/scripts/dev/build-jackrose-packages" --build
 fi
 echo ""
 
 # Stage 2: Collect Packages
 echo "=== Stage 2/4: Collecting Built Packages ==="
 if [ "$DRY_RUN" -eq 1 ]; then
-  echo "  [DRY-RUN] would collect package archives using collect-cidre-packages"
+  echo "  [DRY-RUN] would collect package archives using collect-jackrose-packages"
 else
-  "$REPO_ROOT/scripts/dev/collect-cidre-packages"
+  "$REPO_ROOT/scripts/dev/collect-jackrose-packages"
 fi
 echo ""
 

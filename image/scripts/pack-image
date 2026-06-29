@@ -107,7 +107,7 @@ fi
 
 echo "Writing build manifest..."
 {
-  echo "profile_name=cidre-seed"
+  echo "profile_name=jackrose-seed"
   echo "image_name=${NAME}"
   echo "version=local"
   echo "arch=aarch64"

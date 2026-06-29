@@ -1,0 +1,95 @@
+#!/bin/sh
+set -eu
+
+usage() {
+  cat <<'EOF'
+Usage:
+  jackrose-app-readiness [options]
+
+Options:
+  --json
+  --markdown
+  --help
+EOF
+}
+
+format="default"
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --json) format="json"; shift ;;
+    --markdown) format="markdown"; shift ;;
+    --help|-h|help) usage; exit 0 ;;
+    *) printf 'ERROR: Unknown option: %s\n' "$1" >&2; usage; exit 2 ;;
+  esac
+done
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+REPO_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+JACKROSE_REPO_ROOT="${JACKROSE_REPO_ROOT:-$REPO_ROOT}"
+export JACKROSE_REPO_ROOT
+
+python3 -c '
+import sys, os, json
+
+format_mode = sys.argv[1]
+repo_root = os.environ["JACKROSE_REPO_ROOT"]
+
+results = []
+passed = True
+
+def add_check(name, ok, msg=""):
+    global passed
+    if not ok:
+        passed = False
+    results.append({"name": name, "passed": ok, "message": msg})
+
+# Check 1: command manifest exists
+manifest_exists = os.path.exists(os.path.join(repo_root, "interface/command-manifest.json"))
+add_check("command_manifest_exists", manifest_exists, "Command manifest exists" if manifest_exists else "Command manifest missing")
+
+# Check 2: schemas exist
+schema_dir = os.path.join(repo_root, "interface/schemas")
+schemas_exists = os.path.exists(schema_dir) and len(os.listdir(schema_dir)) > 0
+add_check("schemas_present", schemas_exists, "JSON schemas directory populated" if schemas_exists else "JSON schemas directory empty or missing")
+
+# Check 3: destructive default block status (allow_real_delete_by_default is false)
+target_rules = os.path.join(repo_root, "uninstaller/target-rules.json")
+blocked_by_default = False
+if os.path.exists(target_rules):
+    try:
+        with open(target_rules) as f:
+            d = json.load(f)
+            if d.get("allow_real_delete_by_default") == False:
+                blocked_by_default = True
+    except Exception:
+        pass
+add_check("destructive_blocked_by_default", blocked_by_default, "Destructive operations disabled by default")
+
+res = {
+    "schema_version": 1,
+    "command": "jackrose-app-readiness",
+    "status": "pass" if passed else "fail",
+    "summary": "App readiness checks passed." if passed else "App readiness checks failed.",
+    "phase": "app-runtime",
+    "stage": "safe-command-execution",
+    "exit_code": 0 if passed else 6,
+    "warnings": [],
+    "errors": [] if passed else [{"code": "app-readiness-failed", "message": "One or more readiness checks failed."}],
+    "checks": results
+}
+
+if format_mode == "json":
+    print(json.dumps(res, indent=2))
+elif format_mode == "markdown":
+    print("# Jackrose App Readiness Diagnostic\n")
+    print("| Check Name | Status | Message |")
+    print("|---|---|---|")
+    for c in results:
+        status = "PASS" if c["passed"] else "FAIL"
+        print("| %s | %s | %s |" % (c["name"], status, c["message"]))
+else:
+    print("App Readiness Diagnostics:")
+    for c in results:
+        status = "[OK]  " if c["passed"] else "[FAIL]"
+        print("  %s %s: %s" % (status, c["name"], c["message"]))
+' "$format"

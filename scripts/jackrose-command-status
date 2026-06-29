@@ -1,0 +1,47 @@
+#!/bin/sh
+set -eu
+
+usage() {
+  cat <<'EOF'
+Usage:
+  jackrose-command-status [options]
+
+Options:
+  --json
+  --markdown
+  --help
+EOF
+}
+
+mode="default"
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --json) mode="json"; shift ;;
+    --markdown) mode="markdown"; shift ;;
+    --help|-h|help) usage; exit 0 ;;
+    *) printf 'ERROR: Unknown option: %s\n' "$1" >&2; usage; exit 2 ;;
+  esac
+done
+
+python3 -c '
+import sys, json, os
+
+mode = sys.argv[1]
+repo_root = os.environ.get("JACKROSE_REPO_ROOT", "/home/yasuno/Projects/Jackrose")
+status_path = os.path.join(repo_root, "interface/status-values.json")
+
+with open(status_path) as f:
+    data = json.load(f)
+
+if mode == "json":
+    print(json.dumps(data, indent=2))
+elif mode == "markdown":
+    print("# Jackrose Common Status Vocabulary\n")
+    print("| Status | Description |")
+    print("|---|---|")
+    for item in data.get("status_values", []):
+        print("| %s | %s |" % (item["value"], item["description"]))
+else:
+    for item in data.get("status_values", []):
+        print("%-15s %s" % (item["value"], item["description"]))
+' "$mode"

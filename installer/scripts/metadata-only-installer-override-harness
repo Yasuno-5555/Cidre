@@ -2,7 +2,7 @@
 # metadata-only-installer-override-harness: Orchestrates the metadata-only override chain and env output
 set -euo pipefail
 
-CIDRE_METADATA=""
+JACKROSE_METADATA=""
 REPO_BASE=""
 PORT=8765
 SNAPSHOT=""
@@ -16,18 +16,18 @@ KEEP_SERVER=0
 STRICT=0
 
 usage() {
-  echo "Usage: $0 --cidre-metadata <path> --repo-base <url> --port <port> --bootstrap-snapshot <path> [options]"
+  echo "Usage: $0 --jackrose-metadata <path> --repo-base <url> --port <port> --bootstrap-snapshot <path> [options]"
   exit 1
 }
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --cidre-metadata)
+    --jackrose-metadata)
       if [ $# -lt 2 ]; then
-        echo "ERROR: --cidre-metadata requires a path." >&2
+        echo "ERROR: --jackrose-metadata requires a path." >&2
         exit 1
       fi
-      CIDRE_METADATA="$2"
+      JACKROSE_METADATA="$2"
       shift 2
       ;;
     --repo-base)
@@ -117,13 +117,13 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-if [ -z "$CIDRE_METADATA" ] || [ -z "$REPO_BASE" ] || [ -z "$SNAPSHOT" ]; then
-  echo "ERROR: --cidre-metadata, --repo-base, and --bootstrap-snapshot are required." >&2
+if [ -z "$JACKROSE_METADATA" ] || [ -z "$REPO_BASE" ] || [ -z "$SNAPSHOT" ]; then
+  echo "ERROR: --jackrose-metadata, --repo-base, and --bootstrap-snapshot are required." >&2
   usage
 fi
 
-if [ ! -f "$CIDRE_METADATA" ]; then
-  echo "ERROR: Cidre metadata file not found: $CIDRE_METADATA" >&2
+if [ ! -f "$JACKROSE_METADATA" ]; then
+  echo "ERROR: Jackrose metadata file not found: $JACKROSE_METADATA" >&2
   exit 1
 fi
 
@@ -149,7 +149,7 @@ fi
 # Step 1: Export Asahi-like candidate formats
 echo "Step 1: Exporting Asahi-like metadata..." >&2
 "$SCRIPT_DIR/export-asahi-installer-data" \
-  --input "$CIDRE_METADATA" \
+  --input "$JACKROSE_METADATA" \
   --output "$ASAHI_OUT" \
   --channel dev \
   --repo-base "$REPO_BASE"
@@ -165,7 +165,7 @@ fi
 # Stage normalized file for serving
 serve_dir="$tmp_dir/serve"
 mkdir -p "$serve_dir"
-cp "$NORM_OUT" "$serve_dir/asahi-installer-data.cidre.dev.normalized.json"
+cp "$NORM_OUT" "$serve_dir/asahi-installer-data.jackrose.dev.normalized.json"
 
 # Step 3: Serve metadata over localhost
 echo "Step 3: Starting mock HTTP server on port $PORT..." >&2
@@ -187,7 +187,7 @@ sleep 2
 echo "Step 4: Running boundary probe..." >&2
 probe_out_file="$tmp_dir/probe_result.md"
 probe_args=(
-  --installer-data-url "http://$HOST:$PORT/asahi-installer-data.cidre.dev.normalized.json"
+  --installer-data-url "http://$HOST:$PORT/asahi-installer-data.jackrose.dev.normalized.json"
   --repo-base "$REPO_BASE"
   --bootstrap-snapshot "$SNAPSHOT"
   --output "$probe_out_file"
@@ -215,10 +215,10 @@ if [ "$decision" = "A_SAFE_METADATA_PATH" ]; then
   
   # Generate override environment variable definition block
   env_block=$(cat <<EOF
-# Cidre bootstrap override environment variables
-export INSTALLER_DATA="http://$HOST:$PORT/asahi-installer-data.cidre.dev.normalized.json"
+# Jackrose bootstrap override environment variables
+export INSTALLER_DATA="http://$HOST:$PORT/asahi-installer-data.jackrose.dev.normalized.json"
 export REPO_BASE="$REPO_BASE"
-export CIDRE_METADATA_ONLY_OVERRIDE_READY="1"
+export JACKROSE_METADATA_ONLY_OVERRIDE_READY="1"
 EOF
 )
   
@@ -235,7 +235,7 @@ EOF
 # Phase 24 Metadata-only Override Harness Result
 
 ## Inputs
-- cidre metadata:     $CIDRE_METADATA
+- jackrose metadata:     $JACKROSE_METADATA
 - repo base:          $REPO_BASE
 - port:               $PORT
 - bootstrap snapshot: $SNAPSHOT
@@ -243,7 +243,7 @@ EOF
 ## Generated Artifacts
 - Asahi-like metadata: $ASAHI_OUT
 - normalized metadata: $NORM_OUT
-- INSTALLER_DATA URL:  http://$HOST:$PORT/asahi-installer-data.cidre.dev.normalized.json
+- INSTALLER_DATA URL:  http://$HOST:$PORT/asahi-installer-data.jackrose.dev.normalized.json
 
 ## Validation Results
 - boundary probe decision: $decision
@@ -276,7 +276,7 @@ else
 # Phase 24 Metadata-only Override Harness Result
 
 ## Inputs
-- cidre metadata:     $CIDRE_METADATA
+- jackrose metadata:     $JACKROSE_METADATA
 - repo base:          $REPO_BASE
 - port:               $PORT
 - bootstrap snapshot: $SNAPSHOT

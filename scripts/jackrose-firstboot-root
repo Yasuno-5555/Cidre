@@ -1,0 +1,322 @@
+#!/bin/sh
+set -eu
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+REPO_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+JACKROSE_SYSTEM_ROOT="${JACKROSE_SYSTEM_ROOT:-}"
+STATE_DIR=""
+DRY_RUN=0
+NON_INTERACTIVE=0
+IMPORT_SEED_PATH=""
+USER_NAME=""
+PROFILE_NAME=""
+SKIP_MODE=0
+HANDOFF_MODE=0
+
+usage() {
+  cat <<'EOF'
+Usage:
+  jackrose-firstboot-root [options]
+
+Options:
+  --dry-run         Show planned firstboot actions
+  --non-interactive Do not prompt for missing values
+  --status          Show firstboot-root status
+  --mark-complete   Mark firstboot-root as completed
+  --skip            Mark firstboot-root as skipped
+  --handoff         Show handoff text
+  --import-seed <p> Import a seed before handoff generation
+  --user <name>     Select or confirm target user
+  --profile <name>  Select or confirm profile
+  -h, --help        Show this help
+EOF
+}
+
+state_dir() {
+  if [ -z "$JACKROSE_SYSTEM_ROOT" ] || [ "$JACKROSE_SYSTEM_ROOT" = "/var/lib/jackrose" ]; then
+    printf '/var/lib/jackrose/firstboot-root\n'
+  else
+    printf '%s/var/lib/jackrose/firstboot-root\n' "$JACKROSE_SYSTEM_ROOT"
+  fi
+}
+
+system_seed_dir() {
+  if [ -z "$JACKROSE_SYSTEM_ROOT" ] || [ "$JACKROSE_SYSTEM_ROOT" = "/var/lib/jackrose" ]; then
+    printf '/var/lib/jackrose/seed\n'
+  else
+    printf '%s/var/lib/jackrose/seed\n' "$JACKROSE_SYSTEM_ROOT"
+  fi
+}
+
+system_resume_dir() {
+  if [ -z "$JACKROSE_SYSTEM_ROOT" ] || [ "$JACKROSE_SYSTEM_ROOT" = "/var/lib/jackrose" ]; then
+    printf '/var/lib/jackrose/resume\n'
+  else
+    printf '%s/var/lib/jackrose/resume\n' "$JACKROSE_SYSTEM_ROOT"
+  fi
+}
+
+STATE_DIR="$(state_dir)"
+SEED_DIR="$(system_seed_dir)"
+RESUME_DIR="$(system_resume_dir)"
+
+validate_profile() {
+  case "$1" in
+    ""|desktop|developer|minimal|recovery) return 0 ;;
+    *) printf 'ERROR: unknown profile: %s\n' "$1" >&2; exit 1 ;;
+  esac
+}
+
+resume_profile() {
+  if [ -f "$RESUME_DIR/resume.env" ]; then
+    grep -E '^JACKROSE_RESUME_PROFILE=' "$RESUME_DIR/resume.env" | head -n1 | cut -d= -f2-
+  fi
+}
+
+normal_users() {
+  awk -F: '$3 >= 1000 && $1 != "nobody" {print $1}' /etc/passwd 2>/dev/null || true
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --dry-run)
+      DRY_RUN=1
+      shift
+      ;;
+    --non-interactive)
+      NON_INTERACTIVE=1
+      shift
+      ;;
+    --status)
+      "$SCRIPT_DIR/jackrose-firstboot-state" status
+      exit 0
+      ;;
+    --mark-complete)
+      "$SCRIPT_DIR/jackrose-firstboot-state" mark-completed
+      exit 0
+      ;;
+    --skip)
+      SKIP_MODE=1
+      shift
+      ;;
+    --handoff)
+      HANDOFF_MODE=1
+      shift
+      ;;
+    --import-seed)
+      IMPORT_SEED_PATH="$2"
+      shift 2
+      ;;
+    --user)
+      USER_NAME="$2"
+      shift 2
+      ;;
+    --profile)
+      PROFILE_NAME="$2"
+      validate_profile "$PROFILE_NAME"
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      printf 'ERROR: unknown option: %s\n' "$1" >&2
+      usage
+      exit 1
+      ;;
+  esac
+done
+
+printf 'Jackrose Firstboot Root Setup\n\n'
+
+if [ "$SKIP_MODE" -eq 1 ]; then
+  if [ "$DRY_RUN" -eq 1 ]; then
+    printf '[DRY-RUN] would mark firstboot-root skipped\n'
+  else
+    "$SCRIPT_DIR/jackrose-firstboot-state" mark-skipped
+  fi
+  exit 0
+fi
+
+if [ "$HANDOFF_MODE" -eq 1 ]; then
+  if [ -f "$STATE_DIR/handoff.txt" ]; then
+    "$SCRIPT_DIR/jackrose-firstboot-state" show-handoff
+  else
+    [ -n "$USER_NAME" ] || USER_NAME="$(cat "$STATE_DIR/selected-user" 2>/dev/null || true)"
+    [ -n "$PROFILE_NAME" ] || PROFILE_NAME="$(cat "$STATE_DIR/selected-profile" 2>/dev/null || true)"
+    [ -n "$USER_NAME" ] || {
+      printf 'ERROR: no handoff available and no user selected\n' >&2
+      exit 1
+    }
+    if [ -n "$PROFILE_NAME" ]; then
+      "$SCRIPT_DIR/jackrose-firstboot-handoff" --user "$USER_NAME" --profile "$PROFILE_NAME"
+    else
+      "$SCRIPT_DIR/jackrose-firstboot-handoff" --user "$USER_NAME"
+    fi
+  fi
+  exit 0
+fi
+
+if [ "$DRY_RUN" -eq 1 ]; then
+  [ -n "$PROFILE_NAME" ] || PROFILE_NAME="$(resume_profile)"
+  printf '[DRY-RUN] state dir: %s\n' "$STATE_DIR"
+  printf '[DRY-RUN] would mark firstboot started\n'
+  if [ -n "$IMPORT_SEED_PATH" ]; then
+    printf '[DRY-RUN] would import seed: %s\n' "$IMPORT_SEED_PATH"
+  fi
+  if [ -f "$RESUME_DIR/resume.env" ]; then
+    printf '[DRY-RUN] detected resume state: %s\n' "$RESUME_DIR/resume.env"
+  else
+    printf '[DRY-RUN] no resume state detected\n'
+  fi
+  if [ -n "$USER_NAME" ]; then
+    printf '[DRY-RUN] selected user: %s\n' "$USER_NAME"
+  fi
+  if [ -n "$PROFILE_NAME" ]; then
+    printf '[DRY-RUN] selected profile: %s\n' "$PROFILE_NAME"
+  fi
+  printf '[DRY-RUN] would run lightweight network/pacman checks\n'
+  printf '[DRY-RUN] would run jackrose-oobe\n'
+  printf '[DRY-RUN] would delegate to jackrose-preinstall\n'
+  printf '[DRY-RUN] would generate root-to-user handoff\n'
+  printf '[DRY-RUN] would warn about changing the root password\n'
+  exit 0
+fi
+
+if [ "$(id -u)" -ne 0 ]; then
+  printf 'ERROR: jackrose-firstboot-root must run as root.\n' >&2
+  exit 1
+fi
+
+[ "$(uname -s)" = "Linux" ] || {
+  printf 'ERROR: jackrose-firstboot-root must run on Linux.\n' >&2
+  exit 1
+}
+
+mkdir -p "$STATE_DIR"
+"$SCRIPT_DIR/jackrose-firstboot-state" set-stage "init" >/dev/null
+"$SCRIPT_DIR/jackrose-firstboot-state" mark-started >/dev/null
+
+set +e
+
+# Update guided installer state
+"$SCRIPT_DIR/jackrose-install-state" --set-stage firstboot --set-status running --set-next-command "Reboot and let firstboot setup complete"
+trap 'if [ "$?" -ne 0 ]; then "$SCRIPT_DIR/jackrose-install-state" --mark-failed "verify-failed"; "$SCRIPT_DIR/jackrose-install-failure-report" --stage firstboot --reason "verify-failed" --output "$REPO_ROOT/.local/state/jackrose/install/current/install-failure-report.md" 2>/dev/null || true; fi' EXIT
+
+
+# Stage: seed-check
+"$SCRIPT_DIR/jackrose-firstboot-state" set-stage "seed-check" >/dev/null
+if [ -n "$IMPORT_SEED_PATH" ]; then
+  if ! JACKROSE_SYSTEM_ROOT="${JACKROSE_SYSTEM_ROOT:-}" "$SCRIPT_DIR/jackrose-seed-import" "$IMPORT_SEED_PATH"; then
+    "$SCRIPT_DIR/jackrose-firstboot-state" set-error "seed import failed"
+    "$SCRIPT_DIR/jackrose-firstboot-state" mark-failed >/dev/null
+    exit 1
+  fi
+fi
+
+# Stage: resume-check
+"$SCRIPT_DIR/jackrose-firstboot-state" set-stage "resume-check" >/dev/null
+[ -n "$PROFILE_NAME" ] || PROFILE_NAME="$(resume_profile)"
+
+# Stage: user-check
+"$SCRIPT_DIR/jackrose-firstboot-state" set-stage "user-check" >/dev/null
+if [ -z "$USER_NAME" ]; then
+  if [ "$NON_INTERACTIVE" -eq 1 ]; then
+    existing_user="$(normal_users | head -n1 || true)"
+    if [ -z "$existing_user" ]; then
+      "$SCRIPT_DIR/jackrose-firstboot-state" set-error "no user for non-interactive mode"
+      "$SCRIPT_DIR/jackrose-firstboot-state" mark-failed >/dev/null
+      exit 1
+    fi
+    USER_NAME="$existing_user"
+  else
+    if [ -n "$PROFILE_NAME" ]; then
+      USER_NAME="$("$SCRIPT_DIR/jackrose-oobe" --profile "$PROFILE_NAME" | awk -F': ' '/^user: / {print $2; exit}')"
+    else
+      USER_NAME="$("$SCRIPT_DIR/jackrose-oobe" | awk -F': ' '/^user: / {print $2; exit}')"
+    fi
+  fi
+fi
+
+printf '%s\n' "$USER_NAME" > "$STATE_DIR/selected-user"
+if [ -n "$PROFILE_NAME" ]; then
+  printf '%s\n' "$PROFILE_NAME" > "$STATE_DIR/selected-profile"
+fi
+
+# Stage: oobe
+"$SCRIPT_DIR/jackrose-firstboot-state" set-stage "oobe" >/dev/null
+oobe_args="--user $USER_NAME"
+if [ -n "$PROFILE_NAME" ]; then
+  oobe_args="$oobe_args --profile $PROFILE_NAME"
+fi
+if [ "$NON_INTERACTIVE" -eq 1 ]; then
+  oobe_args="$oobe_args --non-interactive"
+fi
+# shellcheck disable=SC2086
+if ! "$SCRIPT_DIR/jackrose-oobe" $oobe_args; then
+  "$SCRIPT_DIR/jackrose-firstboot-state" set-error "oobe execution failed"
+  "$SCRIPT_DIR/jackrose-firstboot-state" mark-failed >/dev/null
+  if [ -x "$SCRIPT_DIR/jackrose-firstboot-console" ]; then
+    "$SCRIPT_DIR/jackrose-firstboot-console" --status || true
+  fi
+  if [ -x "$SCRIPT_DIR/jackrose-panic" ]; then
+    "$SCRIPT_DIR/jackrose-panic" --reason firstboot-failed --stage oobe --message "oobe execution failed" --report --dry-run || true
+  fi
+  exit 1
+fi
+
+# Stage: preinstall-handoff
+"$SCRIPT_DIR/jackrose-firstboot-state" set-stage "preinstall-handoff" >/dev/null
+preinstall_args="--prepare --non-interactive --yes --user $USER_NAME"
+if [ -n "$IMPORT_SEED_PATH" ]; then
+  preinstall_args="$preinstall_args --import-seed $IMPORT_SEED_PATH"
+fi
+
+printf '\n[INFO] delegating to jackrose-preinstall\n'
+# shellcheck disable=SC2086
+if ! "$SCRIPT_DIR/jackrose-preinstall" $preinstall_args; then
+  "$SCRIPT_DIR/jackrose-firstboot-state" set-error "preinstall step failed"
+  "$SCRIPT_DIR/jackrose-firstboot-state" mark-failed >/dev/null
+  if [ -x "$SCRIPT_DIR/jackrose-firstboot-console" ]; then
+    "$SCRIPT_DIR/jackrose-firstboot-console" --recovery || true
+  fi
+  if [ -x "$SCRIPT_DIR/jackrose-panic" ]; then
+    "$SCRIPT_DIR/jackrose-panic" --reason firstboot-failed --stage preinstall-handoff --message "preinstall step failed" --report --dry-run || true
+  fi
+  exit 1
+fi
+
+# Stage: handoff
+"$SCRIPT_DIR/jackrose-firstboot-state" set-stage "handoff" >/dev/null
+if [ -n "$PROFILE_NAME" ]; then
+  "$SCRIPT_DIR/jackrose-firstboot-handoff" --user "$USER_NAME" --profile "$PROFILE_NAME" >/dev/null
+else
+  "$SCRIPT_DIR/jackrose-firstboot-handoff" --user "$USER_NAME" >/dev/null
+fi
+
+# Stage: complete
+"$SCRIPT_DIR/jackrose-firstboot-state" set-stage "complete" >/dev/null
+"$SCRIPT_DIR/jackrose-firstboot-state" mark-completed >/dev/null
+rm -f "$STATE_DIR/failed"
+
+# Update guided installer state
+"$SCRIPT_DIR/jackrose-install-state" --set-stage firstboot --set-status passed
+"$SCRIPT_DIR/jackrose-install-state" --set-stage user-phase --set-status pending --set-next-command "Log in to your Jackrose desktop session" --set-next-stage "desktop-verification"
+
+trap - EXIT
+set -e
+
+cat <<EOF
+Jackrose firstboot root setup is complete.
+
+Default root credentials are unsafe.
+Change the root password before using this system as a daily driver.
+
+Recommended:
+
+  passwd root
+
+EOF
+
+"$SCRIPT_DIR/jackrose-firstboot-state" show-handoff

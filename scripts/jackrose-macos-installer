@@ -1,0 +1,599 @@
+#!/bin/sh
+set -eu
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+REPO_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+PROFILE=""
+DRY_RUN=0
+NO_SEED=0
+CHECK_ONLY=0
+PRINT_HANDOFF=0
+RESTORE_HELP=0
+RESTORE_CHECK=0
+PARTITION_AUDIT=0
+STARTUP_DISK_CHECK=0
+UNINSTALL_GUIDE=0
+RESTORE_REPORT=0
+RESCUE_HELP=0
+RESCUE_CHECK=0
+RESCUE_DISK_AUDIT=0
+RESCUE_PLAN=0
+RESCUE_GUIDE=0
+RESCUE_REPORT=0
+RESCUE_CREATE_DRY_RUN=0
+RESCUE_CREATE=0
+RESCUE_CREATE_PREFLIGHT=0
+RESCUE_TARGET_CHECK=0
+RESCUE_CREATE_GUIDE=0
+RESCUE_CREATE_REPORT=0
+RESCUE_TARGET_VALUE=""
+RESCUE_SIZE_VALUE=""
+RESCUE_ARTIFACT_VALUE=""
+INSTALL_DASHBOARD=0
+INSTALL_PREFLIGHT=0
+INSTALL_GUIDE=0
+INSTALL_REPORT=0
+INSTALL_RESUME=0
+INSTALL_HANDOFF=0
+INSTALL_CONTINUE=0
+UNINSTALL_DASHBOARD=0
+UNINSTALL_PREFLIGHT=0
+UNINSTALL_TARGET_SCAN=0
+UNINSTALL_TARGET_REVIEW=0
+UNINSTALL_PLAN=0
+UNINSTALL_DRY_RUN=0
+UNINSTALL_REPORT=0
+UNINSTALL_RESUME=0
+JSON_MODE=0
+
+
+usage() {
+  cat <<'EOF'
+Usage:
+  ./install-macos [options]
+
+Options:
+  --check              Run readiness checks only
+  --dry-run            Print planned actions without making changes
+  --profile <name>     Select profile: desktop, developer, minimal, recovery
+  --no-seed            Skip manifest generation
+  --print-handoff      Print handoff instructions only
+  --restore-help       Print uninstall/restore guidance only
+  --restore-check      Run macOS restore readiness checks
+  --partition-audit    Collect a read-only macOS partition audit
+  --startup-disk-check Generate startup disk guidance
+  --uninstall-guide    Generate a macOS uninstall guide
+  --restore-report     Generate a macOS restore report
+  --rescue-help        Print Rescue Slot guidance
+  --rescue-check       Run macOS-side Rescue Slot readiness checks
+  --rescue-disk-audit  Collect a read-only macOS rescue disk audit
+  --rescue-plan        Generate a macOS rescue planning document
+  --rescue-guide       Generate a macOS rescue guide
+  --rescue-report      Generate a macOS rescue report
+  --rescue-create-dry-run Print rescue creation dry-run guidance
+  --rescue-create      Run macOS rescue creation guidance entrypoint
+  --rescue-create-preflight Run macOS rescue creation preflight
+  --rescue-target-check Check an exact macOS rescue target
+  --rescue-create-guide Generate a macOS rescue creation guide
+  --rescue-create-report Generate a macOS rescue creation report
+  --dashboard          Show guided installer dashboard
+  --install-preflight  Run installation preflight checks
+  --install-guide      Generate guided install instructions
+  --install-report     Generate guided install report
+  --install-resume     Show or run guided install resume status
+  --install-handoff    Generate installation handoff files
+  --continue           Continue guided installation flow
+  --uninstall-dashboard Show guided uninstaller dashboard on macOS
+  --uninstall-preflight Run uninstaller preflight checks on macOS
+  --uninstall-target-scan Scan for uninstall targets on macOS
+  --uninstall-target-review Review exact uninstall target on macOS
+  --uninstall-plan      Generate guided uninstall plan on macOS
+  --uninstall-dry-run   Preview uninstall changes on macOS
+  --uninstall-report    Generate uninstall report on macOS
+  --uninstall-resume    Show or run pending uninstall command on macOS
+  -h, --help           Show this help
+EOF
+}
+
+validate_profile() {
+  case "$1" in
+    desktop|developer|minimal|recovery) return 0 ;;
+    *) printf 'ERROR: unknown profile: %s\n' "$1" >&2; exit 1 ;;
+  esac
+}
+
+require_macos() {
+  if [ "$(uname -s)" != "Darwin" ]; then
+    if [ "${JSON_MODE:-0}" -eq 1 ]; then
+      printf '{\n  "schema_version": 1,\n  "command": "install-macos",\n  "status": "blocked",\n  "reason": "requires-macos",\n  "summary": "This command requires macOS. No disk operation was performed.",\n  "exit_code": 4\n}\n'
+    else
+      printf 'ERROR: this command requires macOS.\nNo disk operation was performed.\n' >&2
+    fi
+    exit 4
+  fi
+}
+
+choose_profile() {
+  if [ -n "$PROFILE" ]; then
+    return 0
+  fi
+
+  if [ -t 0 ] && [ -t 1 ]; then
+    printf 'Select Jackrose profile:\n'
+    printf '  [1] desktop\n'
+    printf '  [2] developer\n'
+    printf '  [3] minimal\n'
+    printf '  [4] recovery\n'
+    printf 'Select option [1-4] (default: 1): '
+    read answer || true
+    case "${answer:-1}" in
+      2) PROFILE="developer" ;;
+      3) PROFILE="minimal" ;;
+      4) PROFILE="recovery" ;;
+      *) PROFILE="desktop" ;;
+    esac
+  else
+    PROFILE="desktop"
+  fi
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --check)
+      CHECK_ONLY=1
+      shift
+      ;;
+    --dry-run)
+      DRY_RUN=1
+      shift
+      ;;
+    --profile)
+      [ "$#" -ge 2 ] || {
+        printf 'ERROR: --profile requires an argument\n' >&2
+        exit 1
+      }
+      PROFILE="$2"
+      validate_profile "$PROFILE"
+      shift 2
+      ;;
+    --target)
+      [ "$#" -ge 2 ] || {
+        printf 'ERROR: --target requires an argument\n' >&2
+        exit 1
+      }
+      RESCUE_TARGET_VALUE="$2"
+      shift 2
+      ;;
+    --size)
+      [ "$#" -ge 2 ] || {
+        printf 'ERROR: --size requires an argument\n' >&2
+        exit 1
+      }
+      RESCUE_SIZE_VALUE="$2"
+      shift 2
+      ;;
+    --artifact)
+      [ "$#" -ge 2 ] || {
+        printf 'ERROR: --artifact requires an argument\n' >&2
+        exit 1
+      }
+      RESCUE_ARTIFACT_VALUE="$2"
+      shift 2
+      ;;
+    --no-seed)
+      NO_SEED=1
+      shift
+      ;;
+    --print-handoff)
+      PRINT_HANDOFF=1
+      shift
+      ;;
+    --restore-help)
+      RESTORE_HELP=1
+      shift
+      ;;
+    --restore-check)
+      RESTORE_CHECK=1
+      shift
+      ;;
+    --partition-audit)
+      PARTITION_AUDIT=1
+      shift
+      ;;
+    --startup-disk-check)
+      STARTUP_DISK_CHECK=1
+      shift
+      ;;
+    --uninstall-guide)
+      UNINSTALL_GUIDE=1
+      shift
+      ;;
+    --restore-report)
+      RESTORE_REPORT=1
+      shift
+      ;;
+    --rescue-help)
+      RESCUE_HELP=1
+      shift
+      ;;
+    --rescue-check)
+      RESCUE_CHECK=1
+      shift
+      ;;
+    --rescue-disk-audit)
+      RESCUE_DISK_AUDIT=1
+      shift
+      ;;
+    --rescue-plan)
+      RESCUE_PLAN=1
+      shift
+      ;;
+    --rescue-guide)
+      RESCUE_GUIDE=1
+      shift
+      ;;
+    --rescue-report)
+      RESCUE_REPORT=1
+      shift
+      ;;
+    --rescue-create-dry-run)
+      RESCUE_CREATE_DRY_RUN=1
+      shift
+      ;;
+    --rescue-create)
+      RESCUE_CREATE=1
+      shift
+      ;;
+    --rescue-create-preflight)
+      RESCUE_CREATE_PREFLIGHT=1
+      shift
+      ;;
+    --rescue-target-check)
+      RESCUE_TARGET_CHECK=1
+      shift
+      ;;
+    --rescue-create-guide)
+      RESCUE_CREATE_GUIDE=1
+      shift
+      ;;
+    --rescue-create-report)
+      RESCUE_CREATE_REPORT=1
+      shift
+      ;;
+    --dashboard)
+      INSTALL_DASHBOARD=1
+      shift
+      ;;
+    --install-preflight)
+      INSTALL_PREFLIGHT=1
+      shift
+      ;;
+    --install-guide)
+      INSTALL_GUIDE=1
+      shift
+      ;;
+    --install-report)
+      INSTALL_REPORT=1
+      shift
+      ;;
+    --install-resume)
+      INSTALL_RESUME=1
+      shift
+      ;;
+    --install-handoff)
+      INSTALL_HANDOFF=1
+      shift
+      ;;
+    --continue)
+      INSTALL_CONTINUE=1
+      shift
+      ;;
+    --uninstall-dashboard)
+      UNINSTALL_DASHBOARD=1
+      shift
+      ;;
+    --uninstall-preflight)
+      UNINSTALL_PREFLIGHT=1
+      shift
+      ;;
+    --uninstall-target-scan)
+      UNINSTALL_TARGET_SCAN=1
+      shift
+      ;;
+    --uninstall-target-review)
+      UNINSTALL_TARGET_REVIEW=1
+      shift
+      ;;
+    --uninstall-plan)
+      UNINSTALL_PLAN=1
+      shift
+      ;;
+    --uninstall-dry-run)
+      UNINSTALL_DRY_RUN=1
+      shift
+      ;;
+    --uninstall-report)
+      UNINSTALL_REPORT=1
+      shift
+      ;;
+    --uninstall-resume)
+      UNINSTALL_RESUME=1
+      shift
+      ;;
+    --json)
+      JSON_MODE=1
+      shift
+      ;;
+    --plain|--no-color|--non-interactive)
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      printf 'ERROR: unknown option: %s\n' "$1" >&2
+      usage
+      exit 1
+      ;;
+  esac
+done
+
+if [ "$INSTALL_DASHBOARD" -eq 1 ]; then
+  exec "$SCRIPT_DIR/jackrose-macos-install-dashboard"
+fi
+
+if [ "$INSTALL_PREFLIGHT" -eq 1 ]; then
+  exec "$SCRIPT_DIR/jackrose-macos-install-preflight"
+fi
+
+if [ "$INSTALL_GUIDE" -eq 1 ]; then
+  exec "$SCRIPT_DIR/jackrose-macos-install-guide"
+fi
+
+if [ "$INSTALL_REPORT" -eq 1 ]; then
+  exec "$SCRIPT_DIR/jackrose-macos-install-report"
+fi
+
+if [ "$INSTALL_RESUME" -eq 1 ]; then
+  exec "$SCRIPT_DIR/jackrose-macos-install-resume"
+fi
+
+if [ "$INSTALL_HANDOFF" -eq 1 ]; then
+  exec "$SCRIPT_DIR/jackrose-macos-install-handoff"
+fi
+
+if [ "$INSTALL_CONTINUE" -eq 1 ]; then
+  exec "$SCRIPT_DIR/jackrose-macos-install-resume" --run
+fi
+
+if [ "$UNINSTALL_DASHBOARD" -eq 1 ]; then
+  require_macos
+  exec "$SCRIPT_DIR/jackrose-macos-uninstall-dashboard"
+fi
+
+if [ "$UNINSTALL_PREFLIGHT" -eq 1 ]; then
+  require_macos
+  exec "$SCRIPT_DIR/jackrose-macos-uninstall-preflight"
+fi
+
+if [ "$UNINSTALL_TARGET_SCAN" -eq 1 ]; then
+  require_macos
+  exec "$SCRIPT_DIR/jackrose-macos-uninstall-target-scan"
+fi
+
+if [ "$UNINSTALL_TARGET_REVIEW" -eq 1 ]; then
+  require_macos
+  exec "$SCRIPT_DIR/jackrose-macos-uninstall-target-review" "$@"
+fi
+
+if [ "$UNINSTALL_PLAN" -eq 1 ]; then
+  require_macos
+  exec "$SCRIPT_DIR/jackrose-macos-uninstall-plan" "$@"
+fi
+
+if [ "$UNINSTALL_DRY_RUN" -eq 1 ]; then
+  require_macos
+  exec "$SCRIPT_DIR/jackrose-macos-uninstall-dry-run" "$@"
+fi
+
+if [ "$UNINSTALL_REPORT" -eq 1 ]; then
+  require_macos
+  exec "$SCRIPT_DIR/jackrose-macos-uninstall-report"
+fi
+
+if [ "$UNINSTALL_RESUME" -eq 1 ]; then
+  require_macos
+  exec "$SCRIPT_DIR/jackrose-macos-uninstall-resume"
+fi
+
+if [ "$CHECK_ONLY" -eq 1 ]; then
+  require_macos
+  exec "$SCRIPT_DIR/jackrose-macos-check"
+fi
+
+if [ "$RESTORE_CHECK" -eq 1 ]; then
+  require_macos
+  exec "$SCRIPT_DIR/jackrose-macos-restore-check"
+fi
+
+if [ "$PARTITION_AUDIT" -eq 1 ]; then
+  require_macos
+  exec "$SCRIPT_DIR/jackrose-macos-partition-audit"
+fi
+
+if [ "$STARTUP_DISK_CHECK" -eq 1 ]; then
+  require_macos
+  exec "$SCRIPT_DIR/jackrose-macos-startup-disk-check"
+fi
+
+if [ "$UNINSTALL_GUIDE" -eq 1 ]; then
+  require_macos
+  exec "$SCRIPT_DIR/jackrose-macos-uninstall-guide"
+fi
+
+if [ "$RESTORE_REPORT" -eq 1 ]; then
+  require_macos
+  exec "$SCRIPT_DIR/jackrose-macos-restore-report"
+fi
+
+if [ "$RESCUE_CHECK" -eq 1 ]; then
+  require_macos
+  exec "$SCRIPT_DIR/jackrose-macos-rescue-check"
+fi
+
+if [ "$RESCUE_DISK_AUDIT" -eq 1 ]; then
+  require_macos
+  exec "$SCRIPT_DIR/jackrose-macos-rescue-disk-audit"
+fi
+
+if [ "$RESCUE_PLAN" -eq 1 ]; then
+  require_macos
+  exec "$SCRIPT_DIR/jackrose-macos-rescue-plan"
+fi
+
+if [ "$RESCUE_GUIDE" -eq 1 ]; then
+  require_macos
+  exec "$SCRIPT_DIR/jackrose-macos-rescue-guide"
+fi
+
+if [ "$RESCUE_REPORT" -eq 1 ]; then
+  require_macos
+  exec "$SCRIPT_DIR/jackrose-macos-rescue-report"
+fi
+
+if [ "$RESCUE_CREATE" -eq 1 ]; then
+  require_macos
+  set -- --dry-run
+  [ -n "$RESCUE_SIZE_VALUE" ] && set -- "$@" --size "$RESCUE_SIZE_VALUE"
+  [ -n "$RESCUE_TARGET_VALUE" ] && set -- "$@" --target "$RESCUE_TARGET_VALUE"
+  [ -n "$RESCUE_ARTIFACT_VALUE" ] && set -- "$@" --artifact "$RESCUE_ARTIFACT_VALUE"
+  exec "$SCRIPT_DIR/jackrose-macos-rescue-create" "$@"
+fi
+
+if [ "$RESCUE_CREATE_PREFLIGHT" -eq 1 ]; then
+  require_macos
+  exec "$SCRIPT_DIR/jackrose-macos-rescue-create-preflight"
+fi
+
+if [ "$RESCUE_TARGET_CHECK" -eq 1 ]; then
+  require_macos
+  set --
+  [ -n "$RESCUE_TARGET_VALUE" ] && set -- "$@" --target "$RESCUE_TARGET_VALUE"
+  exec "$SCRIPT_DIR/jackrose-macos-rescue-target-check" "$@"
+fi
+
+if [ "$RESCUE_CREATE_GUIDE" -eq 1 ]; then
+  require_macos
+  exec "$SCRIPT_DIR/jackrose-macos-rescue-create-guide"
+fi
+
+if [ "$RESCUE_CREATE_REPORT" -eq 1 ]; then
+  require_macos
+  exec "$SCRIPT_DIR/jackrose-macos-rescue-create-report"
+fi
+
+if [ "$RESCUE_CREATE_DRY_RUN" -eq 1 ]; then
+  require_macos
+  cat <<'EOF'
+Jackrose macOS rescue create dry-run
+
+- This release only generates read-only planning output.
+- No partition will be created.
+- No boot entry will be modified.
+- Generate rescue plan, guide, and report first.
+- For creation guidance, run:
+  - ./install-macos --rescue-create-preflight
+  - ./install-macos --rescue-target-check --target <identifier>
+  - ./install-macos --rescue-create-guide
+EOF
+  exit 0
+fi
+
+if [ "$RESTORE_HELP" -eq 1 ]; then
+  cat <<'EOF'
+Jackrose restore and removal guidance
+
+- v0.24.0 adds macOS-side restore check, partition audit, startup disk guidance, uninstall guide, and restore report generation.
+- v0.24.0 does not delete partitions, resize APFS containers, or change the default startup disk automatically.
+- Review Linux-side artifacts first:
+  - scripts/jackrose-uninstall-check
+  - scripts/jackrose-state-export --include-logs --include-reports
+  - scripts/jackrose-partition-audit
+  - scripts/jackrose-macos-restore-guide
+- Then, from macOS:
+  - ./install-macos --restore-check
+  - ./install-macos --partition-audit
+  - ./install-macos --startup-disk-check
+  - ./install-macos --uninstall-guide
+  - ./install-macos --restore-report
+
+Destructive operations remain unavailable in this release.
+EOF
+  exit 0
+fi
+
+if [ "$RESCUE_HELP" -eq 1 ]; then
+  cat <<'EOF'
+Jackrose Rescue Slot guidance
+
+- v0.28.0 adds guided Rescue Slot creation for explicitly selected prepared targets.
+- Recommended size: 6-12 GiB, with 8 GiB as a reasonable starting point.
+- Rescue is a minimal ALARM-based environment, not a daily desktop.
+- Creation defaults to dry-run and requires an exact target plus explicit confirmation.
+- v0.28.0 does not create partitions or modify boot entries automatically.
+- Use Rescue for mount/export/kernel inspection.
+- macOS-side planning commands:
+  - ./install-macos --rescue-check
+  - ./install-macos --rescue-disk-audit
+  - ./install-macos --rescue-plan
+  - ./install-macos --rescue-guide
+  - ./install-macos --rescue-report
+  - ./install-macos --rescue-create-preflight
+  - ./install-macos --rescue-target-check --target <identifier>
+  - ./install-macos --rescue-create-guide
+  - ./install-macos --rescue-create-report
+- Use macOS Restore Assistant if Rescue cannot recover main Jackrose.
+EOF
+  exit 0
+fi
+
+choose_profile
+
+if [ "$PRINT_HANDOFF" -eq 1 ]; then
+  require_macos
+  exec "$SCRIPT_DIR/jackrose-macos-handoff" --profile "$PROFILE" --state-dir "$REPO_ROOT/.local/state/jackrose/macos-bootstrap"
+fi
+
+require_macos
+
+printf 'Jackrose macOS Bootstrap (Guided Install Flow)\n\n'
+
+# Update states
+"$SCRIPT_DIR/jackrose-install-state" --set-stage macos-preflight --set-status running --set-next-command "./install-macos --continue"
+
+if ! "$SCRIPT_DIR/jackrose-macos-install-preflight"; then
+  "$SCRIPT_DIR/jackrose-install-state" --mark-failed "preflight-failed"
+  exit 1
+fi
+"$SCRIPT_DIR/jackrose-install-state" --set-stage macos-seed --set-status running
+
+if [ "$NO_SEED" -eq 0 ]; then
+  if ! "$SCRIPT_DIR/jackrose-macos-seed" --profile "$PROFILE"; then
+    "$SCRIPT_DIR/jackrose-install-state" --mark-failed "seed-failed"
+    exit 1
+  fi
+fi
+
+"$SCRIPT_DIR/jackrose-install-state" --set-stage macos-handoff --set-status running
+
+if ! "$SCRIPT_DIR/jackrose-macos-install-handoff" --output "$REPO_ROOT/.local/state/jackrose/install/current/install-handoff.md"; then
+  "$SCRIPT_DIR/jackrose-install-state" --mark-failed "generic-failure"
+  exit 1
+fi
+
+"$SCRIPT_DIR/jackrose-install-state" --set-stage alarm-install --set-status pending --set-next-command "./preinstall --resume" --set-next-stage "root-preinstall"
+"$SCRIPT_DIR/jackrose-install-state" --set-status passed
+
+# Show dashboard
+"$SCRIPT_DIR/jackrose-macos-install-dashboard"

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "cidre_version": "0.27.0",
+  "jackrose_version": "0.27.0",
   "slot_type": "rescue",
   "profile": "minimal-rescue",
   "boot_integration": "planned",

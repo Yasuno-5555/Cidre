@@ -1,0 +1,41 @@
+#!/bin/sh
+set -eu
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+. "$SCRIPT_DIR/jackrose-macos-restore-common"
+
+state_root="${JACKROSE_MACOS_RESCUE_CREATE_STATE_ROOT:-$PWD/.local/state/jackrose/macos-rescue-create}"
+output_file="$state_root/current/macos-rescue-create-guide.md"
+
+usage() {
+  cat <<EOF
+Usage: jackrose-macos-rescue-create-guide [options]
+
+Options:
+  --output <file>
+  --help
+EOF
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --output) output_file="$2"; shift 2 ;;
+    --help) usage; exit 0 ;;
+    *) printf 'ERROR: unknown option: %s\n' "$1" >&2; exit 1 ;;
+  esac
+done
+
+jackrose_macos_restore_require_macos
+mkdir -p "$(dirname "$output_file")"
+cat > "$output_file" <<EOF
+# Jackrose macOS Rescue Create Guide
+
+- Back up macOS data first.
+- Run Jackrose state export before creating a Rescue Slot.
+- Use exact targets only.
+- Prepared target mode is the primary v0.28.0 flow.
+- Manual Disk Utility or diskutil work remains user-driven.
+- Future boot integration remains separate.
+- No automatic destructive creation is enabled by default.
+EOF
+printf '%s\n' "$output_file"

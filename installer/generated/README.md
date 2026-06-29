@@ -9,7 +9,7 @@ This directory contains simplified JSON schemas designed to drive future Asahi-s
 To validate the mapped metadata format:
 
 ```bash
-installer/scripts/validate-exported-installer-metadata installer/generated/cidre-installer-data.local.json
+installer/scripts/validate-exported-installer-metadata installer/generated/jackrose-installer-data.local.json
 ```
 
 ---

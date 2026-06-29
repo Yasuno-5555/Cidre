@@ -1,7 +1,7 @@
 # Phase 22 Boundary Probe Result
 
 ## Inputs
-- INSTALLER_DATA:       http://127.0.0.1:8765/asahi-installer-data.cidre.dev.json
+- INSTALLER_DATA:       http://127.0.0.1:8765/asahi-installer-data.jackrose.dev.json
 - REPO_BASE:            http://127.0.0.1:8765
 - bootstrap snapshot:   installer/bootstrap/upstream/asahi-bootstrap-dev.snapshot.sh
 

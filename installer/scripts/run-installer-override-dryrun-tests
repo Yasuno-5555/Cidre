@@ -5,15 +5,15 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-TEST_TMPDIR="${CIDRE_TEST_TMPDIR:-/tmp/cidre-installer-override-dryrun}"
+TEST_TMPDIR="${JACKROSE_TEST_TMPDIR:-/tmp/jackrose-installer-override-dryrun}"
 rm -rf "$TEST_TMPDIR"
 mkdir -p "$TEST_TMPDIR/generated"
 mkdir -p "$TEST_TMPDIR/fetch"
 
 echo "=== Running Installer Override Dry-run Tests ==="
 
-FIXTURE="$REPO_ROOT/installer/fixtures/cidre-seed-v0.integration.json"
-LOCAL_LAYOUT="$REPO_ROOT/installer/release/cidre-release-layout.localhost.json"
+FIXTURE="$REPO_ROOT/installer/fixtures/jackrose-seed-v0.integration.json"
+LOCAL_LAYOUT="$REPO_ROOT/installer/release/jackrose-release-layout.localhost.json"
 
 # Staging initial local metadata format
 "$REPO_ROOT/installer/scripts/export-installer-metadata" \
@@ -30,7 +30,7 @@ LOCAL_LAYOUT="$REPO_ROOT/installer/release/cidre-release-layout.localhost.json"
 # Export Asahi-like candidate formats to generated folder
 "$REPO_ROOT/installer/scripts/export-asahi-installer-data" \
   --input "$TEST_TMPDIR/dev-facing.json" \
-  --output "$TEST_TMPDIR/generated/asahi-installer-data.cidre.dev.json" \
+  --output "$TEST_TMPDIR/generated/asahi-installer-data.jackrose.dev.json" \
   --channel dev
 
 # Start mock HTTP server
@@ -52,13 +52,13 @@ sleep 3
 # Test 1: Fetch and validation
 echo "Test 1: Validating installer data URL..."
 "$REPO_ROOT/installer/scripts/validate-installer-data-url" \
-  --url "http://127.0.0.1:8765/asahi-installer-data.cidre.dev.json" \
+  --url "http://127.0.0.1:8765/asahi-installer-data.jackrose.dev.json" \
   --download-dir "$TEST_TMPDIR/fetch"
 
 # Test 2: Print override variables
 echo "Test 2: Exporting override configurations..."
 "$REPO_ROOT/installer/scripts/print-installer-override-env" \
-  --installer-data-url "http://127.0.0.1:8765/asahi-installer-data.cidre.dev.json" \
+  --installer-data-url "http://127.0.0.1:8765/asahi-installer-data.jackrose.dev.json" \
   --repo-base "http://127.0.0.1:8765" \
   --output "$TEST_TMPDIR/installer-env.env"
 

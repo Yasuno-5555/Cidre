@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "commands": [
+    {
+      "name": "jackrose-install-dashboard",
+      "path": "scripts/jackrose-install-dashboard",
+      "category": "install",
+      "supports_json": true,
+      "supports_plain": true,
+      "supports_noninteractive": true,
+      "supports_dry_run": false,
+      "destructive_capable": false,
+      "requires_root": false,
+      "requires_macos": false,
+      "requires_linux": false
+    },
+    {
+      "name": "jackrose-uninstall-dashboard",
+      "path": "scripts/jackrose-uninstall-dashboard",
+      "category": "uninstall",
+      "supports_json": true,
+      "supports_plain": true,
+      "supports_noninteractive": true,
+      "supports_dry_run": false,
+      "destructive_capable": false,
+      "requires_root": false,
+      "requires_macos": false,
+      "requires_linux": true
+    },
+    {
+      "name": "jackrose-uninstall-execute",
+      "path": "scripts/jackrose-uninstall-execute",
+      "category": "uninstall",
+      "supports_json": true,
+      "supports_plain": true,
+      "supports_noninteractive": true,
+      "supports_dry_run": true,
+      "destructive_capable": true,
+      "requires_root": false,
+      "requires_macos": false,
+      "requires_linux": true
+    },
+    {
+      "name": "jackrose-doctor",
+      "path": "scripts/jackrose-doctor",
+      "category": "doctor",
+      "supports_json": true,
+      "supports_plain": true,
+      "supports_noninteractive": true,
+      "supports_dry_run": false,
+      "destructive_capable": false,
+      "requires_root": false,
+      "requires_macos": false,
+      "requires_linux": false
+    },
+    {
+      "name": "jackrose-recovery",
+      "path": "scripts/jackrose-recovery",
+      "category": "recovery",
+      "supports_json": true,
+      "supports_plain": true,
+      "supports_noninteractive": true,
+      "supports_dry_run": false,
+      "destructive_capable": false,
+      "requires_root": false,
+      "requires_macos": false,
+      "requires_linux": false
+    }
+  ]
+}

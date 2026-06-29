@@ -1,9 +1,9 @@
 #!/bin/sh
-# Cidre step2 auto-launcher (Asahi ALARM reference layout)
+# Jackrose step2 auto-launcher (Asahi ALARM reference layout)
 # Reference: https://github.com/asahi-alarm/asahi-alarm-installer
 #   src/step2/Finish Installation.app/Contents/MacOS/step2_launcher.sh
 #
-# Runs when recoveryOS boots the Cidre stub and finds .IAPhysicalMedia.
+# Runs when recoveryOS boots the Jackrose stub and finds .IAPhysicalMedia.
 # Opens Terminal.app to run step2.sh interactively.
 #
 # FIXED (2026-06-26): Previously the launcher tried to pass step2.sh as a
@@ -14,10 +14,10 @@
 # Now we write a temporary script that auto-runs step2.sh when Terminal opens,
 # and use open(1) to launch Terminal with the script's directory as a hint.
 
-LOG="/var/log/cidre-step2.log"
+LOG="/var/log/jackrose-step2.log"
 exec >> "$LOG" 2>&1
 
-echo "=== Cidre Step2 Auto-Launcher ==="
+echo "=== Jackrose Step2 Auto-Launcher ==="
 echo "Started: $(date)"
 
 # Priority 1: step2.sh in the app bundle's Resources (Asahi ALARM layout)
@@ -28,9 +28,9 @@ STEP2="$RESOURCES/step2.sh"
 # If step2.sh not in Resources, check fallback locations
 if [ ! -x "$STEP2" ]; then
   for candidate in \
-    "/Volumes/Cidre/cidre/step2.sh" \
-    "/Volumes/Cidre 1/cidre/step2.sh" \
-    "/Volumes/Cidre/cidre-step2.sh"; do
+    "/Volumes/Jackrose/jackrose/step2.sh" \
+    "/Volumes/Jackrose 1/jackrose/step2.sh" \
+    "/Volumes/Jackrose/jackrose-step2.sh"; do
     if [ -x "$candidate" ]; then
       STEP2="$candidate"
       break
@@ -41,7 +41,7 @@ fi
 if [ ! -x "$STEP2" ]; then
   # Can't find step2.sh — just open Terminal so user sees something
   echo "FATAL: Cannot find step2 script"
-  echo "Searched: $RESOURCES/step2.sh, /Volumes/Cidre/cidre/step2.sh"
+  echo "Searched: $RESOURCES/step2.sh, /Volumes/Jackrose/jackrose/step2.sh"
   /System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal &
   exit 1
 fi
@@ -56,13 +56,13 @@ echo "Found step2.sh: $STEP2"
 # Most users of the Asahi flow expect to type the command themselves.
 
 # Write a clear instruction file
-INSTRUCTIONS="/var/tmp/cidre-step2-instructions.txt"
+INSTRUCTIONS="/var/tmp/jackrose-step2-instructions.txt"
 cat > "$INSTRUCTIONS" << EOF
 ============================================
-  Cidre Installer — Recovery Step 2
+  Jackrose Installer — Recovery Step 2
 ============================================
 
-Almost done! To complete the Cidre installation,
+Almost done! To complete the Jackrose installation,
 please run the following command in this Terminal:
 
     $STEP2
@@ -73,7 +73,7 @@ This will:
   3. Configure the boot entry
   4. Reboot your Mac
 
-After reboot: hold the power button → select Cidre → Linux boots!
+After reboot: hold the power button → select Jackrose → Linux boots!
 
 ============================================
 EOF
@@ -91,7 +91,7 @@ fi
 # We're NOT in a terminal (launched by recoveryOS auto-run).
 # Open Terminal and display instructions.
 # Write a temporary rc file that shows instructions
-TMP_RC="/var/tmp/cidre-rc"
+TMP_RC="/var/tmp/jackrose-rc"
 cat > "$TMP_RC" << EOF
 clear
 cat "$INSTRUCTIONS"
@@ -106,13 +106,13 @@ TERMINAL_APP="/System/Applications/Utilities/Terminal.app/Contents/MacOS/Termina
 
 if [ -x "$TERMINAL_APP" ]; then
   # Create a wrapper that shows instructions and drops to shell
-  TMP_RUNNER="/var/tmp/cidre-runner.sh"
+  TMP_RUNNER="/var/tmp/jackrose-runner.sh"
   cat > "$TMP_RUNNER" << RUNNEREOF
 #!/bin/sh
 clear
 cat "$INSTRUCTIONS"
 echo ""
-echo "To complete Cidre installation, run:"
+echo "To complete Jackrose installation, run:"
 echo "  $STEP2"
 echo ""
 exec /bin/sh

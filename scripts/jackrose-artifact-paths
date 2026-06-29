@@ -1,0 +1,107 @@
+#!/bin/sh
+set -eu
+
+usage() {
+  cat <<'EOF'
+Usage:
+  jackrose-artifact-paths [options]
+
+Options:
+  --install
+  --uninstall
+  --recovery
+  --rescue
+  --all
+  --json
+  --help
+EOF
+}
+
+cat_install=false
+cat_uninstall=false
+cat_recovery=false
+cat_rescue=false
+json_mode=false
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --install) cat_install=true; shift ;;
+    --uninstall) cat_uninstall=true; shift ;;
+    --recovery) cat_recovery=true; shift ;;
+    --rescue) cat_rescue=true; shift ;;
+    --all) cat_install=true; cat_uninstall=true; cat_recovery=true; cat_rescue=true; shift ;;
+    --json) json_mode=true; shift ;;
+    --help|-h|help) usage; exit 0 ;;
+    *) printf 'ERROR: Unknown option: %s\n' "$1" >&2; usage; exit 2 ;;
+  esac
+done
+
+if [ "$cat_install" = "false" ] && [ "$cat_uninstall" = "false" ] && [ "$cat_recovery" = "false" ] && [ "$cat_rescue" = "false" ]; then
+  cat_install=true; cat_uninstall=true; cat_recovery=true; cat_rescue=true
+fi
+
+python3 -c '
+import sys, json, os
+
+cat_install = sys.argv[1] == "true"
+cat_uninstall = sys.argv[2] == "true"
+cat_recovery = sys.argv[3] == "true"
+cat_rescue = sys.argv[4] == "true"
+json_mode = sys.argv[5] == "true"
+
+repo_root = os.environ.get("JACKROSE_REPO_ROOT", "/home/yasuno/Projects/Jackrose")
+layout_path = os.path.join(repo_root, "interface/artifact-layout.json")
+
+with open(layout_path) as f:
+    layout_data = json.load(f)
+
+artifacts = []
+
+# Resolve variables like ~ or relative paths
+home = os.path.expanduser("~")
+
+for art in layout_data.get("artifacts", []):
+    role = art["role"]
+    path = art["path"]
+    
+    # Simple selection logic based on role prefix
+    if role.startswith("install") and not cat_install:
+        continue
+    if role.startswith("uninstall") and not cat_uninstall:
+        continue
+    if role.startswith("recovery") and not cat_recovery:
+        continue
+    if role.startswith("rescue") and not cat_rescue:
+        continue
+        
+    # Check absolute location
+    full_path = path
+    if path.startswith(".local/"):
+        full_path = os.path.join(home, path)
+    
+    exists = os.path.exists(full_path)
+    
+    artifacts.append({
+        "role": role,
+        "path": full_path,
+        "type": art["type"],
+        "exists": exists
+    })
+
+res = {
+    "schema_version": 1,
+    "artifacts": artifacts
+}
+
+if json_mode:
+    print(json.dumps(res, indent=2))
+else:
+    print("Jackrose Artifact Paths:")
+    for a in artifacts:
+        status = "[EXISTS]" if a["exists"] else "[MISSING]"
+        print("  %-25s %s -> %s" % (a["role"], status, a["path"]))
+' "$([ "$cat_install" = "true" ] && echo "true" || echo "false")" \
+  "$([ "$cat_uninstall" = "true" ] && echo "true" || echo "false")" \
+  "$([ "$cat_recovery" = "true" ] && echo "true" || echo "false")" \
+  "$([ "$cat_rescue" = "true" ] && echo "true" || echo "false")" \
+  "$([ "$json_mode" = "true" ] && echo "true" || echo "false")"

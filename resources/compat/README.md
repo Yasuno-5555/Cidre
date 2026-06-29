@@ -2,12 +2,12 @@
 
 These files are kept for upstream `niri` compatibility and local testing.
 
-They are not installed as part of the standard Cidre session.
-The official Cidre session uses:
+They are not installed as part of the standard Jackrose session.
+The official Jackrose session uses:
 
-- `cidre-session`
-- `cidre.service`
-- `cidre.desktop`
-- `/usr/bin/niri-cidre`
+- `jackrose-session`
+- `jackrose.service`
+- `jackrose.desktop`
+- `/usr/bin/niri-jackrose`
 
-Do not report issues against Cidre using these compatibility session files unless the issue also reproduces with the standard Cidre session.
+Do not report issues against Jackrose using these compatibility session files unless the issue also reproduces with the standard Jackrose session.

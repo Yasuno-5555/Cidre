@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+# jackrose-first-login: Print post-login instructions and next steps guidance
+set -euo pipefail
+
+USER_STATE_DIR="${JACKROSE_USER_STATE_DIR:-$HOME/.local/state/jackrose/user-phase}"
+JACKROSE_SYSTEM_ROOT="${JACKROSE_SYSTEM_ROOT:-}"
+ROOT_HANDOFF_DIR="${JACKROSE_SYSTEM_ROOT%/}/var/lib/jackrose/handoff"
+
+do_status=false
+do_next=false
+failure_reason=""
+
+usage() {
+  cat <<EOF
+Usage: jackrose-first-login [options]
+
+Show guided options and commands for the first login of a normal user.
+
+Options:
+  --status    Display detected root phase handoff status parameters
+  --next      Display recommended next installation commands
+  --failure <reason>  Record a first-login failure and show recovery guidance
+  --help      Show this help
+EOF
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --status) do_status=true; shift ;;
+    --next) do_next=true; shift ;;
+    --failure) failure_reason="$2"; shift 2 ;;
+    --help) usage; exit 0 ;;
+    *) echo "ERROR: unknown option: $1" >&2; usage >&2; exit 1 ;;
+  esac
+done
+
+if [ -n "$failure_reason" ]; then
+  exec "$(dirname "$0")/jackrose-session-failure" --component first-login --exit-code 1 --reason "$failure_reason"
+fi
+
+# Update guided installer state
+"$(dirname "$0")/jackrose-install-state" --set-stage user-phase --set-status running --set-next-command "./install --verify"
+
+
+# Try loading handoff
+profile="minimal"
+repo_path="~/Projects/Jackrose"
+
+if [ -f "$USER_STATE_DIR/resume.env" ]; then
+  JACKROSE_SELECTED_PROFILE=""
+  JACKROSE_REPO_PATH=""
+  # shellcheck disable=SC1090
+  source "$USER_STATE_DIR/resume.env"
+  profile="${JACKROSE_SELECTED_PROFILE:-minimal}"
+  repo_path="${JACKROSE_REPO_PATH:-~/Projects/Jackrose}"
+elif [ -f "$ROOT_HANDOFF_DIR/user-phase.env" ]; then
+  JACKROSE_SELECTED_USER=""
+  JACKROSE_SELECTED_PROFILE=""
+  JACKROSE_REPO_PATH=""
+  # shellcheck disable=SC1090
+  source "$ROOT_HANDOFF_DIR/user-phase.env"
+  profile="${JACKROSE_SELECTED_PROFILE:-minimal}"
+  repo_path="${JACKROSE_REPO_PATH:-~/Projects/Jackrose}"
+fi
+
+if $do_status; then
+  echo "Jackrose First Login Status"
+  echo "========================"
+  echo "Detected handoff profile: $profile"
+  echo "Detected repository path: $repo_path"
+  if [ -f "$USER_STATE_DIR/handoff-imported" ]; then
+    echo "Handoff import state:     imported"
+  else
+    echo "Handoff import state:     pending"
+  fi
+  exit 0
+fi
+
+if $do_next; then
+  echo "Next Steps:"
+  echo "  cd $repo_path"
+  echo "  ./install --resume"
+  exit 0
+fi
+
+# Default: print full guide
+cat <<EOF
+==================================================
+                 Jackrose First Login
+==================================================
+Detected handoff:
+  profile: $profile
+
+Next:
+  cd $repo_path
+  ./install --resume
+
+Diagnostics:
+  scripts/jackrose-user-phase-verify
+  scripts/jackrose-doctor --user-phase
+Recovery:
+  scripts/jackrose-recovery-screen --reason first-login-failed --non-interactive
+==================================================
+EOF

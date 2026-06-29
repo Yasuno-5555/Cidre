@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+
+# Wrapper that runs the guide for macos-preflight stage
+exec "$(dirname "$0")/jackrose-install-guide" --stage macos-preflight "$@"

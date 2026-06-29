@@ -81,7 +81,7 @@ fi
 # 1. Create backup
 BACKUP_DIR="$SCRIPT_DIR/../metadata/backups"
 mkdir -p "$BACKUP_DIR"
-backup_file="$BACKUP_DIR/cidre-seed.local.$(date +%Y%m%d-%H%M).json"
+backup_file="$BACKUP_DIR/jackrose-seed.local.$(date +%Y%m%d-%H%M).json"
 cp "$METADATA" "$backup_file"
 echo "Backup created at $backup_file"
 

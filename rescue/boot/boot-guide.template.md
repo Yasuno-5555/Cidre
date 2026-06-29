@@ -1,4 +1,4 @@
-# Cidre Rescue Boot Guide
+# Jackrose Rescue Boot Guide
 
 - Rescue Slot concept
 - required artifact

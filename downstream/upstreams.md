@@ -5,8 +5,8 @@
 Purpose:
   ALARM installer flow
 
-Cidre interest:
-  Cidre image entry and bootstrap integration
+Jackrose interest:
+  Jackrose image entry and bootstrap integration
 
 Tracking strategy:
   fork with upstream remote
@@ -16,8 +16,8 @@ Tracking strategy:
 Purpose:
   ALARM reference image builder
 
-Cidre interest:
-  Cidre rootfs image prototype
+Jackrose interest:
+  Jackrose rootfs image prototype
 
 Tracking strategy:
   fork or reference clone
@@ -27,7 +27,7 @@ Tracking strategy:
 Purpose:
   ALARM package and distribution repository
 
-Cidre interest:
+Jackrose interest:
   package overlay, distribution assumptions, docs
 
 Tracking strategy:
@@ -38,7 +38,7 @@ Tracking strategy:
 Purpose:
   reference installer metadata
 
-Cidre interest:
+Jackrose interest:
   metadata structure and installable image entries
 
 Tracking strategy:
@@ -49,7 +49,7 @@ Tracking strategy:
 Purpose:
   upstream installer implementation
 
-Cidre interest:
+Jackrose interest:
   structure understanding only
 
 Tracking strategy:

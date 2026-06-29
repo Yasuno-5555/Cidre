@@ -1,3 +1,0 @@
-Cidre v1.0 diagnostics profile
-
-This package is a meta profile for troubleshooting and performance analysis tools.

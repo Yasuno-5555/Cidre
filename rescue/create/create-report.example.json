@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "target": "/mnt/cidre-rescue",
-  "artifact": ".local/state/cidre/rescue/artifacts/cidre-rescue-rootfs.tar.gz",
-  "metadata": ".local/state/cidre/rescue-boot/current/rescue-slot-metadata.json",
+  "target": "/mnt/jackrose-rescue",
+  "artifact": ".local/state/jackrose/rescue/artifacts/jackrose-rescue-rootfs.tar.gz",
+  "metadata": ".local/state/jackrose/rescue-boot/current/rescue-slot-metadata.json",
   "creation_status": "dry-run",
   "verify_status": "pending",
   "boot_integration": "pending"

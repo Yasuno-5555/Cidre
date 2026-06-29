@@ -1,0 +1,171 @@
+#!/usr/bin/env bash
+# jackrose-controlled-boot-test: Orchestrator entrypoint managing prep, check, verify, results, reports
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+artifact_path=""
+manifest_path=""
+profile="developer"
+prepare=false
+record_observation=false
+collect_logs=false
+verify_firstboot=false
+classify=false
+report=false
+
+# Observation params
+firstboot_visible="no"
+oobe_visible="no"
+handoff_visible="no"
+login_prompt_visible="no"
+obs_error="none"
+obs_note=""
+
+# Result params
+res_status=""
+res_stage="unknown"
+res_reason=""
+
+usage() {
+  cat <<EOF
+Usage: jackrose-controlled-boot-test [options]
+
+High-level orchestrator for controlled boot tests.
+
+Options:
+  --artifact <path>   Registered image artifact
+  --manifest <path>   Manifest JSON file path
+  --profile <name>    Profile name (default: developer)
+
+Subcommands:
+  --prepare           Preflight check, compile checklist, set up directories
+  --record-observation Write screen check notes
+  --collect-logs      Gather post-boot system logs
+  --verify-firstboot  Verify firstboot markers
+  --classify          Categorize failures
+  --report            Compile markdown summary report
+
+Observation parameters (optional, with --record-observation):
+  --firstboot-visible yes|no
+  --oobe-visible yes|no
+  --handoff-visible yes|no
+  --login-prompt-visible yes|no
+  --error <text>
+  --note <text>
+
+Result parameters (optional, with --report/--classify):
+  --status success|partial|failed|blocked
+  --stage <stage>
+  --reason <text>
+  --help
+EOF
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --artifact) artifact_path="$2"; shift 2 ;;
+    --manifest) manifest_path="$2"; shift 2 ;;
+    --profile) profile="$2"; shift 2 ;;
+    --prepare) prepare=true; shift ;;
+    --record-observation) record_observation=true; shift ;;
+    --collect-logs) collect_logs=true; shift ;;
+    --verify-firstboot) verify_firstboot=true; shift ;;
+    --classify) classify=true; shift ;;
+    --report) report=true; shift ;;
+    
+    # Observation args
+    --firstboot-visible) firstboot_visible="$2"; shift 2 ;;
+    --oobe-visible) oobe_visible="$2"; shift 2 ;;
+    --handoff-visible) handoff_visible="$2"; shift 2 ;;
+    --login-prompt-visible) login_prompt_visible="$2"; shift 2 ;;
+    --error) obs_error="$2"; shift 2 ;;
+    --note) obs_note="$2"; shift 2 ;;
+    
+    # Result args
+    --status) res_status="$2"; shift 2 ;;
+    --stage) res_stage="$2"; shift 2 ;;
+    --reason) res_reason="$2"; shift 2 ;;
+    
+    --help) usage; exit 0 ;;
+    *) echo "ERROR: unknown option: $1" >&2; usage >&2; exit 1 ;;
+  esac
+done
+
+state_dir="$REPO_ROOT/.local/state/jackrose/boot-test/current"
+mkdir -p "$state_dir"
+
+if $prepare; then
+  if [ -z "$artifact_path" ]; then
+    echo "ERROR: --artifact is required for --prepare" >&2
+    exit 1
+  fi
+  if [ -z "$manifest_path" ]; then
+    manifest_path="$REPO_ROOT/.local/state/jackrose/image-build/jackrose-image-manifest.json"
+  fi
+  
+  echo "Running preflight validation..."
+  "$SCRIPT_DIR/jackrose-boot-preflight" --artifact "$artifact_path" --manifest "$manifest_path" --profile "$profile" --output "$state_dir"
+  
+  echo "Checking boot readiness..."
+  "$SCRIPT_DIR/jackrose-image-boot-readiness" --image "$artifact_path" --manifest "$manifest_path" > "$state_dir/boot-readiness.log" 2>&1 || true
+  
+  echo "Generating controlled boot checklist..."
+  "$SCRIPT_DIR/jackrose-boot-checklist" --output "$state_dir/checklist.md"
+  
+  echo "[OK] Controlled boot test environment prepared."
+  exit 0
+fi
+
+if $record_observation; then
+  "$SCRIPT_DIR/jackrose-boot-observe" \
+    --firstboot-visible "$firstboot_visible" \
+    --oobe-visible "$oobe_visible" \
+    --handoff-visible "$handoff_visible" \
+    --login-prompt-visible "$login_prompt_visible" \
+    --error "$obs_error" \
+    --note "$obs_note" \
+    --output "$state_dir/observation.md"
+  exit 0
+fi
+
+if $collect_logs; then
+  echo "Collecting logs..."
+  "$SCRIPT_DIR/jackrose-boot-log-collect" --boot-test-state "$state_dir"
+  exit 0
+fi
+
+if $verify_firstboot; then
+  echo "Verifying firstboot markers..."
+  "$SCRIPT_DIR/jackrose-firstboot-verify" --root / > "$state_dir/firstboot-verify.log" 2>&1 || true
+  cat "$state_dir/firstboot-verify.log"
+  exit 0
+fi
+
+if $classify || $report; then
+  if [ -n "$res_status" ]; then
+    "$SCRIPT_DIR/jackrose-boot-result" \
+      --status "$res_status" \
+      --stage "$res_stage" \
+      --reason "$res_reason" \
+      --output "$state_dir/result.json"
+  fi
+  
+  if $classify; then
+    "$SCRIPT_DIR/jackrose-boot-failure-classify" \
+      --result "$state_dir/result.json" \
+      --output "$state_dir/failure-classification.md"
+  fi
+  
+  if $report; then
+    "$SCRIPT_DIR/jackrose-boot-test-report" \
+      --state "$state_dir" \
+      --output "$state_dir/report.md"
+  fi
+  exit 0
+fi
+
+usage
+exit 1
+EOF

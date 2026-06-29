@@ -4,7 +4,7 @@ set -euo pipefail
 
 METADATA=""
 ID=""
-DOWNLOAD_DIR="${CIDRE_FETCH_DIR:-/tmp/cidre-release-fetch}"
+DOWNLOAD_DIR="${JACKROSE_FETCH_DIR:-/tmp/jackrose-release-fetch}"
 STRICT=0
 NO_DOWNLOAD=0
 

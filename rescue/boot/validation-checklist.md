@@ -1,9 +1,9 @@
-# Cidre Rescue Boot Validation Checklist
+# Jackrose Rescue Boot Validation Checklist
 
 ## Pre-flight
 
 - [ ] macOS backup exists
-- [ ] main Cidre state exported
+- [ ] main Jackrose state exported
 - [ ] rescue artifact built
 - [ ] rescue metadata generated
 - [ ] disk audit generated
@@ -18,9 +18,9 @@
 
 - [ ] rescue boots
 - [ ] bash available
-- [ ] cidre-rescue-check passes
-- [ ] main Cidre can be scanned
-- [ ] main Cidre can be mounted read-only
+- [ ] jackrose-rescue-check passes
+- [ ] main Jackrose can be scanned
+- [ ] main Jackrose can be mounted read-only
 - [ ] logs and state can be exported
 - [ ] kernel-check works
 

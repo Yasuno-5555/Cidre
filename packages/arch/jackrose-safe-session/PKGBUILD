@@ -1,0 +1,22 @@
+# Maintainer: Yasuno <yasuno@example.invalid>
+
+pkgname=jackrose-safe-session
+pkgver=1.0.0
+pkgrel=1
+pkgdesc='Jackrose environment minimal recovery safe session (Skeleton)'
+url='https://github.com/Yasuno-5555/Jackrose'
+arch=('any')
+license=('custom')
+depends=('bash')
+source=()
+sha256sums=()
+
+# Monorepo-local packaging path.
+# This will be replaced by source=() when packages move to jackrose-packages.
+_repo_root="${startdir}/../../.."
+
+package() {
+  # Skeleton phase: Create minimal marker or directories
+  mkdir -p "${pkgdir}/usr/share/jackrose/safe"
+  echo "# safe session config skeleton" > "${pkgdir}/usr/share/jackrose/safe/skeleton.txt"
+}

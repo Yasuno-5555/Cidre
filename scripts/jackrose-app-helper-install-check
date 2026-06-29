@@ -1,0 +1,3 @@
+#!/bin/sh
+set -eu
+python3 -c 'import json; print(json.dumps({"schema_version":1,"command":"jackrose-app-helper-install-check","status":"warn","summary":"Helper install flow is scaffolded but not registered with macOS ServiceManagement yet.","exit_code":0,"warnings":["Registration is not implemented yet."],"errors":[]}, indent=2))'

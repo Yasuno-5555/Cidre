@@ -1,0 +1,48 @@
+#!/bin/sh
+set -eu
+
+usage() {
+  cat <<'EOF'
+Usage:
+  jackrose-command-manifest [options]
+
+Options:
+  --json
+  --markdown
+  --help
+EOF
+}
+
+mode="default"
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --json) mode="json"; shift ;;
+    --markdown) mode="markdown"; shift ;;
+    --help|-h|help) usage; exit 0 ;;
+    *) printf 'ERROR: Unknown option: %s\n' "$1" >&2; usage; exit 2 ;;
+  esac
+done
+
+python3 -c '
+import sys, json, os
+
+mode = sys.argv[1]
+repo_root = os.environ.get("JACKROSE_REPO_ROOT", "/home/yasuno/Projects/Jackrose")
+manifest_path = os.path.join(repo_root, "interface/command-manifest.json")
+
+with open(manifest_path) as f:
+    data = json.load(f)
+
+if mode == "json":
+    print(json.dumps(data, indent=2))
+elif mode == "markdown":
+    print("# Jackrose Command Manifest\n")
+    print("| Command | Path | Category | Requires Root? | OS |")
+    print("|---|---|---|---|---|")
+    for item in data.get("commands", []):
+        os_platform = "macOS" if item["requires_macos"] else ("Linux" if item["requires_linux"] else "Any")
+        print("| %s | %s | %s | %s | %s |" % (item["name"], item["path"], item["category"], item["requires_root"], os_platform))
+else:
+    for item in data.get("commands", []):
+        print("%-30s %s" % (item["name"], item["path"]))
+' "$mode"

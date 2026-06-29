@@ -1,0 +1,16 @@
+# Maintainer: Yasuno <yasuno@example.invalid>
+
+pkgname=jackrose-snapshot
+pkgver=1.0.0
+pkgrel=1
+pkgdesc='Jackrose configuration snapshot and rollback management tool'
+url='https://github.com/Yasuno-5555/Jackrose'
+arch=('any')
+license=('custom')
+depends=('bash' 'jq')
+source=('jackrose-snapshot')
+sha256sums=('SKIP')
+
+package() {
+  install -Dm755 "${srcdir}/jackrose-snapshot" "${pkgdir}/usr/bin/jackrose-snapshot"
+}

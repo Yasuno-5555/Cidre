@@ -156,9 +156,9 @@ for ((i=0; i<length; i++)); do
   echo "$updated_json" > "$tmp_json"
 done
 
-# Add _cidre_asset_layout block
+# Add _jackrose_asset_layout block
 layout_block=$(jq -r '.' "$POLICY")
-final_json=$(jq --argjson layout "$layout_block" '._cidre_asset_layout = $layout' "$tmp_json")
+final_json=$(jq --argjson layout "$layout_block" '._jackrose_asset_layout = $layout' "$tmp_json")
 
 echo "$final_json" > "$OUTPUT"
 echo "Normalization completed successfully. Saved to $OUTPUT"

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "plan_id": "mutation-fixture-valid",
-  "operation": "create-cidre-test-target",
+  "operation": "create-jackrose-test-target",
   "helper_operation": "partition-create",
   "target": "disk9s3",
   "destructive": true,
@@ -15,6 +15,6 @@
   ],
   "container_size": "350G",
   "partition_size": "80G",
-  "volume_name": "Cidre Test",
+  "volume_name": "Jackrose Test",
   "plan_hash": "fixture-placeholder"
 }

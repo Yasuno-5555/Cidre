@@ -1,5 +1,5 @@
 #!/bin/bash
-# validate-generated-asahi-installer-data: Validator for Cidre-generated Asahi-like metadata files
+# validate-generated-asahi-installer-data: Validator for Jackrose-generated Asahi-like metadata files
 set -euo pipefail
 
 FILE=""
@@ -116,9 +116,9 @@ for ((i=0; i<os_count; i++)); do
 
   # Warnings
   if [[ "$os_pkg" =~ \.tar\.zst$ ]]; then
-    layout_present=$(jq -e '._cidre_asset_layout' "$FILE" >/dev/null 2>&1 && echo 1 || echo 0)
+    layout_present=$(jq -e '._jackrose_asset_layout' "$FILE" >/dev/null 2>&1 && echo 1 || echo 0)
     if [ "$layout_present" -eq 1 ]; then
-      echo "  [WARN] .tar.zst accepted for Cidre boundary probing. upstream installer compatibility is unproven."
+      echo "  [WARN] .tar.zst accepted for Jackrose boundary probing. upstream installer compatibility is unproven."
     else
       echo "  [WARN] package format is .tar.zst. Upstream installer might enforce package.zip layers."
     fi

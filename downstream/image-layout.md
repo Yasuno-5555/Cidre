@@ -1,26 +1,26 @@
-# Cidre Image Layout
+# Jackrose Image Layout
 
-The prototype Cidre image should treat ALARM minimal as the base and add a small downstream overlay.
+The prototype Jackrose image should treat ALARM minimal as the base and add a small downstream overlay.
 
 ## Expected Layout
 
 ```text
-/usr/lib/cidre/
-  cidre-firstboot-root
-  cidre-seed
-  cidre-seed-verify
-  cidre-seed-import
-  cidre-resume
-  cidre-doctor
-  cidre-recovery
-  cidre-preinstall
-  cidre-installer
+/usr/lib/jackrose/
+  jackrose-firstboot-root
+  jackrose-seed
+  jackrose-seed-verify
+  jackrose-seed-import
+  jackrose-resume
+  jackrose-doctor
+  jackrose-recovery
+  jackrose-preinstall
+  jackrose-installer
 
 /etc/systemd/system/
-  cidre-firstboot-root.service
-  multi-user.target.wants/cidre-firstboot-root.service
+  jackrose-firstboot-root.service
+  multi-user.target.wants/jackrose-firstboot-root.service
 
-/var/lib/cidre/
+/var/lib/jackrose/
   seed/
   resume/
   firstboot-root/

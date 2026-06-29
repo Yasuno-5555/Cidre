@@ -1,0 +1,12 @@
+{
+  "release_layout_version": "0.1",
+  "project": "Jackrose",
+  "channel": "dev",
+  "base_url": "http://127.0.0.1:8765",
+  "assets": {
+    "image": "jackrose-seed-aarch64-v0.10.0.tar.zst",
+    "sha256": "jackrose-seed-aarch64-v0.10.0.tar.zst.sha256",
+    "manifest": "jackrose-seed-aarch64-v0.10.0.manifest",
+    "metadata": "jackrose-installer-data.dev.json"
+  }
+}

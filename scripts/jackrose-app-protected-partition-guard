@@ -1,0 +1,156 @@
+#!/bin/sh
+set -eu
+
+before=""
+after=""
+snapshot=""
+json_mode=false
+
+usage() {
+  echo "Usage: jackrose-app-protected-partition-guard (--snapshot <file> | --before <file> --after <file>) [--json]"
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --before) before="$2"; shift 2 ;;
+    --after) after="$2"; shift 2 ;;
+    --snapshot) snapshot="$2"; shift 2 ;;
+    --json) json_mode=true; shift ;;
+    --help|-h) usage; exit 0 ;;
+    *) echo "ERROR: unknown option: $1" >&2; usage; exit 2 ;;
+  esac
+done
+
+python3 - "$before" "$after" "$snapshot" "$json_mode" <<'PY'
+import json
+import sys
+
+before_path, after_path, snapshot_path, json_mode = sys.argv[1:]
+json_mode = json_mode == "true"
+
+def load(path):
+    with open(path, "r", encoding="utf-8") as handle:
+        return json.load(handle)
+
+def entries(snapshot):
+    return snapshot.get("partitions") or [
+        partition
+        for disk in snapshot.get("disks", [])
+        for partition in disk.get("partitions", [])
+    ]
+
+def classify(snapshot):
+    root_ids = set(snapshot.get("root_identifiers") or [])
+    protected = {}
+    for part in entries(snapshot):
+        identifier = part.get("device_identifier") or part.get("identifier")
+        if not identifier:
+            continue
+        role = part.get("role") or "unclassified"
+        protected_flag = part.get("protected")
+        content = part.get("content") or part.get("type")
+        name = part.get("volume_name") or part.get("name")
+        if protected_flag is None:
+            content_lower = (content or "").lower()
+            name_lower = (name or "").lower()
+            protected_flag = (
+                identifier in root_ids
+                or "recovery" in content_lower
+                or "recovery" in name_lower
+                or "apple_" in content_lower
+            )
+        if protected_flag:
+            protected[identifier] = {
+                "identifier": identifier,
+                "content": content,
+                "volume_name": name,
+                "size": part.get("size") or part.get("size_bytes"),
+                "roles": part.get("roles") or [],
+                "role": role,
+                "protected": True,
+            }
+    return protected
+
+def check_set(snapshot, protected):
+    entry_list = entries(snapshot)
+    apple_recovery = any(item.get("role") == "system-recovery" for item in protected.values())
+    startup_container = any(item.get("role") == "startup-container" for item in protected.values())
+    return [
+        {
+            "id": "apple-recovery-present",
+            "status": "passed" if apple_recovery else "failed",
+            "reason": None if apple_recovery else "Apple_APFS_Recovery is missing",
+        },
+        {
+            "id": "startup-container-present",
+            "status": "passed" if startup_container else "failed",
+            "reason": None if startup_container else "macOS startup container is missing",
+        },
+        {
+            "id": "protected-partitions-classified",
+            "status": "passed" if protected else "failed",
+            "reason": None if protected else "Protected Apple partitions could not be classified",
+        },
+        {
+            "id": "unknown-apple-partitions-accounted",
+            "status": "passed" if entry_list else "failed",
+            "reason": None if entry_list else "Disk snapshot is empty",
+        },
+    ]
+
+if snapshot_path:
+    snap = load(snapshot_path)
+    protected = classify(snap)
+    checks = check_set(snap, protected)
+    failures = [item for item in checks if item["status"] == "failed"]
+    status = "passed" if not failures else "failed"
+    payload = {
+        "schema_version": 1,
+        "command": "jackrose-app-protected-partition-guard",
+        "status": status,
+        "summary": "Protected Apple partitions are classifiable." if not failures else "Protected Apple partition safety checks failed.",
+        "phase": "safety",
+        "stage": "protected-partition-guard",
+        "exit_code": 0 if not failures else 8,
+        "warnings": [],
+        "errors": [{"code": item["id"], "message": item["reason"] or item["id"]} for item in failures],
+        "checks": checks,
+        "protected_partitions": protected,
+    }
+else:
+    before = load(before_path)
+    after = load(after_path)
+    before_protected = classify(before)
+    after_protected = classify(after)
+    failures = []
+    for identifier, baseline in before_protected.items():
+        current = after_protected.get(identifier)
+        if current is None:
+            failures.append(f"protected-partition-missing:{identifier}")
+            continue
+        if baseline != current:
+            failures.append(f"protected-partition-changed:{identifier}")
+    for identifier, current in after_protected.items():
+        if identifier not in before_protected:
+            failures.append(f"protected-partition-added:{identifier}:{current.get('role', 'unclassified')}")
+    checks = check_set(after, after_protected)
+    failures.extend(item["id"] for item in checks if item["status"] == "failed")
+    status = "passed" if not failures else "failed"
+    payload = {
+        "schema_version": 1,
+        "command": "jackrose-app-protected-partition-guard",
+        "status": status,
+        "summary": "Protected Apple partitions remain unchanged." if not failures else "Protected Apple partition changed unexpectedly.",
+        "phase": "safety",
+        "stage": "protected-partition-guard",
+        "exit_code": 0 if not failures else 8,
+        "warnings": [],
+        "errors": [{"code": code.split(":")[0], "message": code} for code in failures],
+        "checks": checks,
+        "before_protected_partitions": before_protected,
+        "after_protected_partitions": after_protected,
+    }
+
+print(json.dumps(payload, indent=2) if json_mode else payload["summary"])
+sys.exit(payload["exit_code"])
+PY

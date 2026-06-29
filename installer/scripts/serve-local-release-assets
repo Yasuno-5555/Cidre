@@ -50,7 +50,7 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "Serving local Cidre release assets:"
+echo "Serving local Jackrose release assets:"
 echo "  Port:      $PORT"
 echo "  Directory: $DIRECTORY"
 echo ""

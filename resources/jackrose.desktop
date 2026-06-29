@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=Jackrose Desktop
+Comment=Jackrose desktop session powered by niri-jackrose
+Exec=jackrose-session
+Type=Application
+DesktopNames=Jackrose

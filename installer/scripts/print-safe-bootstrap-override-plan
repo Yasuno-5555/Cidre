@@ -62,7 +62,7 @@ plan_block=""
 
 if [ "$FORMAT" = "markdown" ]; then
   plan_block=$(cat <<EOF
-# Cidre Safe Bootstrap Override Plan
+# Jackrose Safe Bootstrap Override Plan
 
 Configure these variables inside your shell before starting the dry-run test check.
 
@@ -80,7 +80,7 @@ EOF
   fi
   plan_block=$(cat <<EOF
 $plan_block
-export CIDRE_BOOTSTRAP_OVERRIDE_DRYRUN="1"
+export JACKROSE_BOOTSTRAP_OVERRIDE_DRYRUN="1"
 \`\`\`
 
 > [!WARNING]
@@ -89,7 +89,7 @@ EOF
 )
 else
   plan_block=$(cat <<EOF
-# Cidre bootstrap override plan.
+# Jackrose bootstrap override plan.
 # Phase 20 static inspection only.
 # Do not execute installer scripts with this yet.
 
@@ -106,7 +106,7 @@ EOF
   fi
   plan_block=$(cat <<EOF
 $plan_block
-export CIDRE_BOOTSTRAP_OVERRIDE_DRYRUN="1"
+export JACKROSE_BOOTSTRAP_OVERRIDE_DRYRUN="1"
 
 # Not executed:
 # curl ... | sh

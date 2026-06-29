@@ -1,0 +1,50 @@
+#!/bin/sh
+set -eu
+
+reason="unknown"
+print_env=false
+
+usage() {
+  cat <<EOF
+Usage: jackrose-safe-shell [options]
+
+Options:
+  --reason <reason>
+  --print-env
+  --help
+EOF
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --reason) reason="$2"; shift 2 ;;
+    --print-env) print_env=true; shift ;;
+    --help) usage; exit 0 ;;
+    *) echo "ERROR: unknown option: $1" >&2; usage >&2; exit 1 ;;
+  esac
+done
+
+export JACKROSE_SAFE_MODE=1
+export JACKROSE_RECOVERY_REASON="$reason"
+export JACKROSE_NO_DESKTOP=1
+
+if [ "$print_env" = "true" ]; then
+  printf 'JACKROSE_SAFE_MODE=%s\n' "$JACKROSE_SAFE_MODE"
+  printf 'JACKROSE_RECOVERY_REASON=%s\n' "$JACKROSE_RECOVERY_REASON"
+  printf 'JACKROSE_NO_DESKTOP=%s\n' "$JACKROSE_NO_DESKTOP"
+  exit 0
+fi
+
+cat <<EOF
+Jackrose Safe Shell
+
+Normal desktop startup has been skipped.
+Useful commands:
+
+  jackrose-doctor --daily
+  jackrose-doctor --uninstall
+  jackrose-recovery status
+  jackrose-state-export
+  jackrose-exit-plan
+  jackrose-goodbye
+EOF

@@ -1,0 +1,108 @@
+#!/bin/sh
+set -eu
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+REPO_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+RESCUE_DIR="$REPO_ROOT/rescue"
+OVERLAY_DIR="$RESCUE_DIR/overlay"
+STATE_ROOT="${JACKROSE_RESCUE_STATE_ROOT:-$REPO_ROOT/.local/state/jackrose/rescue}"
+CURRENT_DIR="$STATE_ROOT/current"
+ARTIFACTS_DIR="$STATE_ROOT/artifacts"
+output_dir="$ARTIFACTS_DIR"
+profile="minimal-rescue"
+dry_run=false
+overlay_only=false
+
+usage() {
+  cat <<EOF
+Usage: jackrose-rescue-image-build [options]
+
+Options:
+  --dry-run
+  --overlay-only
+  --output <dir>
+  --profile minimal-rescue
+  --help
+EOF
+}
+
+sync_rescue_overlay() {
+  overlay_jackrose_dir="$OVERLAY_DIR/usr/lib/jackrose"
+  overlay_etc_dir="$OVERLAY_DIR/etc/jackrose"
+  overlay_state_dir="$OVERLAY_DIR/var/lib/jackrose/rescue"
+  mkdir -p "$overlay_jackrose_dir" "$overlay_etc_dir" "$overlay_state_dir"
+  cp "$REPO_ROOT/rescue/profile/profile.env" "$overlay_etc_dir/profile.env"
+  for script in \
+    jackrose-rescue \
+    jackrose-rescue-check \
+    jackrose-rescue-plan \
+    jackrose-rescue-profile \
+    jackrose-rescue-image-build \
+    jackrose-rescue-image-inspect \
+    jackrose-rescue-manifest \
+    jackrose-rescue-mount \
+    jackrose-rescue-export \
+    jackrose-rescue-kernel-check \
+    jackrose-rescue-report \
+    jackrose-rescue-clean \
+    jackrose-rescue-create \
+    jackrose-rescue-create-preflight \
+    jackrose-rescue-target-check \
+    jackrose-rescue-target-format \
+    jackrose-rescue-deploy-rootfs \
+    jackrose-rescue-install-metadata \
+    jackrose-rescue-create-verify \
+    jackrose-rescue-create-report \
+    jackrose-rescue-create-risk \
+    jackrose-rescue-create-clean; do
+    cp "$SCRIPT_DIR/$script" "$overlay_jackrose_dir/$script"
+    chmod +x "$overlay_jackrose_dir/$script"
+  done
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --dry-run) dry_run=true; shift ;;
+    --overlay-only) overlay_only=true; shift ;;
+    --output) output_dir="$2"; shift 2 ;;
+    --profile) profile="$2"; shift 2 ;;
+    --help) usage; exit 0 ;;
+    *) printf 'ERROR: unknown option: %s\n' "$1" >&2; usage >&2; exit 1 ;;
+  esac
+done
+
+if [ "$dry_run" = "true" ]; then
+  printf 'Jackrose rescue image build (dry-run)\n\n'
+  printf '[OK] profile: %s\n' "$profile"
+  printf '[OK] rescue overlay: %s\n' "$OVERLAY_DIR"
+  printf '[OK] output dir: %s\n' "$output_dir"
+  printf '[OK] planned packages:\n'
+  sed 's/^/  /' "$REPO_ROOT/rescue/profile/packages.txt"
+  printf '[OK] planned overlay files:\n'
+  printf '  rescue/overlay/usr/lib/jackrose/jackrose-rescue\n'
+  printf '  rescue/overlay/usr/lib/jackrose/jackrose-rescue-check\n'
+  printf '  rescue/overlay/usr/lib/jackrose/jackrose-rescue-mount\n'
+  printf '  rescue/overlay/usr/lib/jackrose/jackrose-rescue-export\n'
+  printf '  rescue/overlay/usr/lib/jackrose/jackrose-rescue-kernel-check\n'
+  printf '[OK] planned artifacts:\n'
+  printf '  %s/jackrose-rescue-rootfs.tar.gz\n' "$output_dir"
+  printf '  %s/jackrose-rescue-rootfs.tar.gz.sha256\n' "$output_dir"
+  printf '  %s/jackrose-rescue-manifest.json\n' "$output_dir"
+  exit 0
+fi
+
+mkdir -p "$CURRENT_DIR" "$output_dir"
+sync_rescue_overlay
+
+manifest_file="$output_dir/jackrose-rescue-manifest.json"
+"$SCRIPT_DIR/jackrose-rescue-manifest" --generate --output "$manifest_file" >/dev/null
+
+if [ "$overlay_only" = "true" ]; then
+  tarball="$output_dir/jackrose-rescue-rootfs.tar.gz"
+  tar -C "$OVERLAY_DIR" -czf "$tarball" .
+  sha256sum "$tarball" > "$tarball.sha256"
+  printf '%s\n' "$tarball"
+  exit 0
+fi
+
+printf 'Rescue overlay synced: %s\n' "$OVERLAY_DIR"

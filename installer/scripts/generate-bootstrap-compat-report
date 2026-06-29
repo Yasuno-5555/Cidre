@@ -53,10 +53,10 @@ REQUIRED_NOTES=(
   "bootstrap-fetch-flow.md"
   "bootstrap-execution-boundary.md"
   "mutation-boundary.md"
-  "cidre-override-entrypoints.md"
+  "jackrose-override-entrypoints.md"
   "minimum-safe-override-experiment.md"
   "bootstrap-risk-register.md"
-  "cidre-installer-entry-strategy.md"
+  "jackrose-installer-entry-strategy.md"
 )
 
 # Verify preconditions
@@ -77,7 +77,7 @@ echo "Assembling compatibility notes..."
 report_body=$(cat <<EOF
 # Bootstrap Override Compatibility Report
 
-Cidre can currently generate, serve, fetch, and validate installer_data-shaped metadata, but it has not executed the real Asahi/ALARM installer. The next safe step is a controlled non-executing bootstrap override probe, not a real install.
+Jackrose can currently generate, serve, fetch, and validate installer_data-shaped metadata, but it has not executed the real Asahi/ALARM installer. The next safe step is a controlled non-executing bootstrap override probe, not a real install.
 
 > [!WARNING]
 > Do not run bootstrap scripts yet.
@@ -113,7 +113,7 @@ Cidre can currently generate, serve, fetch, and validate installer_data-shaped m
 
 ## 5. Override Strategy
 
-\$(cat "$NOTES_DIR/cidre-installer-entry-strategy.md")
+\$(cat "$NOTES_DIR/jackrose-installer-entry-strategy.md")
 
 ---
 

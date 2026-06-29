@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Jackrose Welcome
+Comment=Start Jackrose first-use setup
+Exec=jackrose-welcome --first-run
+X-GNOME-Autostart-enabled=true

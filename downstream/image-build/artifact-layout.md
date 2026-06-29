@@ -1,15 +1,15 @@
 # Artifact Layout
 
 ```text
-.local/state/cidre/image-build/
-  cidre-rootfs-overlay.tar.gz
-  cidre-rootfs-overlay.tar.gz.sha256
-  cidre-image-manifest.json
+.local/state/jackrose/image-build/
+  jackrose-rootfs-overlay.tar.gz
+  jackrose-rootfs-overlay.tar.gz.sha256
+  jackrose-image-manifest.json
   build.log
   inspect.log
 
 future:
-  cidre-prototype-rootfs.img
-  cidre-prototype-rootfs.img.zst
-  cidre-prototype-rootfs.img.zst.sha256
+  jackrose-prototype-rootfs.img
+  jackrose-prototype-rootfs.img.zst
+  jackrose-prototype-rootfs.img.zst.sha256
 ```

@@ -1,5 +1,5 @@
 #!/bin/bash
-# export-installer-metadata: Converts Cidre internal metadata to simplified installer-facing JSON
+# export-installer-metadata: Converts Jackrose internal metadata to simplified installer-facing JSON
 set -euo pipefail
 
 METADATA=""
@@ -134,7 +134,7 @@ echo "Exporting mapped installer-facing metadata to $OUTPUT..."
 tmp_file="${OUTPUT}.tmp"
 jq --arg ver "0.1" \
    --arg chan "$CHANNEL" \
-   --arg gen "cidre" \
+   --arg gen "jackrose" \
    '{
       format_version: $ver,
       channel: $chan,

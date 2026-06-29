@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "command": "cidre-app-no-default-boot-check",
+  "command": "jackrose-app-no-default-boot-check",
   "status": "passed",
   "summary": "No default boot mutations detected.",
   "exit_code": 0,

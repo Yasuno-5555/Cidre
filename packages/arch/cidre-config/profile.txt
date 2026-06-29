@@ -1,3 +1,0 @@
-Cidre v1.0 config package
-
-This package owns the default configuration assets used by the standard Cidre session layout.

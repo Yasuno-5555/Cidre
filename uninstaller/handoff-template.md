@@ -10,7 +10,7 @@ Next, you need to transition back to macOS to finalize partition cleanup.
    ```sh
    diskutil list
    ```
-3. Use the macOS Restore Assistant or Disk Utility to remove the Cidre/Asahi container:
+3. Use the macOS Restore Assistant or Disk Utility to remove the Jackrose/Asahi container:
    ```sh
    ./install-macos --uninstall-plan
    ```

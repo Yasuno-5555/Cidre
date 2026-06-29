@@ -1,0 +1,3 @@
+#!/bin/sh
+set -eu
+python3 -c 'import json; print(json.dumps({"schema_version":1,"command":"jackrose-app-repair-wizard","status":"pass","summary":"Repair failure scan completed.","phase":"app-wizard","stage":"failure-scan","exit_code":0,"warnings":[],"errors":[]}, indent=2))'

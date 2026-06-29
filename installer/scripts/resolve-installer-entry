@@ -89,14 +89,14 @@ elif [ "$FORMAT" = "env" ]; then
   img_sha=$(echo "$entry_json" | jq -r '.image.sha256')
   img_manifest=$(echo "$entry_json" | jq -r '.image.manifest')
   
-  echo "CIDRE_ENTRY_ID=${ID}"
-  echo "CIDRE_ENTRY_NAME=\"${entry_name}\""
-  echo "CIDRE_ENTRY_VERSION=${entry_ver}"
-  echo "CIDRE_ENTRY_CHANNEL=${entry_chan}"
-  echo "CIDRE_IMAGE_URL=${img_url}"
-  echo "CIDRE_IMAGE_SHA256=${img_sha}"
-  echo "CIDRE_IMAGE_MANIFEST=${img_manifest}"
-  echo "CIDRE_FIRST_BOOT_MODE=${first_boot_mode}"
+  echo "JACKROSE_ENTRY_ID=${ID}"
+  echo "JACKROSE_ENTRY_NAME=\"${entry_name}\""
+  echo "JACKROSE_ENTRY_VERSION=${entry_ver}"
+  echo "JACKROSE_ENTRY_CHANNEL=${entry_chan}"
+  echo "JACKROSE_IMAGE_URL=${img_url}"
+  echo "JACKROSE_IMAGE_SHA256=${img_sha}"
+  echo "JACKROSE_IMAGE_MANIFEST=${img_manifest}"
+  echo "JACKROSE_FIRST_BOOT_MODE=${first_boot_mode}"
 else
   # Default text formatting
   echo "Resolved Entry: $ID"

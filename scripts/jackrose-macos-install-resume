@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+
+# Wrapper that runs the resume tool
+exec "$(dirname "$0")/jackrose-install-resume" "$@"

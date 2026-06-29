@@ -1,0 +1,32 @@
+# Maintainer: Yasuno <yasuno@example.invalid>
+
+pkgname=jackrose-seed
+pkgver=1.0.0
+pkgrel=1
+pkgdesc='Jackrose environment seed meta-package for first-boot OOBE'
+url='https://github.com/Yasuno-5555/Jackrose'
+arch=('any')
+license=('custom')
+depends=(
+  'jackrose-firstboot'
+  'jackrose-welcome'
+  'jackrose-healthcheck'
+  'jackrose-config'
+  'jackrose-user-setup'
+  'jackrose-meta-desktop-baseline'
+  'jackrose-experience-upgrade'
+  'networkmanager'
+  'sudo'
+  'bash'
+)
+source=()
+sha256sums=()
+install='jackrose-seed.install'
+
+# Monorepo-local packaging path.
+# This will be replaced by source=() when packages move to jackrose-packages.
+_repo_root="${startdir}/../../.."
+
+package() {
+  install -Dm644 README.md "${pkgdir}/usr/share/doc/jackrose-seed/README.md"
+}

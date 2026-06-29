@@ -1,0 +1,131 @@
+#!/bin/sh
+set -eu
+
+usage() {
+  cat <<'EOF'
+Usage:
+  jackrose-app-safe-actions [options]
+
+Options:
+  --json
+  --markdown
+  --help
+EOF
+}
+
+format="plain"
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --json) format="json"; shift ;;
+    --markdown) format="markdown"; shift ;;
+    --help|-h|help) usage; exit 0 ;;
+    *) printf 'ERROR: Unknown option: %s\n' "$1" >&2; usage; exit 2 ;;
+  esac
+done
+
+python3 -c '
+import sys, json
+
+format_mode = sys.argv[1]
+
+actions = [
+    {
+        "id": "app-readiness",
+        "title": "App Readiness",
+        "command": "scripts/jackrose-app-readiness --json",
+        "safe_to_run": True,
+        "destructive": False,
+        "requires_root": False,
+        "allowed_in_v0_34": True,
+        "blocked_reason": None
+    },
+    {
+        "id": "interface-doctor",
+        "title": "Interface Doctor",
+        "command": "scripts/jackrose-interface-doctor --json",
+        "safe_to_run": True,
+        "destructive": False,
+        "requires_root": False,
+        "allowed_in_v0_34": True,
+        "blocked_reason": None
+    },
+    {
+        "id": "report-index",
+        "title": "Report Index",
+        "command": "scripts/jackrose-report-index --scan --json",
+        "safe_to_run": True,
+        "destructive": False,
+        "requires_root": False,
+        "allowed_in_v0_34": True,
+        "blocked_reason": None
+    },
+    {
+        "id": "artifact-paths",
+        "title": "Artifact Paths",
+        "command": "scripts/jackrose-artifact-paths --json",
+        "safe_to_run": True,
+        "destructive": False,
+        "requires_root": False,
+        "allowed_in_v0_34": True,
+        "blocked_reason": None
+    },
+    {
+        "id": "install-dashboard-read",
+        "title": "Install Dashboard Read",
+        "command": "scripts/jackrose-install-dashboard --json",
+        "safe_to_run": True,
+        "destructive": False,
+        "requires_root": False,
+        "allowed_in_v0_34": True,
+        "blocked_reason": None
+    },
+    {
+        "id": "uninstall-dashboard-read",
+        "title": "Uninstall Dashboard Read",
+        "command": "scripts/jackrose-uninstall-dashboard --json",
+        "safe_to_run": True,
+        "destructive": False,
+        "requires_root": False,
+        "allowed_in_v0_34": True,
+        "blocked_reason": None
+    },
+    {
+        "id": "real-install",
+        "title": "Real Install",
+        "command": "scripts/jackrose-installer --apply",
+        "safe_to_run": False,
+        "destructive": True,
+        "requires_root": True,
+        "allowed_in_v0_34": False,
+        "blocked_reason": "privileged helper not implemented"
+    },
+    {
+        "id": "real-uninstall",
+        "title": "Real Uninstall",
+        "command": "scripts/jackrose-uninstall-execute",
+        "safe_to_run": False,
+        "destructive": True,
+        "requires_root": True,
+        "allowed_in_v0_34": False,
+        "blocked_reason": "destructive operation not enabled"
+    }
+]
+
+if format_mode == "json":
+    print(json.dumps(actions, indent=2))
+elif format_mode == "markdown":
+    print("# Jackrose.app Safe Actions")
+    print("| Action ID | Title | Command | Allowed in v0.34 | Blocked Reason |")
+    print("|---|---|---|---|---|")
+    for a in actions:
+        allowed = "Yes" if a["allowed_in_v0_34"] else "No"
+        reason = a["blocked_reason"] if a["blocked_reason"] else "N/A"
+        print("| %s | %s | `%s` | %s | %s |" % (a["id"], a["title"], a["command"], allowed, reason))
+else:
+    for a in actions:
+        status = "ALLOWED" if a["allowed_in_v0_34"] else "BLOCKED"
+        print("Action: %s [%s]" % (a["title"], status))
+        print("  Command: %s" % a["command"])
+        if a["blocked_reason"]:
+            print("  Reason:  %s" % a["blocked_reason"])
+' "$format"

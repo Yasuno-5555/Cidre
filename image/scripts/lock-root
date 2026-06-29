@@ -74,7 +74,7 @@ else
   echo "  Could not lock root password in the target rootfs." >&2
   echo "" >&2
   echo "Why it matters:" >&2
-  echo "  Cidre should not expose raw root password login as the normal path." >&2
+  echo "  Jackrose should not expose raw root password login as the normal path." >&2
   echo "" >&2
   echo "Next action:" >&2
   echo "  Lock root manually inside the rootfs or fix lock-root support before packaging." >&2

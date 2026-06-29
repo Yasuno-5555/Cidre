@@ -1,0 +1,23 @@
+# Maintainer: Yasuno <yasuno@example.invalid>
+
+pkgname=jackrose-welcome
+pkgver=1.0.0
+pkgrel=1
+pkgdesc='Jackrose first-login welcome dashboard screen'
+url='https://github.com/Yasuno-5555/Jackrose'
+arch=('any')
+license=('custom')
+depends=('bash')
+source=()
+sha256sums=()
+
+# Monorepo-local packaging path.
+# This will be replaced by source=() when packages move to jackrose-packages.
+_repo_root="${startdir}/../../.."
+
+package() {
+  install -Dm755 "${_repo_root}/components/welcome/bin/jackrose-welcome" "${pkgdir}/usr/bin/jackrose-welcome"
+  install -Dm755 "${_repo_root}/components/welcome/bin/jackrose-oobe" "${pkgdir}/usr/bin/jackrose-oobe"
+  install -Dm644 "${_repo_root}/components/welcome/autostart/jackrose-welcome.desktop" "${pkgdir}/etc/xdg/autostart/jackrose-welcome.desktop"
+}
+

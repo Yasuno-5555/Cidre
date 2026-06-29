@@ -1,0 +1,242 @@
+#!/bin/sh
+set -eu
+# jackrose-app-boot-chain-stage
+# Deploys the complete Apple Silicon boot chain to a Jackrose volume.
+#
+# Asahi-alarm reference: stub.py / osinstall.py / step2.sh
+#   https://github.com/asahi-alarm/asahi-alarm-installer
+#
+# IMPORTANT (Asahi approach):
+# - boot.efi = Apple-signed kernelcache (IMG4) for initial 1TR boot
+# - boot.efi.m1n1 = m1n1 backup (for step2 restoration via kmutil configure-boot)
+# - kmutil configure-boot installs m1n1 AFTER bputil -nc sets Reduced Security
+# - m1n1 MUST NOT be written directly as boot.efi (can't boot with Full Security)
+#
+# The Jackrose volume layout after staging:
+#   /boot/
+#     m1n1.macho          # stage-1 bootloader backup
+#     Image                # Linux kernel
+#     initramfs.img        # Initramfs
+#     dtb/                 # Device tree blobs
+#   /jackrose/
+#     rootfs/              # Root filesystem
+#     install/
+#     state/
+#   /System/Library/CoreServices/
+#     boot.efi             # Apple kernelcache (for 1TR boot — set by boot-policy-create)
+#     boot.efi.m1n1        # m1n1 backup (for step2 kmutil configure-boot)
+
+m1n1_path=""
+kernel_path=""
+initramfs_path=""
+target_mount=""
+dry_run=false
+json_mode=false
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --m1n1-path) m1n1_path="$2"; shift 2 ;;
+    --kernel-path) kernel_path="$2"; shift 2 ;;
+    --initramfs-path) initramfs_path="$2"; shift 2 ;;
+    --target-mount) target_mount="$2"; shift 2 ;;
+    --dry-run) dry_run=true; shift ;;
+    --json) json_mode=true; shift ;;
+    --help|-h)
+      echo "Usage: jackrose-app-boot-chain-stage --m1n1-path <file> --target-mount <path> [--kernel-path <file>] [--initramfs-path <file>] [--dry-run] [--json]"
+      echo "Deploys the complete boot chain (m1n1 + kernel + initramfs) to a Jackrose volume."
+      exit 0
+      ;;
+    *) echo "ERROR: unknown option: $1" >&2; exit 2 ;;
+  esac
+done
+
+[ -n "$m1n1_path" ] || { echo "ERROR: --m1n1-path is required" >&2; exit 2; }
+[ -n "$target_mount" ] || { echo "ERROR: --target-mount is required" >&2; exit 2; }
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+steps=""
+errors=""
+staged_files=""
+
+if [ "$dry_run" = true ]; then
+  python3 -c "import json; print(json.dumps({'schema_version':1,'command':'jackrose-app-boot-chain-stage','status':'passed','summary':'Dry-run: would deploy m1n1 + kernel + initramfs','exit_code':0,'dry_run':True},indent=2))"
+  exit 0
+fi
+
+# ── Stage m1n1 ──────────────────────────────────────────────────────
+# Asahi-alarm: m1n1 is installed via kmutil configure-boot in step2.sh
+# (which runs from 1TR after bputil sets Reduced Security).
+# Here we save m1n1 as a backup — step2 picks it up and installs it.
+# We do NOT overwrite boot.efi (which must remain Apple kernelcache).
+#
+# IMPORTANT: Both m1n1.macho (Mach-O) and m1n1.bin (raw ARM64 binary)
+# are needed. kmutil configure-boot --raw requires the raw .bin;
+# the .macho is kept as backup for direct boot.efi placement.
+# Resolve m1n1_path: if it's a directory, look for m1n1.macho inside
+if [ -d "$m1n1_path" ]; then
+  if [ -f "$m1n1_path/m1n1.macho" ]; then
+    m1n1_path="$m1n1_path/m1n1.macho"
+  elif [ -f "$m1n1_path/m1n1.bin" ]; then
+    m1n1_path="$m1n1_path/m1n1.bin"
+  fi
+fi
+
+if [ -f "$m1n1_path" ]; then
+  # Check if it's a Mach-O or raw binary
+  m1n1_type="$(file "$m1n1_path" 2>/dev/null || true)"
+  m1n1_dir="$(dirname "$m1n1_path")"
+  mkdir -p "$target_mount/boot"
+  mkdir -p "$target_mount/System/Library/CoreServices"
+
+  if echo "$m1n1_type" | grep -q "Mach-O"; then
+    # Primary m1n1 Mach-O (backup for direct boot.efi placement)
+    cp "$m1n1_path" "$target_mount/boot/m1n1.macho"
+    chmod 755 "$target_mount/boot/m1n1.macho"
+    steps="${steps}m1n1-macho-staged "
+
+    # Also copy the raw .bin if available alongside
+    if [ -f "$m1n1_dir/m1n1.bin" ]; then
+      cp "$m1n1_dir/m1n1.bin" "$target_mount/boot/m1n1.bin"
+      chmod 755 "$target_mount/boot/m1n1.bin"
+      staged_files="$staged_files boot/m1n1.macho boot/m1n1.bin"
+      steps="${steps}m1n1-bin-staged "
+    else
+      staged_files="$staged_files boot/m1n1.macho"
+      echo "WARNING: m1n1.bin not found alongside m1n1.macho. kmutil --raw will fail."
+    fi
+  else
+    # Raw binary — copy as m1n1.bin
+    cp "$m1n1_path" "$target_mount/boot/m1n1.bin"
+    chmod 755 "$target_mount/boot/m1n1.bin"
+    staged_files="$staged_files boot/m1n1.bin"
+    steps="${steps}m1n1-bin-staged "
+    echo "WARNING: m1n1_path is a raw binary, not Mach-O. Direct boot.efi placement may fail."
+  fi
+
+  # m1n1 backup for step2 restoration (boot.efi stays as kernelcache)
+  cp "$m1n1_path" "$target_mount/System/Library/CoreServices/boot.efi.m1n1"
+  chmod 755 "$target_mount/System/Library/CoreServices/boot.efi.m1n1"
+
+  # Only copy to boot.efi if boot.efi doesn't already exist (first-time setup)
+  if [ ! -f "$target_mount/System/Library/CoreServices/boot.efi" ]; then
+    echo "NOTE: boot.efi not present — this volume needs boot-policy-create first"
+    cp "$m1n1_path" "$target_mount/System/Library/CoreServices/boot.efi"
+    chmod 755 "$target_mount/System/Library/CoreServices/boot.efi"
+  fi
+
+  staged_files="$staged_files boot/m1n1.macho System/Library/CoreServices/boot.efi.m1n1"
+  steps="${steps}m1n1-staged "
+else
+  errors="${errors}m1n1-not-found($m1n1_path) "
+fi
+
+# ── Stage kernel ────────────────────────────────────────────────────
+if [ -n "$kernel_path" ] && [ -f "$kernel_path" ]; then
+  mkdir -p "$target_mount/boot"
+  cp "$kernel_path" "$target_mount/boot/Image"
+  chmod 644 "$target_mount/boot/Image" 2>/dev/null || true
+  staged_files="$staged_files boot/Image"
+  steps="${steps}kernel-staged "
+fi
+
+# ── Stage initramfs ─────────────────────────────────────────────────
+if [ -n "$initramfs_path" ] && [ -f "$initramfs_path" ]; then
+  mkdir -p "$target_mount/boot"
+  cp "$initramfs_path" "$target_mount/boot/initramfs.img"
+  chmod 644 "$target_mount/boot/initramfs.img" 2>/dev/null || true
+  staged_files="$staged_files boot/initramfs.img"
+  steps="${steps}initramfs-staged "
+fi
+
+# ── Stage device trees from m1n1 ────────────────────────────────────
+# m1n1 embeds device trees; extract if available
+m1n1_dir="$(dirname "$m1n1_path")/../m1n1"
+if [ -d "$m1n1_dir/data" ]; then
+  # m1n1 doesn't produce separate dtb files; the DT is compiled in
+  # For kernel-based DTs, they come from the kernel package
+  :
+fi
+
+# ── Create SystemVersion.plist if missing ───────────────────────────
+if [ ! -f "$target_mount/System/Library/CoreServices/SystemVersion.plist" ]; then
+  mkdir -p "$target_mount/System/Library/CoreServices"
+  cat > "$target_mount/System/Library/CoreServices/SystemVersion.plist" << 'SVPEOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>CFBundleIdentifier</key><string>com.apple.SystemVersion</string>
+<key>ProductBuildVersion</key><string>1</string>
+<key>ProductCopyright</key><string>Jackrose Project</string>
+<key>ProductName</key><string>Jackrose</string>
+<key>ProductUserVisibleVersion</key><string>1.0</string>
+<key>ProductVersion</key><string>1.0</string>
+</dict></plist>
+SVPEOF
+  staged_files="$staged_files System/Library/CoreServices/SystemVersion.plist"
+fi
+
+# ── Create m1n1 boot configuration ──────────────────────────────────
+# m1n1 uses a config file or default paths on the same volume
+# Default behavior: searches for /boot/Image, /boot/initramfs.img
+# Device tree is embedded in m1n1 for the detected machine
+
+# Dynamically detect root device. macOS device names (disk3s1) differ from
+# Linux names (nvme0n1p3), so prefer PARTUUID which is stable across OSes.
+ROOT_VOLUME_UUID="$(diskutil info -plist "$target_mount" 2>/dev/null | python3 -c 'import plistlib,sys; print(plistlib.loads(sys.stdin.buffer.read()).get("VolumeUUID",""))' 2>/dev/null || echo "")"
+ROOT_DEVICE="$(diskutil info -plist "$target_mount" 2>/dev/null | python3 -c 'import plistlib,sys; print(plistlib.loads(sys.stdin.buffer.read()).get("DeviceIdentifier",""))' 2>/dev/null || echo "")"
+
+if [ -n "$ROOT_VOLUME_UUID" ]; then
+  ROOT_SPEC="root=PARTUUID=$ROOT_VOLUME_UUID"
+  echo "Root device: PARTUUID=$ROOT_VOLUME_UUID (macOS: $ROOT_DEVICE)"
+else
+  # Fallback: use macOS device name (may differ in Linux, adjust at step2 time)
+  ROOT_SPEC="root=/dev/${ROOT_DEVICE:-disk0s3}"
+  echo "WARNING: No volume UUID found. Using device: $ROOT_SPEC"
+fi
+
+cat > "$target_mount/boot/m1n1.conf" << M1N1EOF
+# Jackrose m1n1 boot configuration
+# m1n1 auto-detects the machine and loads the appropriate device tree.
+# Kernel and initramfs are loaded from /boot/ on this volume.
+
+# Boot target: Linux kernel
+chainload=boot/Image
+
+# Initramfs
+initramfs=boot/initramfs.img
+
+# Boot arguments for ALARM/Asahi
+# These will be appended to the device tree /chosen/bootargs
+cmdline=${ROOT_SPEC} rw loglevel=3
+M1N1EOF
+staged_files="$staged_files boot/m1n1.conf"
+steps="${steps}m1n1-conf-created "
+
+# ── Report ──────────────────────────────────────────────────────────
+status="passed"
+exit_code=0
+summary="Boot chain staged: $steps"
+
+if [ -n "$errors" ]; then
+  status="blocked"
+  exit_code=4
+  summary="$summary Errors: $errors"
+fi
+
+python3 - "$json_mode" "$status" "$exit_code" "$summary" "$target_mount" "$staged_files" "$steps" "$errors" <<'PY'
+import json, sys
+json_mode, status, exit_code, summary, target_mount, staged_files, steps, errors = sys.argv[1:]
+exit_code = int(exit_code); json_mode = json_mode == "true"
+payload = {
+    "schema_version": 1,
+    "command": "jackrose-app-boot-chain-stage",
+    "status": status, "summary": summary, "exit_code": exit_code,
+    "target_mount": target_mount,
+    "staged_files": staged_files.strip().split() if staged_files.strip() else [],
+    "steps_completed": steps.strip() if steps.strip() else None,
+}
+if errors.strip():
+    payload["errors"] = [{"code": "staging-error", "message": errors.strip()}]
+print(json.dumps(payload, indent=2) if json_mode else payload["summary"])
+sys.exit(exit_code)
+PY

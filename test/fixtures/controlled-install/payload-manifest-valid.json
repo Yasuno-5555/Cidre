@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "files": [
-    {"path": "cidre/install/manifest.json", "sha256": "placeholder-hash"},
-    {"path": "cidre/install/profile.json", "sha256": "placeholder-hash"},
-    {"path": "cidre/install/seed.tar.gz", "sha256": "placeholder-hash"},
-    {"path": "cidre/install/handoff.txt", "sha256": "placeholder-hash"}
+    {"path": "jackrose/install/manifest.json", "sha256": "placeholder-hash"},
+    {"path": "jackrose/install/profile.json", "sha256": "placeholder-hash"},
+    {"path": "jackrose/install/seed.tar.gz", "sha256": "placeholder-hash"},
+    {"path": "jackrose/install/handoff.txt", "sha256": "placeholder-hash"}
   ]
 }

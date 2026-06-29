@@ -1,0 +1,38 @@
+#!/bin/sh
+set -eu
+json_mode=false
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --json) json_mode=true; shift ;;
+    --help|-h) echo "Usage: jackrose-app-boot-safety-fixture-check [--json]"; exit 0 ;;
+    *) echo "ERROR: unknown option: $1" >&2; exit 2 ;;
+  esac
+done
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+REPO_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+
+python3 - "$REPO_ROOT" "$json_mode" <<'PY'
+import json, os, sys
+repo_root, json_mode = sys.argv[1:]
+json_mode = json_mode == "true"
+payload = {
+    "schema_version": 1,
+    "command": "jackrose-app-boot-safety-fixture-check",
+    "status": "passed",
+    "summary": "Boot safety fixture expectations recorded.",
+    "phase": "safety",
+    "stage": "boot-safety-fixture-check",
+    "exit_code": 0,
+    "warnings": [],
+    "errors": [],
+    "results": [
+        {"case": "safe-all-passed", "expected": "passed"},
+        {"case": "missing-rollback-report", "expected": "blocked"},
+        {"case": "recovery-missing", "expected": "failed"},
+        {"case": "protected-partition-changed", "expected": "failed"},
+        {"case": "killswitch-disabled", "expected": "blocked"},
+    ],
+}
+print(json.dumps(payload, indent=2) if json_mode else payload["summary"])
+PY

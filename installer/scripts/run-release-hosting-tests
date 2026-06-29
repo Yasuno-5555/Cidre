@@ -5,16 +5,16 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-TEST_TMPDIR="${CIDRE_TEST_TMPDIR:-/tmp/cidre-release-hosting-tests}"
+TEST_TMPDIR="${JACKROSE_TEST_TMPDIR:-/tmp/jackrose-release-hosting-tests}"
 rm -rf "$TEST_TMPDIR"
 mkdir -p "$TEST_TMPDIR"
 
 echo "=== Running Release Asset Hosting Tests ==="
 echo "Staging test fixtures under $TEST_TMPDIR..."
 
-FIXTURE="$REPO_ROOT/installer/fixtures/cidre-seed-v0.integration.json"
-DEV_LAYOUT="$REPO_ROOT/installer/release/cidre-release-layout.dev.json"
-LOCAL_LAYOUT="$REPO_ROOT/installer/release/cidre-release-layout.localhost.json"
+FIXTURE="$REPO_ROOT/installer/fixtures/jackrose-seed-v0.integration.json"
+DEV_LAYOUT="$REPO_ROOT/installer/release/jackrose-release-layout.dev.json"
+LOCAL_LAYOUT="$REPO_ROOT/installer/release/jackrose-release-layout.localhost.json"
 
 # Staging initial local metadata facing format
 "$REPO_ROOT/installer/scripts/export-installer-metadata" \

@@ -1,4 +1,4 @@
-# Cidre Installation Handoff
+# Jackrose Installation Handoff
 
 You have completed the stage: **@FROM_STAGE@** (Phase: @FROM_PHASE@).
 

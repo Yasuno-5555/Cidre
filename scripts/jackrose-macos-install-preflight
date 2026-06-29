@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+
+# Wrapper that runs the macOS phase preflight verification
+exec "$(dirname "$0")/jackrose-install-preflight" --phase macos "$@"

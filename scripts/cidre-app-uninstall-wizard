@@ -1,6 +1,0 @@
-#!/bin/sh
-set -eu
-SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
-"$SCRIPT_DIR/cidre-state-export" --include-logs --include-reports >/dev/null 2>&1 || true
-"$SCRIPT_DIR/cidre-exit-plan" --include-partition-audit --include-macos-guide >/dev/null 2>&1 || true
-python3 -c 'import json; print(json.dumps({"schema_version":1,"command":"cidre-app-uninstall-wizard","status":"pass","summary":"Uninstall export stage completed.","phase":"app-wizard","stage":"uninstall-export","exit_code":0,"warnings":[],"errors":[]}, indent=2))'

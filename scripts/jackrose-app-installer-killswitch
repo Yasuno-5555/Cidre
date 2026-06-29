@@ -1,0 +1,141 @@
+#!/bin/sh
+set -eu
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+REPO_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+STATE_DIR="$REPO_ROOT/.local/state/jackrose/killswitch"
+STATE_FILE="$STATE_DIR/installer-killswitch.json"
+
+mode="status"
+json_mode=false
+confirm_risk=false
+actor="${USER:-unknown}"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  jackrose-app-installer-killswitch --status [--json]
+  jackrose-app-installer-killswitch --disable [--json]
+  jackrose-app-installer-killswitch --enable-for-test --i-understand-dfu-risk [--json]
+EOF
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --status) mode="status"; shift ;;
+    --disable) mode="disable"; shift ;;
+    --enable-for-test) mode="enable"; shift ;;
+    --i-understand-dfu-risk) confirm_risk=true; shift ;;
+    --actor)
+      [ "$#" -ge 2 ] || { echo "ERROR: --actor requires a value" >&2; exit 2; }
+      actor="$2"
+      shift 2
+      ;;
+    --json) json_mode=true; shift ;;
+    --help|-h) usage; exit 0 ;;
+    *) echo "ERROR: unknown option: $1" >&2; usage; exit 2 ;;
+  esac
+done
+
+mkdir -p "$STATE_DIR"
+
+python3 - "$mode" "$STATE_FILE" "$json_mode" "$confirm_risk" "$actor" <<'PY'
+import json
+import os
+import sys
+from datetime import datetime, timezone
+
+mode, state_file, json_mode, confirm_risk, actor = sys.argv[1:]
+json_mode = json_mode == "true"
+confirm_risk = confirm_risk == "true"
+
+default_state = {
+    "schema_version": 1,
+    "incident": "DFU_RESTORE_001",
+    "installer_status": "disabled",
+    "destructive_install_allowed": False,
+    "reason": "DFU_RESTORE_001 containment active",
+    "updated_at": None,
+    "updated_by": None,
+}
+
+def now():
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+def load_state():
+    if not os.path.exists(state_file):
+        return dict(default_state)
+    try:
+        with open(state_file, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except Exception:
+        return dict(default_state)
+    merged = dict(default_state)
+    merged.update(data)
+    merged["destructive_install_allowed"] = merged.get("installer_status") == "enabled-for-test"
+    return merged
+
+def save_state(state):
+    os.makedirs(os.path.dirname(state_file), exist_ok=True)
+    with open(state_file, "w", encoding="utf-8") as handle:
+        json.dump(state, handle, indent=2)
+        handle.write("\n")
+
+state = load_state()
+status = "pass"
+exit_code = 0
+
+if mode == "disable":
+    state.update({
+        "installer_status": "disabled",
+        "destructive_install_allowed": False,
+        "reason": "DFU_RESTORE_001 containment active",
+        "updated_at": now(),
+        "updated_by": actor,
+    })
+    save_state(state)
+    summary = "Disk-changing install flows are disabled."
+elif mode == "enable":
+    if not confirm_risk:
+        status = "blocked"
+        exit_code = 4
+        summary = "Refusing to enable disk-changing install without explicit DFU risk acknowledgement."
+    else:
+        state.update({
+            "installer_status": "enabled-for-test",
+            "destructive_install_allowed": True,
+            "reason": "Temporary test override enabled after explicit DFU risk acknowledgement",
+            "updated_at": now(),
+            "updated_by": actor,
+        })
+        save_state(state)
+        summary = "Disk-changing install test override enabled."
+else:
+    summary = (
+        "Disk-changing install flows are disabled by default."
+        if not state["destructive_install_allowed"]
+        else "Disk-changing install test override is enabled."
+    )
+
+payload = {
+    "schema_version": 1,
+    "command": "jackrose-app-installer-killswitch",
+    "status": status,
+    "summary": summary,
+    "phase": "safety",
+    "stage": "installer-killswitch",
+    "exit_code": exit_code,
+    "warnings": [] if state["destructive_install_allowed"] else ["Disk-changing install remains blocked until safety gates are fully verified."],
+    "errors": [] if status == "pass" else [{"code": "dfu-risk-confirmation-required", "message": summary}],
+    "state_file": state_file,
+    "mutation_test_mode_required": True,
+}
+payload.update(state)
+
+if json_mode:
+    print(json.dumps(payload, indent=2))
+else:
+    print(payload["summary"])
+
+sys.exit(exit_code)
+PY

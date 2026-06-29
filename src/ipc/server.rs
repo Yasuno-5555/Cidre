@@ -765,7 +765,7 @@ async fn process(ctx: &ClientCtx, request: Request) -> Reply {
             let (tx, rx) = async_channel::bounded(1);
             let profile_clone = profile.clone();
             ctx.event_loop.insert_idle(move |state| {
-                println!("niri-cidre IPC: setting power profile to {profile_clone}");
+                println!("niri-jackrose IPC: setting power profile to {profile_clone}");
                 state.niri.adaptive_power_profile = Some(profile_clone);
                 state.niri.reconcile_adaptive_animation_profile();
                 let _ = tx.send_blocking(Response::Handled);

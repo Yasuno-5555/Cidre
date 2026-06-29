@@ -1,0 +1,12 @@
+[Unit]
+Description=Jackrose firstboot preparation
+ConditionPathExists=!/var/lib/jackrose/firstboot.done
+Before=greetd.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/jackrose-firstboot-prep
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

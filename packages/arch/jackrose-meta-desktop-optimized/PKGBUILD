@@ -1,0 +1,28 @@
+# Maintainer: Yasuno <yasuno@example.invalid>
+
+pkgname=jackrose-meta-desktop-optimized
+pkgver=1.0.0
+pkgrel=1
+pkgdesc='Jackrose optimized desktop experience meta-package (Placeholder)'
+url='https://github.com/Yasuno-5555/Jackrose'
+arch=('any')
+license=('custom')
+depends=(
+  'jackrose-meta-desktop-baseline'
+  'jackrose-experience-upgrade'
+)
+optdepends=(
+  'ghostty: preferred Jackrose terminal'
+  'fish: preferred Jackrose shell'
+  'niri-jackrose: Jackrose-optimized compositor'
+)
+source=()
+sha256sums=()
+
+# Monorepo-local packaging path.
+_repo_root="${startdir}/../../.."
+
+package() {
+  # This is a placeholder meta-package; no files installed.
+  true
+}

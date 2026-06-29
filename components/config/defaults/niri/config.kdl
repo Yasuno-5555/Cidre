@@ -257,7 +257,7 @@ layout {
 spawn-at-startup "waybar"
 // fcitx5 is managed by fcitx5.service systemd user unit
 // spawn-at-startup "fcitx5" "-d"
-spawn-at-startup "swaybg" "-i" "/usr/share/backgrounds/cidre-wallpaper.png" "-m" "fill"
+spawn-at-startup "swaybg" "-i" "/usr/share/backgrounds/jackrose-wallpaper.png" "-m" "fill"
 
 // To run a shell command (with variables, pipes, etc.), use spawn-sh-at-startup:
 // spawn-sh-at-startup "qs -c ~/source/qs/MyAwesomeShell"

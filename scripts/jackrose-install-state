@@ -1,0 +1,159 @@
+#!/bin/sh
+set -eu
+
+# Resolve the appropriate state directory and file
+if [ -n "${JACKROSE_INSTALL_STATE_FILE:-}" ]; then
+  STATE_FILE="$JACKROSE_INSTALL_STATE_FILE"
+elif [ "$(id -u)" -eq 0 ] && [ "$(uname)" = "Linux" ]; then
+  STATE_FILE="/var/lib/jackrose/install/install-state.json"
+else
+  STATE_FILE="${HOME}/.local/state/jackrose/install/current/install-state.json"
+fi
+
+STATE_DIR="$(dirname "$STATE_FILE")"
+mkdir -p "$STATE_DIR"
+
+# Initialize state file if not exists
+if [ ! -f "$STATE_FILE" ] || [ ! -s "$STATE_FILE" ]; then
+  printf '{"schema_version": 1, "stage": "macos-preflight", "status": "pending", "next_stage": "macos-seed", "next_command": "./install-macos --continue", "failure_reason": "", "timestamp": "%s"}\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" > "$STATE_FILE"
+fi
+
+# We can use python3 to manipulate the json file cleanly
+run_py() {
+  python3 -c '
+import sys, json, datetime
+filepath = sys.argv[1]
+cmd = sys.argv[2]
+
+try:
+    with open(filepath, "r") as f:
+        data = json.load(f)
+except Exception:
+    data = {"schema_version": 1, "stage": "macos-preflight", "status": "pending", "next_stage": "macos-seed", "next_command": "", "failure_reason": ""}
+
+data["timestamp"] = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+
+if cmd == "show":
+    print("Stage:   %s" % data.get("stage", ""))
+    print("Status:  %s" % data.get("status", ""))
+    print("Next:    %s" % data.get("next_stage", ""))
+    print("Command: %s" % data.get("next_command", ""))
+    if data.get("failure_reason"):
+        print("Failure Reason: %s" % data.get("failure_reason"))
+elif cmd == "json":
+    print(json.dumps(data, indent=2))
+elif cmd == "set-stage":
+    data["stage"] = sys.argv[3]
+elif cmd == "set-status":
+    data["status"] = sys.argv[3]
+elif cmd == "set-next-command":
+    data["next_command"] = sys.argv[3]
+elif cmd == "set-next-stage":
+    data["next_stage"] = sys.argv[3]
+elif cmd == "mark-failed":
+    data["status"] = "failed"
+    data["failure_reason"] = sys.argv[3]
+elif cmd == "reset":
+    data = {
+        "schema_version": 1,
+        "stage": "macos-preflight",
+        "status": "pending",
+        "next_stage": "macos-seed",
+        "next_command": "./install-macos --continue",
+        "failure_reason": "",
+        "timestamp": data["timestamp"]
+    }
+
+if cmd not in ["show", "json"]:
+    with open(filepath, "w") as f:
+        json.dump(data, f, indent=2)
+        f.write("\n")
+' "$STATE_FILE" "$@"
+}
+
+usage() {
+  cat <<'EOF'
+Usage:
+  jackrose-install-state [options]
+
+Options:
+  --show
+  --json
+  --set-stage <stage>
+  --set-status <status>
+  --set-next-command <command>
+  --set-next-stage <stage>
+  --mark-failed <reason>
+  --reset
+  --help
+EOF
+}
+
+cmd=""
+val=""
+
+if [ "$#" -eq 0 ]; then
+  usage
+  exit 1
+fi
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --show)
+      run_py show
+      shift
+      ;;
+    --json)
+      run_py json
+      shift
+      ;;
+    --set-stage)
+      run_py set-stage "$2"
+      shift 2
+      ;;
+    --set-status)
+      run_py set-status "$2"
+      shift 2
+      ;;
+    --set-next-command)
+      run_py set-next-command "$2"
+      shift 2
+      ;;
+    --set-next-stage)
+      run_py set-next-stage "$2"
+      shift 2
+      ;;
+    --mark-failed)
+      run_py mark-failed "$2"
+      shift 2
+      ;;
+    --reset)
+      run_py reset
+      shift
+      ;;
+    --help|-h|help)
+      usage
+      exit 0
+      ;;
+    *)
+      printf 'ERROR: Unknown option: %s\n' "$1" >&2
+      usage
+      exit 1
+      ;;
+  esac
+done
+
+# Also write stage name to text file 'install-stage' and next command to 'next-command.txt' next to state file
+if [ -f "$STATE_FILE" ]; then
+  python3 -c '
+import sys, json, os
+filepath = sys.argv[1]
+with open(filepath) as f:
+    d = json.load(f)
+sdir = os.path.dirname(filepath)
+with open(os.path.join(sdir, "install-stage"), "w") as sf:
+    sf.write(d.get("stage", "") + "\n")
+with open(os.path.join(sdir, "next-command.txt"), "w") as cf:
+    cf.write(d.get("next_command", "") + "\n")
+' "$STATE_FILE"
+fi

@@ -1,0 +1,55 @@
+#!/bin/sh
+set -eu
+
+usage() {
+  cat <<'EOF'
+Usage:
+  jackrose-app-runtime-clean [options]
+
+Options:
+  --dry-run
+  --logs
+  --state
+  --yes
+  --help
+EOF
+}
+
+dry_run=false
+clean_logs=false
+clean_state=false
+confirmed=false
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --dry-run) dry_run=true; shift ;;
+    --logs) clean_logs=true; shift ;;
+    --state) clean_state=true; shift ;;
+    --yes) confirmed=true; shift ;;
+    --help|-h|help) usage; exit 0 ;;
+    *) printf 'ERROR: Unknown option: %s\n' "$1" >&2; usage; exit 2 ;;
+  esac
+done
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+REPO_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+STATE_DIR="${REPO_ROOT}/.local/state/jackrose/app-runtime/current"
+
+[ "$clean_logs" = true ] || [ "$clean_state" = true ] || { clean_logs=true; clean_state=true; }
+
+if [ "$dry_run" = false ] && [ "$confirmed" = false ]; then
+  echo "Refusing to clean runtime state without --yes." >&2
+  exit 2
+fi
+
+targets=""
+[ "$clean_logs" = true ] && targets="$targets $STATE_DIR/app-build.log $STATE_DIR/app-launch.log $STATE_DIR/app-command-execution.log $STATE_DIR/app-ui-validation.log"
+[ "$clean_state" = true ] && targets="$targets $STATE_DIR/runtime-state.json $STATE_DIR/runtime-stage $STATE_DIR/next-action.txt"
+
+for target in $targets; do
+  if [ "$dry_run" = true ]; then
+    printf 'Would remove: %s\n' "$target"
+  else
+    rm -f "$target"
+    printf 'Removed: %s\n' "$target"
+  fi
+done

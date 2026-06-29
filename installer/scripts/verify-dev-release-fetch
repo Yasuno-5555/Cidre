@@ -5,7 +5,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 METADATA=""
 ID=""
-DOWNLOAD_DIR="${CIDRE_FETCH_DIR:-/tmp/cidre-dev-release-fetch}"
+DOWNLOAD_DIR="${JACKROSE_FETCH_DIR:-/tmp/jackrose-dev-release-fetch}"
 STRICT=0
 NO_DOWNLOAD=0
 REQUIRE_REAL=0

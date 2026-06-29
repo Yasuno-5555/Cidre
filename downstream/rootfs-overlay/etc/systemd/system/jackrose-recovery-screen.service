@@ -1,0 +1,15 @@
+[Unit]
+Description=Jackrose Recovery Screen
+After=multi-user.target
+ConditionPathExists=/var/lib/jackrose/recovery-screen/recovery-screen-requested
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/jackrose/jackrose-recovery-screen --reason auto --non-interactive
+StandardInput=tty
+StandardOutput=tty
+TTYPath=/dev/tty1
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,15 @@
+[Unit]
+Description=Jackrose Safe Mode
+After=multi-user.target
+ConditionPathExists=/var/lib/jackrose/recovery-screen/safe-mode-requested
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/jackrose/jackrose-safe-mode --reason auto --menu
+StandardInput=tty
+StandardOutput=tty
+TTYPath=/dev/tty1
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

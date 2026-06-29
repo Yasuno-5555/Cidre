@@ -5,7 +5,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-TEST_TMPDIR="${CIDRE_TEST_TMPDIR:-/tmp/cidre-installer-asset-layout-tests}"
+TEST_TMPDIR="${JACKROSE_TEST_TMPDIR:-/tmp/jackrose-installer-asset-layout-tests}"
 rm -rf "$TEST_TMPDIR"
 mkdir -p "$TEST_TMPDIR/generated"
 
@@ -14,8 +14,8 @@ echo "=== Running Installer Asset Layout Tests ==="
 SAFE_FIXTURE="$REPO_ROOT/installer/bootstrap/fixtures/minimal-bootstrap-sample.sh"
 DANGER_FIXTURE="$REPO_ROOT/installer/bootstrap/fixtures/dangerous-bootstrap-sample.sh"
 
-FIXTURE_DATA="$REPO_ROOT/installer/fixtures/cidre-seed-v0.integration.json"
-LOCAL_LAYOUT="$REPO_ROOT/installer/release/cidre-release-layout.localhost.json"
+FIXTURE_DATA="$REPO_ROOT/installer/fixtures/jackrose-seed-v0.integration.json"
+LOCAL_LAYOUT="$REPO_ROOT/installer/release/jackrose-release-layout.localhost.json"
 
 # Export layout normalized metadata
 echo "Test 1: Exporting normalized Asahi metadata..."
@@ -31,7 +31,7 @@ echo "Test 1: Exporting normalized Asahi metadata..."
 
 "$REPO_ROOT/installer/scripts/export-asahi-installer-data" \
   --input "$TEST_TMPDIR/dev-facing.json" \
-  --output "$TEST_TMPDIR/generated/asahi-installer-data.cidre.dev.json" \
+  --output "$TEST_TMPDIR/generated/asahi-installer-data.jackrose.dev.json" \
   --channel dev \
   --repo-base "http://127.0.0.1:8763" \
   --normalize-asset-layout
@@ -39,7 +39,7 @@ echo "Test 1: Exporting normalized Asahi metadata..."
 # Test 2: Validate asset layout
 echo "Test 2: Validating asset layout against policy..."
 "$REPO_ROOT/installer/scripts/validate-installer-asset-layout" \
-  --metadata "$TEST_TMPDIR/generated/asahi-installer-data.cidre.dev.json" \
+  --metadata "$TEST_TMPDIR/generated/asahi-installer-data.jackrose.dev.json" \
   --repo-base "http://127.0.0.1:8763"
 echo "  [OK] Asset layout format validated."
 
@@ -60,7 +60,7 @@ sleep 2
 # Test 3: Run probe on safe input (expect A decision because normalization resolves C)
 echo "Test 3: Running boundary probe on safe normalized metadata..."
 decision=$("$REPO_ROOT/installer/scripts/controlled-installer-boundary-probe" \
-  --installer-data-url "http://127.0.0.1:8763/asahi-installer-data.cidre.dev.json" \
+  --installer-data-url "http://127.0.0.1:8763/asahi-installer-data.jackrose.dev.json" \
   --repo-base "http://127.0.0.1:8763" \
   --bootstrap-snapshot "$SAFE_FIXTURE" \
   --decision-only)
@@ -76,7 +76,7 @@ echo "=== Running Negative Asset Layout Tests ==="
 
 # Neg 1: Missing manifest (expect C decision)
 echo "Neg 1: Missing manifest check..."
-jq 'del(.os_list[0].manifest)' "$TEST_TMPDIR/generated/asahi-installer-data.cidre.dev.json" > "$TEST_TMPDIR/generated/no-manifest.json"
+jq 'del(.os_list[0].manifest)' "$TEST_TMPDIR/generated/asahi-installer-data.jackrose.dev.json" > "$TEST_TMPDIR/generated/no-manifest.json"
 if "$REPO_ROOT/installer/scripts/validate-installer-asset-layout" \
   --metadata "$TEST_TMPDIR/generated/no-manifest.json" \
   --repo-base "http://127.0.0.1:8763" >/dev/null 2>&1; then
@@ -88,7 +88,7 @@ echo "  [PASSED] Caught missing manifest check."
 # Neg 2: Mismatched extension (expect C decision)
 echo "Neg 2: Mismatched extension check..."
 jq '.os_list[0].package = "unsupported.zip.fake" | .os_list[0].url = "http://127.0.0.1:8763/unsupported.zip.fake"' \
-  "$TEST_TMPDIR/generated/asahi-installer-data.cidre.dev.json" > "$TEST_TMPDIR/generated/bad-ext.json"
+  "$TEST_TMPDIR/generated/asahi-installer-data.jackrose.dev.json" > "$TEST_TMPDIR/generated/bad-ext.json"
 if "$REPO_ROOT/installer/scripts/validate-installer-asset-layout" \
   --metadata "$TEST_TMPDIR/generated/bad-ext.json" \
   --repo-base "http://127.0.0.1:8763" >/dev/null 2>&1; then
@@ -100,7 +100,7 @@ echo "  [PASSED] Caught mismatched extension check."
 # Neg 3: Dangerous bootstrap execution check (expect B decision)
 echo "Neg 3: Dangerous bootstrap snapshot probe check..."
 decision_danger=$("$REPO_ROOT/installer/scripts/controlled-installer-boundary-probe" \
-  --installer-data-url "http://127.0.0.1:8763/asahi-installer-data.cidre.dev.json" \
+  --installer-data-url "http://127.0.0.1:8763/asahi-installer-data.jackrose.dev.json" \
   --repo-base "http://127.0.0.1:8763" \
   --bootstrap-snapshot "$DANGER_FIXTURE" \
   --decision-only)

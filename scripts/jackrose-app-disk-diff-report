@@ -1,0 +1,57 @@
+#!/bin/sh
+set -eu
+
+before=""
+after=""
+format="json"
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --before) before="$2"; shift 2 ;;
+    --after) after="$2"; shift 2 ;;
+    --json) format="json"; shift ;;
+    --markdown) format="markdown"; shift ;;
+    --help|-h) echo "Usage: jackrose-app-disk-diff-report --before <file> --after <file> [--json|--markdown]"; exit 0 ;;
+    *) echo "ERROR: unknown option: $1" >&2; exit 2 ;;
+  esac
+done
+
+[ -n "$before" ] || { echo "ERROR: --before is required" >&2; exit 2; }
+[ -n "$after" ] || { echo "ERROR: --after is required" >&2; exit 2; }
+
+diff_json="$("$(dirname "$0")/jackrose-app-prepost-disk-diff" --before "$before" --after "$after" --json)"
+guard_json="$("$(dirname "$0")/jackrose-app-protected-partition-guard" --before "$before" --after "$after" --json)"
+
+python3 - "$format" "$diff_json" "$guard_json" <<'PY'
+import json
+import sys
+
+fmt, diff_raw, guard_raw = sys.argv[1:]
+diff = json.loads(diff_raw)
+guard = json.loads(guard_raw)
+
+payload = {
+    "schema_version": 1,
+    "command": "jackrose-app-disk-diff-report",
+    "status": "passed" if diff.get("status") == "passed" and guard.get("status") == "passed" else "failed",
+    "summary": "Disk diff report generated.",
+    "phase": "safety",
+    "stage": "disk-diff-report",
+    "exit_code": 0 if diff.get("status") == "passed" and guard.get("status") == "passed" else 8,
+    "warnings": [],
+    "errors": [],
+    "diff": diff,
+    "guard": guard,
+}
+
+if fmt == "markdown":
+    print("# Disk Diff Report")
+    print("")
+    print(f"- Diff status: `{diff.get('status')}`")
+    print(f"- Guard status: `{guard.get('status')}`")
+    print(f"- Allowed target changes: `{len(diff.get('allowed_target_changes') or [])}`")
+    print(f"- Unexpected protected changes: `{len(diff.get('unexpected_protected_changes') or [])}`")
+else:
+    print(json.dumps(payload, indent=2))
+sys.exit(payload["exit_code"])
+PY

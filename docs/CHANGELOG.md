@@ -4,7 +4,7 @@
 
 ### Fixed — Bootstrap Reality Fix Pack
 
-- **`install.sh` auto-clone**: When run via `curl | bash` or without the full repo, `install.sh` auto-clones the Cidre repository from GitHub (using `git` or `curl+tar` fallback) before launching the installer. Makes the README one-liner actually work.
+- **`install.sh` auto-clone**: When run via `curl | bash` or without the full repo, `install.sh` auto-clones the Jackrose repository from GitHub (using `git` or `curl+tar` fallback) before launching the installer. Makes the README one-liner actually work.
 - **`bootstrap.sh` non-interactive**: Added `--user`, `--timezone`, `--keymap`, `--locale`, `--preset japan`, `--yes` flags. Detects existing system settings as defaults (timezone from `/etc/localtime`, keymap from `/etc/vconsole.conf`, locale from `/etc/locale.conf`).
 - **Root execution guidance**: Running `install.sh` as root now shows clear two-phase guidance (preinstall → user → install) instead of just rejecting.
 - **Keyring detection**: Checks for `asahi-alarm-keyring` first, falls back to `asahilinux-keyring`, installs if missing. No longer hardcodes `pacman-key --populate asahi`.
@@ -15,7 +15,7 @@
 
 - **`install`**: Complete rewrite with stdin detection and auto-clone logic.
 - **`scripts/bootstrap.sh`**: Rewritten with CLI flags, system setting detection, keyring fallback, greeter detection, safe password handling.
-- **`scripts/cidre-installer`**: Root guidance updated; passes `--yes` to `bootstrap.sh`.
+- **`scripts/jackrose-installer`**: Root guidance updated; passes `--yes` to `bootstrap.sh`.
 - **README.md**: Quick Install section updated to reflect the working `curl | bash` one-liner and root phase instructions.
 
 ## [0.36.0] - 2026-06-25
@@ -24,20 +24,20 @@
 
 - **Direct profile flags**: `--desktop`, `--dev`, `--student`, `--minimal` as first-class CLI flags on `install.sh`.
 - **Student profile**: Lightweight desktop profile for educational use.
-- **`cidre-repair` command**: Focused repair tool with `--configs`, `--session`, `--audio`, `--all` targets. Simpler than full `cidre-recovery`.
-- **Interactive `cidre-welcome`**: First-login dashboard with numbered menu for input method setup, audio test, terminal/shell selection, and docs.
-- **`lib/cidre/` shared libraries**: `ui.sh` (TUI helpers), `log.sh` (logging), `checks.sh` (system checks), `rollback.sh` (snapshots).
+- **`jackrose-repair` command**: Focused repair tool with `--configs`, `--session`, `--audio`, `--all` targets. Simpler than full `jackrose-recovery`.
+- **Interactive `jackrose-welcome`**: First-login dashboard with numbered menu for input method setup, audio test, terminal/shell selection, and docs.
+- **`lib/jackrose/` shared libraries**: `ui.sh` (TUI helpers), `log.sh` (logging), `checks.sh` (system checks), `rollback.sh` (snapshots).
 - **`install.sh` symlink**: Top-level `install.sh` for `curl | bash` one-liner compatibility.
-- **Brand promise display**: Every install prints and confirms "Cidre will NOT change macOS default boot, NVRAM boot order, boot policy, recovery partition".
+- **Brand promise display**: Every install prints and confirms "Jackrose will NOT change macOS default boot, NVRAM boot order, boot policy, recovery partition".
 - **Failure UX pattern**: All error messages now include Likely causes, Try (recovery commands), and Log path.
 - **`--no-confirm` flag**: Skip non-dangerous confirmations. Brand promise confirmation is never skipped.
 - **`docs/install.md`**: New comprehensive install guide for the `install.sh` flow.
 
 ### Changed
 
-- **`scripts/cidre-installer`**: Rewritten with shared library support, direct flags, Student profile, brand promise, and improved failure UX.
-- **`scripts/cidre-user-setup`**: Added `student` and `recovery` profile mappings.
-- **`scripts/cidre-doctor`**: `valid_profile` now includes `student`.
+- **`scripts/jackrose-installer`**: Rewritten with shared library support, direct flags, Student profile, brand promise, and improved failure UX.
+- **`scripts/jackrose-user-setup`**: Added `student` and `recovery` profile mappings.
+- **`scripts/jackrose-doctor`**: `valid_profile` now includes `student`.
 - **README.md**: Added Quick Install section with one-liner and profile descriptions.
 
 ### Notes
@@ -58,12 +58,12 @@ This release focuses on installer UX: CLI-first, single entry point, clear failu
 ### Changed
 
 - Install flow now explicitly separates payload placement from boot registration.
-- Cidre does not set itself as the default startup disk.
+- Jackrose does not set itself as the default startup disk.
 
 ### Notes
 
 This release does not implement automatic boot registration, default boot changes,
-or automatic reboot into Cidre.
+or automatic reboot into Jackrose.
 
 ## [0.35.3] - 2026-06-22
 
@@ -97,21 +97,21 @@ v0.35.2 still does not re-enable destructive disk-changing installer flows.
 ## [0.35.0] - 2026-06-22
 
 ### Added
-- Terminal-free setup, uninstall, and repair wizard shells in `Cidre.app`.
+- Terminal-free setup, uninstall, and repair wizard shells in `Jackrose.app`.
 - Real APFS partition creation, resize, volume deletion, and partition deletion execution through an allowlisted privileged helper.
 - Per-plan confirmation phrases, execution-time target revalidation, startup disk protection, and helper audit logs.
-- A locally signed `Cidre.app` packaging flow with bundled backend scripts and helper deployment to Application Support.
+- A locally signed `Jackrose.app` packaging flow with bundled backend scripts and helper deployment to Application Support.
 
 ### Changed
 - Live wizard execution is now the default; mock mode remains available for testing.
 
-All notable changes to the Cidre project will be documented in this file.
+All notable changes to the Jackrose project will be documented in this file.
 
 ## [0.33.0] - 2026-06-22
 
 ### Added
 
-- Added repository path selection support for Cidre.app.
+- Added repository path selection support for Jackrose.app.
 - Added safe read-only command execution support.
 - Added live dashboard and action runner UI components.
 - Added execution log UI.
@@ -140,7 +140,7 @@ real uninstall execution, partition mutation, signing, or notarization.
 
 - Extended repository validation to include the macOS app directory.
 - Updated safe action policy data and command manifest coverage for v0.34.0 runtime validation.
-- Extended `cidre-doctor` and `cidre-recovery` with app runtime validation commands.
+- Extended `jackrose-doctor` and `jackrose-recovery` with app runtime validation commands.
 
 ### Notes
 
@@ -150,7 +150,7 @@ v0.34.0 validates the macOS app at runtime but still blocks real install, real u
 
 ### Added
 
-- Added initial Cidre.app prototype layout.
+- Added initial Jackrose.app prototype layout.
 - Added SwiftUI dashboard, install, uninstall, repair, reports, and settings views.
 - Added interface metadata readers.
 - Added mock fixtures for command manifests, app actions, command results, and reports.
@@ -187,7 +187,7 @@ v0.32.0 does not include privileged helper support or destructive install/uninst
 ### Notes
 
 v0.31.0 does not implement the macOS GUI app.
-It prepares the command interface required by a future Cidre.app.
+It prepares the command interface required by a future Jackrose.app.
 
 ## [0.30.0] - 2026-06-22
 ### Added
@@ -201,8 +201,8 @@ It prepares the command interface required by a future Cidre.app.
 ### Changed
 - Integrated uninstall flow with existing state export, exit plan, partition audit, and macOS restore assistant.
 - Extended `install-macos` with guided uninstall commands.
-- Extended `cidre-doctor` with guided uninstall checks.
-- Extended `cidre-recovery` with uninstall subcommands.
+- Extended `jackrose-doctor` with guided uninstall checks.
+- Extended `jackrose-recovery` with uninstall subcommands.
 
 ### Notes
 - v0.30.0 provides guided uninstall planning and safety checks.
@@ -220,8 +220,8 @@ It prepares the command interface required by a future Cidre.app.
 ### Changed
 - Integrated `install-macos`, `preinstall`, and `install` with guided install state.
 - Integrated firstboot and user phase with guided install reporting.
-- Extended `cidre-doctor` with guided install checks.
-- Extended `cidre-recovery` with install status/report/resume commands.
+- Extended `jackrose-doctor` with guided install checks.
+- Extended `jackrose-recovery` with install status/report/resume commands.
 
 ### Notes
 - v0.29.0 improves the guided install experience.
@@ -238,8 +238,8 @@ It prepares the command interface required by a future Cidre.app.
 - Added macOS-side rescue creation guidance.
 
 ### Changed
-- Extended `cidre-doctor` with rescue creation checks.
-- Extended `cidre-recovery` with rescue creation subcommands.
+- Extended `jackrose-doctor` with rescue creation checks.
+- Extended `jackrose-recovery` with rescue creation subcommands.
 - Connected rescue creation status to rescue boot reports and readiness checks.
 
 ### Notes
@@ -257,8 +257,8 @@ It prepares the command interface required by a future Cidre.app.
 
 ### Changed
 - Extended `install-macos` with rescue planning commands.
-- Extended `cidre-doctor` with rescue boot checks.
-- Extended `cidre-recovery` with rescue boot subcommands.
+- Extended `jackrose-doctor` with rescue boot checks.
+- Extended `jackrose-recovery` with rescue boot subcommands.
 - Extended Recovery Screen and Emergency Banner with rescue boot commands.
 - Extended boot readiness and boot checklist with rescue boot state.
 
@@ -268,15 +268,15 @@ It prepares the command interface required by a future Cidre.app.
 
 ## [0.26.0] - 2026-06-21
 ### Added
-- Added Cidre Rescue Slot foundation.
+- Added Jackrose Rescue Slot foundation.
 - Added rescue profile metadata.
 - Added rescue rootfs artifact flow.
 - Added rescue mount, export, kernel-check, and report tools.
 - Added rescue documentation.
 
 ### Changed
-- Extended `cidre-doctor` with `--rescue`.
-- Extended `cidre-recovery` with rescue subcommands.
+- Extended `jackrose-doctor` with `--rescue`.
+- Extended `jackrose-recovery` with rescue subcommands.
 - Extended Recovery Screen and Emergency Banner with Rescue Slot guidance.
 - Extended image and rootfs inspection with rescue readiness checks.
 
@@ -286,44 +286,44 @@ It prepares the command interface required by a future Cidre.app.
 
 ## [0.25.0] - 2026-06-21
 ### Added
-- Added `scripts/cidre-panic`.
-- Added `scripts/cidre-recovery-screen`.
-- Added `scripts/cidre-safe-mode`.
-- Added `scripts/cidre-safe-shell`.
-- Added `scripts/cidre-session-failure`.
-- Added `scripts/cidre-desktop-failure-detect`.
-- Added `scripts/cidre-recovery-actions`.
-- Added `scripts/cidre-emergency-banner`.
-- Added `scripts/cidre-recovery-report`.
+- Added `scripts/jackrose-panic`.
+- Added `scripts/jackrose-recovery-screen`.
+- Added `scripts/jackrose-safe-mode`.
+- Added `scripts/jackrose-safe-shell`.
+- Added `scripts/jackrose-session-failure`.
+- Added `scripts/jackrose-desktop-failure-detect`.
+- Added `scripts/jackrose-recovery-actions`.
+- Added `scripts/jackrose-emergency-banner`.
+- Added `scripts/jackrose-recovery-report`.
 - Added recovery screen and safe mode documentation.
 - Added systemd recovery and safe-mode prototypes.
 
 ### Changed
-- Extended `cidre-doctor` with recovery screen and safe mode checks.
-- Extended `cidre-recovery` with recovery screen, panic, actions, and recovery report commands.
+- Extended `jackrose-doctor` with recovery screen and safe mode checks.
+- Extended `jackrose-recovery` with recovery screen, panic, actions, and recovery report commands.
 - Connected firstboot and first-login failure paths to recovery UX.
 - Extended boot log collection with recovery screen state.
 - Extended overlay sync and image inspection with recovery assets.
 
 ### Notes
-- v0.25.0 handles failures where main Cidre can still boot far enough to present a TTY or TUI recovery path.
+- v0.25.0 handles failures where main Jackrose can still boot far enough to present a TTY or TUI recovery path.
 - Kernel-level boot failure recovery is deferred to a future Rescue Slot.
 
 ## [0.24.0] - 2026-06-21
 ### Added
-- Added `scripts/cidre-macos-restore-check`.
-- Added `scripts/cidre-macos-partition-audit`.
-- Added `scripts/cidre-macos-startup-disk-check`.
-- Added `scripts/cidre-macos-uninstall-guide`.
-- Added `scripts/cidre-macos-restore-report`.
-- Added `scripts/cidre-macos-risk`.
+- Added `scripts/jackrose-macos-restore-check`.
+- Added `scripts/jackrose-macos-partition-audit`.
+- Added `scripts/jackrose-macos-startup-disk-check`.
+- Added `scripts/jackrose-macos-uninstall-guide`.
+- Added `scripts/jackrose-macos-restore-report`.
+- Added `scripts/jackrose-macos-risk`.
 - Added macOS restore assistant documentation.
 
 ### Changed
 - Extended `install-macos` with restore assistant commands.
-- Extended `scripts/cidre-macos-installer` with restore mode dispatch.
-- Expanded `scripts/cidre-macos-check --restore-readiness`.
-- Added `cidre-doctor --macos-restore`.
+- Extended `scripts/jackrose-macos-installer` with restore mode dispatch.
+- Expanded `scripts/jackrose-macos-check --restore-readiness`.
+- Added `jackrose-doctor --macos-restore`.
 - Updated uninstall and exit path documentation.
 
 ### Notes
@@ -332,22 +332,22 @@ It prepares the command interface required by a future Cidre.app.
 
 ## [0.23.0] - 2026-06-21
 ### Added
-- Added `scripts/cidre-uninstall-check`.
-- Added `scripts/cidre-exit-plan`.
-- Added `scripts/cidre-state-export`.
-- Added `scripts/cidre-partition-audit`.
-- Added `scripts/cidre-macos-restore-guide`.
-- Added `scripts/cidre-uninstall-risk`.
-- Added `scripts/cidre-goodbye`.
-- Added `scripts/cidre-erase-preflight`.
+- Added `scripts/jackrose-uninstall-check`.
+- Added `scripts/jackrose-exit-plan`.
+- Added `scripts/jackrose-state-export`.
+- Added `scripts/jackrose-partition-audit`.
+- Added `scripts/jackrose-macos-restore-guide`.
+- Added `scripts/jackrose-uninstall-risk`.
+- Added `scripts/jackrose-goodbye`.
+- Added `scripts/jackrose-erase-preflight`.
 - Added uninstall and exit path documentation.
 
 ### Changed
-- Added `cidre-doctor --uninstall`.
+- Added `jackrose-doctor --uninstall`.
 - Added uninstall and exit path recovery commands.
 - Updated boot/build reports with exit path guidance.
 - Updated validation matrix and v1.0.0 clean-install test plan with uninstall requirements.
-- Added `./install-macos --restore-help` and `scripts/cidre-macos-check --restore-readiness`.
+- Added `./install-macos --restore-help` and `scripts/jackrose-macos-check --restore-readiness`.
 
 ### Notes
 - v0.23.0 does not delete partitions or modify macOS boot policy.
@@ -355,73 +355,73 @@ It prepares the command interface required by a future Cidre.app.
 
 ## [0.22.0] - 2026-06-21
 ### Added
-- Added `scripts/cidre-user-handoff`.
-- Added `scripts/cidre-user-phase-state`.
-- Added `scripts/cidre-user-phase-verify`.
-- Added `scripts/cidre-user-phase-report`.
-- Added `scripts/cidre-user-phase-repair`.
-- Added `scripts/cidre-first-login`.
+- Added `scripts/jackrose-user-handoff`.
+- Added `scripts/jackrose-user-phase-state`.
+- Added `scripts/jackrose-user-phase-verify`.
+- Added `scripts/jackrose-user-phase-report`.
+- Added `scripts/jackrose-user-phase-repair`.
+- Added `scripts/jackrose-first-login`.
 - Added docs/user-phase-handoff.md, docs/user-phase-state.md, docs/first-login.md, docs/install-resume-validation.md, and docs/v0.22.0-user-phase-handoff.md.
 
 ### Changed
-- Extended `cidre-firstboot-handoff` to output machine-readable user-phase handoff states (env and JSON profiles).
-- Improved `cidre-installer --resume` preflight checks, failure trapping, and user phase state tracking.
-- Updated `cidre-resume` to check schema versions and warn on profile discrepancies.
-- Added `cidre-doctor --user-phase` check options.
+- Extended `jackrose-firstboot-handoff` to output machine-readable user-phase handoff states (env and JSON profiles).
+- Improved `jackrose-installer --resume` preflight checks, failure trapping, and user phase state tracking.
+- Updated `jackrose-resume` to check schema versions and warn on profile discrepancies.
+- Added `jackrose-doctor --user-phase` check options.
 - Added user phase recovery commands (`user-phase-status`, `user-phase-report`, `user-phase-repair`, `user-handoff`).
 - Updated boot log collection and boot test reports to parse user phase metrics directories.
 - Updated validation matrix and clean-install test plans.
 
 ### Notes
 - v0.22.0 focuses on user phase handoff stabilization.
-- It does not distribute a public bootable Cidre image.
+- It does not distribute a public bootable Jackrose image.
 
 ## [0.21.0] - 2026-06-21
 ### Added
-- Added `scripts/cidre-firstboot-diagnose` to check state directory markers and error logs.
-- Added `scripts/cidre-firstboot-retry` to safely reset failures to trigger retries.
-- Added `scripts/cidre-firstboot-repair` to clear failed markers and regenerate user handoff files.
-- Added `scripts/cidre-firstboot-report` to compile markdown execution reports.
-- Added `scripts/cidre-firstboot-console` to print status messages optimized for boot screens.
+- Added `scripts/jackrose-firstboot-diagnose` to check state directory markers and error logs.
+- Added `scripts/jackrose-firstboot-retry` to safely reset failures to trigger retries.
+- Added `scripts/jackrose-firstboot-repair` to clear failed markers and regenerate user handoff files.
+- Added `scripts/jackrose-firstboot-report` to compile markdown execution reports.
+- Added `scripts/jackrose-firstboot-console` to print status messages optimized for boot screens.
 - Added docs/firstboot-fixup.md, docs/firstboot-service-ordering.md, docs/firstboot-retry-repair.md, and docs/v0.21.0-firstboot-fixup.md.
 
 ### Changed
-- Improved `scripts/cidre-firstboot-root` stage tracking, failure handling, and completion routines.
-- Updated `scripts/cidre-oobe` with visual styling for plain shell fallbacks and improved non-interactive output.
-- Extended `scripts/cidre-firstboot-state` with subcommands: clear-failed, clear-retry-requested, mark-retry-requested, set-stage, set-error.
-- Updated `scripts/cidre-firstboot-handoff` to include diagnostic recommendations and safer next-step guidance.
-- Updated `scripts/cidre-boot-log-collect` to retrieve firstboot diagnostics, unit definitions, and logs.
-- Updated `scripts/cidre-boot-failure-classify` with detailed classification subcategories (firstboot-service-missing, firstboot-service-failed, firstboot-state-incomplete, handoff-missing, etc.).
-- Updated `scripts/cidre-image-build` to sync the new firstboot scripts into the rootfs overlay.
-- Updated `scripts/cidre-doctor` to add `--firstboot-fixup` option and verify all new files in release candidate checks.
-- Updated `scripts/cidre-recovery` with subcommands: firstboot-diagnose, firstboot-retry, firstboot-repair, and firstboot-report.
-- Adjusted systemd service target ordering in `cidre-firstboot-root.service` to prevent boot hangs when offline.
+- Improved `scripts/jackrose-firstboot-root` stage tracking, failure handling, and completion routines.
+- Updated `scripts/jackrose-oobe` with visual styling for plain shell fallbacks and improved non-interactive output.
+- Extended `scripts/jackrose-firstboot-state` with subcommands: clear-failed, clear-retry-requested, mark-retry-requested, set-stage, set-error.
+- Updated `scripts/jackrose-firstboot-handoff` to include diagnostic recommendations and safer next-step guidance.
+- Updated `scripts/jackrose-boot-log-collect` to retrieve firstboot diagnostics, unit definitions, and logs.
+- Updated `scripts/jackrose-boot-failure-classify` with detailed classification subcategories (firstboot-service-missing, firstboot-service-failed, firstboot-state-incomplete, handoff-missing, etc.).
+- Updated `scripts/jackrose-image-build` to sync the new firstboot scripts into the rootfs overlay.
+- Updated `scripts/jackrose-doctor` to add `--firstboot-fixup` option and verify all new files in release candidate checks.
+- Updated `scripts/jackrose-recovery` with subcommands: firstboot-diagnose, firstboot-retry, firstboot-repair, and firstboot-report.
+- Adjusted systemd service target ordering in `jackrose-firstboot-root.service` to prevent boot hangs when offline.
 
 ### Notes
 - v0.21.0 focuses on stabilizing the first boot initialization path.
-- It does not distribute a public bootable Cidre image.
+- It does not distribute a public bootable Jackrose image.
 
 ## [0.20.0] - 2026-06-21
 ### Added
-- Added `scripts/cidre-boot-preflight` to verify files and manifest configurations before boot validation.
-- Added `scripts/cidre-controlled-boot-test` high-level orchestrator for preparation, observations, log collections, and reporting.
-- Added `scripts/cidre-boot-observe` to log interactive OOBE status.
-- Added `scripts/cidre-firstboot-verify` to check firstboot marker files.
-- Added `scripts/cidre-boot-result` to write machine-readable JSON status details.
-- Added `scripts/cidre-boot-failure-classify` to classify failures into 10 categories.
-- Added `scripts/cidre-boot-test-report` to generate execution summaries.
-- Added `scripts/cidre-boot-test-clean` to archive active logs directories.
+- Added `scripts/jackrose-boot-preflight` to verify files and manifest configurations before boot validation.
+- Added `scripts/jackrose-controlled-boot-test` high-level orchestrator for preparation, observations, log collections, and reporting.
+- Added `scripts/jackrose-boot-observe` to log interactive OOBE status.
+- Added `scripts/jackrose-firstboot-verify` to check firstboot marker files.
+- Added `scripts/jackrose-boot-result` to write machine-readable JSON status details.
+- Added `scripts/jackrose-boot-failure-classify` to classify failures into 10 categories.
+- Added `scripts/jackrose-boot-test-report` to generate execution summaries.
+- Added `scripts/jackrose-boot-test-clean` to archive active logs directories.
 - Added documentation for controlled boot validation, runbooks, firstboot verification, and failure classifications.
 - Added `docs/v0.20.0-controlled-boot-test.md` release plan documentation.
 
 ### Changed
-- Updated `scripts/cidre-boot-checklist` to check preflight parameters and results.
-- Updated `scripts/cidre-boot-log-collect` to support state directories parameters.
-- Updated `scripts/cidre-image-boot-readiness` to update manifest validation status.
-- Updated `scripts/cidre-real-image-build` to route `--prepare-boot-test` logic.
-- Updated `scripts/cidre-image-build-report` to include next boot validation parameters.
-- Updated `scripts/cidre-doctor` to add `--controlled-boot` and append new files to RC checklists.
-- Updated `scripts/cidre-recovery` to add `boot-test-status` subcommand case.
+- Updated `scripts/jackrose-boot-checklist` to check preflight parameters and results.
+- Updated `scripts/jackrose-boot-log-collect` to support state directories parameters.
+- Updated `scripts/jackrose-image-boot-readiness` to update manifest validation status.
+- Updated `scripts/jackrose-real-image-build` to route `--prepare-boot-test` logic.
+- Updated `scripts/jackrose-image-build-report` to include next boot validation parameters.
+- Updated `scripts/jackrose-doctor` to add `--controlled-boot` and append new files to RC checklists.
+- Updated `scripts/jackrose-recovery` to add `boot-test-status` subcommand case.
 - Updated validation matrices, clean-install test plans, known limitations, and README guides.
 
 ### Notes
@@ -430,24 +430,24 @@ It prepares the command interface required by a future Cidre.app.
 
 ## [0.19.0] - 2026-06-21
 ### Added
-- Added `scripts/cidre-real-image-build` high-level orchestrator for full local prototype image builds.
-- Added `scripts/cidre-builder-run` low-level execution wrapper for builder invocation.
-- Added `scripts/cidre-build-environment` for host build tool validation.
-- Added `scripts/cidre-build-failure-report` to generate error diagnostic summaries.
-- Added `scripts/cidre-image-register` to register builder output files to state trees.
-- Added `scripts/cidre-image-verify` to check checksums and manifest properties.
-- Added `scripts/cidre-image-build-report` to write build summaries.
+- Added `scripts/jackrose-real-image-build` high-level orchestrator for full local prototype image builds.
+- Added `scripts/jackrose-builder-run` low-level execution wrapper for builder invocation.
+- Added `scripts/jackrose-build-environment` for host build tool validation.
+- Added `scripts/jackrose-build-failure-report` to generate error diagnostic summaries.
+- Added `scripts/jackrose-image-register` to register builder output files to state trees.
+- Added `scripts/jackrose-image-verify` to check checksums and manifest properties.
+- Added `scripts/jackrose-image-build-report` to write build summaries.
 - Added documentation for real image builds, builder runbooks, image register/verify guides, and build failure reporting.
 - Added `docs/v0.19.0-real-image-build.md` release plan documentation.
 
 ### Changed
-- Updated `scripts/cidre-image-build` to support `--real-build` routing logic.
-- Updated `scripts/cidre-builder-invoke` to support real execute parameters (`--run`, `--capture-log`, `--exit-code-file`).
-- Updated `scripts/cidre-builder-artifacts` to delegate registration flows to `cidre-image-register`.
-- Updated `scripts/cidre-image-manifest` to write schema version `0.19.0` with registered image properties.
-- Updated `scripts/cidre-image-mount` to reject compressed file paths.
-- Updated `scripts/cidre-doctor` to add `--real-build` diagnostics flag and register new files in RC checks.
-- Updated `scripts/cidre-recovery` to add `real-build-status` command case.
+- Updated `scripts/jackrose-image-build` to support `--real-build` routing logic.
+- Updated `scripts/jackrose-builder-invoke` to support real execute parameters (`--run`, `--capture-log`, `--exit-code-file`).
+- Updated `scripts/jackrose-builder-artifacts` to delegate registration flows to `jackrose-image-register`.
+- Updated `scripts/jackrose-image-manifest` to write schema version `0.19.0` with registered image properties.
+- Updated `scripts/jackrose-image-mount` to reject compressed file paths.
+- Updated `scripts/jackrose-doctor` to add `--real-build` diagnostics flag and register new files in RC checks.
+- Updated `scripts/jackrose-recovery` to add `real-build-status` command case.
 - Updated validation matrix and v1.0.0 clean-install test plan with real image build requirements.
 - Updated known limitations with v0.19.0 constraints.
 
@@ -457,63 +457,63 @@ It prepares the command interface required by a future Cidre.app.
 
 ## [0.18.0] - 2026-06-21
 ### Added
-- Added `scripts/cidre-builder-config` to check and load ALARM image builder workspace options.
-- Added `scripts/cidre-builder-integrate` to sync overlays into the builder staging tree.
-- Added `scripts/cidre-builder-invoke` to orchestrate build wrapper commands.
-- Added `scripts/cidre-builder-log` to parse build compiler logs and output warnings.
-- Added `scripts/cidre-builder-artifacts` to scan outputs and register images in state directories.
-- Added `scripts/cidre-image-promote` to copy verified prototypes to public targets.
+- Added `scripts/jackrose-builder-config` to check and load ALARM image builder workspace options.
+- Added `scripts/jackrose-builder-integrate` to sync overlays into the builder staging tree.
+- Added `scripts/jackrose-builder-invoke` to orchestrate build wrapper commands.
+- Added `scripts/jackrose-builder-log` to parse build compiler logs and output warnings.
+- Added `scripts/jackrose-builder-artifacts` to scan outputs and register images in state directories.
+- Added `scripts/jackrose-image-promote` to copy verified prototypes to public targets.
 - Added documentation for builder integration, ALARM builder notes, and builder artifacts.
 - Added `docs/v0.18.0-builder-integration.md` release plan documentation.
 
 ### Changed
-- Updated `scripts/cidre-builder-status` to extract git revision metadata and verify wrapper configurations.
-- Updated `scripts/cidre-image-manifest` schema version to `0.18.0` with `builder_revision` details.
-- Updated `scripts/cidre-image-build` to execute builder config and integration pipelines via `--builder-config`.
-- Updated `scripts/cidre-doctor` to add `--builder` audit verification checks.
-- Updated `scripts/cidre-recovery` to add `builder-status` subcommand.
+- Updated `scripts/jackrose-builder-status` to extract git revision metadata and verify wrapper configurations.
+- Updated `scripts/jackrose-image-manifest` schema version to `0.18.0` with `builder_revision` details.
+- Updated `scripts/jackrose-image-build` to execute builder config and integration pipelines via `--builder-config`.
+- Updated `scripts/jackrose-doctor` to add `--builder` audit verification checks.
+- Updated `scripts/jackrose-recovery` to add `builder-status` subcommand.
 - Updated validation matrix and v1.0.0 clean install test plan with builder integration requirements.
 - Updated known limitations with v0.18.0 developer constraints.
 
 ### Notes
 - v0.18.0 completes local integration with the ALARM image builder.
-- Target outputs are built and registered locally inside `.local/state/cidre/image-build/`.
+- Target outputs are built and registered locally inside `.local/state/jackrose/image-build/`.
 
 ## [0.17.0] - 2026-06-21
 ### Added
-- Added `scripts/cidre-builder-status` for ALARM builder / host tool status checks.
-- Added `scripts/cidre-image-mount` for read-only rootfs image mounting.
-- Added `scripts/cidre-image-unmount` for image unmounting.
-- Added `scripts/cidre-rootfs-inspect` for mounted rootfs Cidre component validation.
-- Added `scripts/cidre-image-boot-readiness` for aggregate boot readiness checks.
-- Added `scripts/cidre-boot-checklist` for boot validation checklist generation.
-- Added `scripts/cidre-boot-log-collect` for post-boot log collection.
+- Added `scripts/jackrose-builder-status` for ALARM builder / host tool status checks.
+- Added `scripts/jackrose-image-mount` for read-only rootfs image mounting.
+- Added `scripts/jackrose-image-unmount` for image unmounting.
+- Added `scripts/jackrose-rootfs-inspect` for mounted rootfs Jackrose component validation.
+- Added `scripts/jackrose-image-boot-readiness` for aggregate boot readiness checks.
+- Added `scripts/jackrose-boot-checklist` for boot validation checklist generation.
+- Added `scripts/jackrose-boot-log-collect` for post-boot log collection.
 - Added image boot validation documentation.
 - Added rootfs inspection documentation.
 - Added boot log collection documentation.
 - Added `docs/v0.17.0-image-boot-validation.md` release doc.
 
 ### Changed
-- Updated `scripts/cidre-image-build`: added `--boot-readiness` and `--builder-status`.
-- Updated `scripts/cidre-image-inspect`: delegates `--rootfs` to `cidre-rootfs-inspect`.
-- Updated `scripts/cidre-image-manifest`: added boot validation fields; bumped `cidre_version` to `0.17.0`.
-- Updated `scripts/cidre-doctor`: added `--boot`; updated `--rc-readiness` with boot validation scripts and docs.
-- Updated `scripts/cidre-recovery`: added `boot-status` subcommand.
+- Updated `scripts/jackrose-image-build`: added `--boot-readiness` and `--builder-status`.
+- Updated `scripts/jackrose-image-inspect`: delegates `--rootfs` to `jackrose-rootfs-inspect`.
+- Updated `scripts/jackrose-image-manifest`: added boot validation fields; bumped `jackrose_version` to `0.17.0`.
+- Updated `scripts/jackrose-doctor`: added `--boot`; updated `--rc-readiness` with boot validation scripts and docs.
+- Updated `scripts/jackrose-recovery`: added `boot-status` subcommand.
 - Updated validation matrix and v1.0.0 clean install test plan with boot validation requirements.
 - Updated known limitations with v0.17.0 constraints.
 
 ### Notes
-v0.17.0 does not ship a public bootable Cidre image.
+v0.17.0 does not ship a public bootable Jackrose image.
 It adds the validation tooling needed to move prototype images toward controlled boot testing.
 
 ## [0.16.0] - 2026-06-21
 ### Added
-- Added `scripts/cidre-oobe` as the firstboot OOBE front-end.
-- Added `scripts/cidre-firstboot-state` for firstboot state management.
-- Added `scripts/cidre-firstboot-handoff` for root-to-user phase handoff generation.
-- Expanded `scripts/cidre-firstboot-root` from prototype into firstboot orchestration.
-- Added `cidre-doctor --firstboot`.
-- Added `cidre-recovery firstboot-status`.
+- Added `scripts/jackrose-oobe` as the firstboot OOBE front-end.
+- Added `scripts/jackrose-firstboot-state` for firstboot state management.
+- Added `scripts/jackrose-firstboot-handoff` for root-to-user phase handoff generation.
+- Expanded `scripts/jackrose-firstboot-root` from prototype into firstboot orchestration.
+- Added `jackrose-doctor --firstboot`.
+- Added `jackrose-recovery firstboot-status`.
 - Added firstboot OOBE documentation and security notes.
 
 ### Changed
@@ -523,21 +523,21 @@ It adds the validation tooling needed to move prototype images toward controlled
 - Updated validation matrix and v1.0.0 clean install test plan with firstboot requirements.
 
 ### Notes
-- v0.16.0 does not ship a public bootable Cidre image.
-- It implements the firstboot OOBE layer intended for future Cidre-controlled images.
+- v0.16.0 does not ship a public bootable Jackrose image.
+- It implements the firstboot OOBE layer intended for future Jackrose-controlled images.
 
 ## [0.15.0] - 2026-06-21
 ### Added
-- Added prototype image build entrypoint `scripts/cidre-image-build`.
-- Added image inspection helper `scripts/cidre-image-inspect`.
-- Added image checksum helper `scripts/cidre-image-checksum`.
-- Added image manifest generator `scripts/cidre-image-manifest`.
-- Added image build cleanup helper `scripts/cidre-image-clean`.
+- Added prototype image build entrypoint `scripts/jackrose-image-build`.
+- Added image inspection helper `scripts/jackrose-image-inspect`.
+- Added image checksum helper `scripts/jackrose-image-checksum`.
+- Added image manifest generator `scripts/jackrose-image-manifest`.
+- Added image build cleanup helper `scripts/jackrose-image-clean`.
 - Added `downstream/image-build/` workspace.
 - Added prototype rootfs overlay synchronization flow.
-- Added docs for Cidre image prototype and image build validation.
-- Added `cidre-doctor --image`.
-- Added `cidre-recovery image-status`.
+- Added docs for Jackrose image prototype and image build validation.
+- Added `jackrose-doctor --image`.
+- Added `jackrose-recovery image-status`.
 
 ### Changed
 - Updated image plan and image build notes for prototype artifact generation.
@@ -546,70 +546,70 @@ It adds the validation tooling needed to move prototype images toward controlled
 - Updated v1.0.0 clean install plan with image requirements.
 
 ### Notes
-- v0.15.0 does not ship a public Cidre image.
-- It establishes a prototype artifact flow for generating and inspecting Cidre rootfs overlay/image contents.
+- v0.15.0 does not ship a public Jackrose image.
+- It establishes a prototype artifact flow for generating and inspecting Jackrose rootfs overlay/image contents.
 
 ## [0.14.0] - 2026-06-21
 ### Added
-- Added downstream strategy documentation for moving Cidre toward an ALARM/Asahi downstream image.
+- Added downstream strategy documentation for moving Jackrose toward an ALARM/Asahi downstream image.
 - Added upstream repository tracking notes.
-- Added Cidre image layout plan.
+- Added Jackrose image layout plan.
 - Added installer integration notes.
 - Added firstboot root login problem documentation.
 - Added downstream workspace under `downstream/`.
-- Added prototype Cidre installer entry example.
+- Added prototype Jackrose installer entry example.
 - Added rootfs overlay prototype layout.
-- Added `scripts/cidre-downstream-check`.
-- Added `scripts/cidre-upstream-status`.
-- Added `scripts/cidre-image-layout-check`.
-- Added `scripts/cidre-installer-metadata-check`.
-- Added prototype `scripts/cidre-firstboot-root`.
-- Added `systemd/cidre-firstboot-root.service`.
-- Added one-shot root autologin example drop-in for future Cidre-controlled images.
+- Added `scripts/jackrose-downstream-check`.
+- Added `scripts/jackrose-upstream-status`.
+- Added `scripts/jackrose-image-layout-check`.
+- Added `scripts/jackrose-installer-metadata-check`.
+- Added prototype `scripts/jackrose-firstboot-root`.
+- Added `systemd/jackrose-firstboot-root.service`.
+- Added one-shot root autologin example drop-in for future Jackrose-controlled images.
 
 ### Changed
-- Updated README to describe Cidre's downstream image direction.
+- Updated README to describe Jackrose's downstream image direction.
 - Updated known limitations with public image and installer integration status.
 - Updated validation matrix with downstream foundation checks.
 - Updated v1.0.0 clean install test plan with firstboot OOBE requirements.
-- Updated `cidre-doctor --rc-readiness` to include downstream foundation scripts.
+- Updated `jackrose-doctor --rc-readiness` to include downstream foundation scripts.
 
 ### Notes
-- v0.14.0 does not ship a public Cidre image.
+- v0.14.0 does not ship a public Jackrose image.
 - It establishes the downstream foundation needed to build one in a future release.
 
 ## [0.13.0] - 2026-06-21
 ### Added
-- Added `scripts/cidre-seed` for seed operations.
-- Added `scripts/cidre-seed-verify` for validating Cidre seed archives.
-- Added `scripts/cidre-seed-import` for importing macOS-generated seed archives into fresh ALARM systems.
-- Added `scripts/cidre-resume` for inspecting and using imported resume state.
+- Added `scripts/jackrose-seed` for seed operations.
+- Added `scripts/jackrose-seed-verify` for validating Jackrose seed archives.
+- Added `scripts/jackrose-seed-import` for importing macOS-generated seed archives into fresh ALARM systems.
+- Added `scripts/jackrose-resume` for inspecting and using imported resume state.
 - Added `./preinstall --import-seed <path>` for root-phase seed import.
 - Added `./install --resume` for user-phase profile continuation.
-- Added seed/resume state storage under `/var/lib/cidre/`.
+- Added seed/resume state storage under `/var/lib/jackrose/`.
 - Added `docs/seed-resume.md`.
 - Added `docs/v0.13.0-seed-resume.md`.
 
 ### Changed
 - Updated macOS handoff instructions to include seed import and resume.
-- Updated `cidre-doctor --rc-readiness` to check seed/resume commands.
+- Updated `jackrose-doctor --rc-readiness` to check seed/resume commands.
 - Updated validation matrix with seed verification, import, and resume tests.
 - Updated known limitations to clarify manual seed transfer requirements.
 
 ### Notes
 - v0.13.0 connects the macOS bootstrap phase to the fresh ALARM setup phase.
-- It does not yet provide automatic rootfs seed injection, a Cidre ALARM image, or a GUI installer.
+- It does not yet provide automatic rootfs seed injection, a Jackrose ALARM image, or a GUI installer.
 
 ## [0.12.0] - 2026-06-21
 ### Added
-- Added `./install-macos` as the macOS-side Cidre bootstrap entrypoint.
-- Added `scripts/cidre-macos-check` for macOS readiness checks.
-- Added `scripts/cidre-macos-installer` for interactive macOS-side bootstrap flow.
-- Added `scripts/cidre-macos-seed` for generating Cidre install manifests.
-- Added `scripts/cidre-macos-handoff` for ALARM/Asahi installer handoff guidance.
+- Added `./install-macos` as the macOS-side Jackrose bootstrap entrypoint.
+- Added `scripts/jackrose-macos-check` for macOS readiness checks.
+- Added `scripts/jackrose-macos-installer` for interactive macOS-side bootstrap flow.
+- Added `scripts/jackrose-macos-seed` for generating Jackrose install manifests.
+- Added `scripts/jackrose-macos-handoff` for ALARM/Asahi installer handoff guidance.
 - Added macOS installation documentation.
 - Added installer threat model documentation.
-- Added macOS-to-Cidre flow documentation.
+- Added macOS-to-Jackrose flow documentation.
 
 ### Changed
 - Updated README installation flow to distinguish macOS, root-phase, and user-phase entrypoints.
@@ -617,91 +617,91 @@ It adds the validation tooling needed to move prototype images toward controlled
 - Updated known limitations to clarify that v0.12.0 does not provide full automatic ALARM installation.
 
 ### Notes
-- v0.12.0 introduces the first macOS-side entrypoint for Cidre.
-- It does not yet provide a custom Cidre ALARM image, automatic rootfs seed injection, or a GUI installer.
+- v0.12.0 introduces the first macOS-side entrypoint for Jackrose.
+- It does not yet provide a custom Jackrose ALARM image, automatic rootfs seed injection, or a GUI installer.
 
 ## [0.11.0] - 2026-06-21
 ### Added
 - Guided `./preinstall` dashboard/wizard mode with backend selection across `dialog`, `whiptail`, and plain shell fallback.
 - Root-phase setup status dashboard covering system, Apple Silicon hints, network, pacman, user, sudo, tools, next step, and preinstall log paths.
 - Guided user selection/creation, wheel/sudo setup, isolated sudoers validation, and final root-to-user handoff output.
-- Root-phase preinstall state logging under `~/.local/state/cidre/preinstall/` with `preinstall.log`, `last-check.log`, and `last-status`.
+- Root-phase preinstall state logging under `~/.local/state/jackrose/preinstall/` with `preinstall.log`, `last-check.log`, and `last-status`.
 
 ### Changed
-- `cidre-doctor --base-readiness` terminology now aligns with preinstall readiness checks and points back to the root-phase entrypoint.
-- Root execution failure path in `./install` now redirects to `./preinstall` and `cidre-doctor --base-readiness --summary`.
-- `cidre-preinstall` package metadata now documents optional `dialog` and `whiptail` backends.
+- `jackrose-doctor --base-readiness` terminology now aligns with preinstall readiness checks and points back to the root-phase entrypoint.
+- Root execution failure path in `./install` now redirects to `./preinstall` and `jackrose-doctor --base-readiness --summary`.
+- `jackrose-preinstall` package metadata now documents optional `dialog` and `whiptail` backends.
 
 ## [0.10.0] - 2026-06-21
 ### Added
-- Root-phase helper utility `preinstall` (backed by `scripts/cidre-preinstall`) managing package sync, base utilities sync (`git`, `curl`, `sudo`, `base-devel`), sudo/wheel configuration validation, and normal user account verification.
+- Root-phase helper utility `preinstall` (backed by `scripts/jackrose-preinstall`) managing package sync, base utilities sync (`git`, `curl`, `sudo`, `base-devel`), sudo/wheel configuration validation, and normal user account verification.
 - Intercept and guidance redirection pointing root execution attempts on `./install` to run `./preinstall --prepare` first.
-- Pre-install base setup diagnostics flag `cidre-doctor --base-readiness` verifying network link, DNS lookups, system clock sanity, filesystem permissions, disk space, and Asahi platform hints.
+- Pre-install base setup diagnostics flag `jackrose-doctor --base-readiness` verifying network link, DNS lookups, system clock sanity, filesystem permissions, disk space, and Asahi platform hints.
 - Consolidated guide for fresh ALARM base environment setups under `docs/base-install.md` and release notes under `docs/v0.10.0-base-install-simplification.md`.
 
 ## [0.9.0] - 2026-06-21
 ### Added
-- Release candidate diagnostics check-suite inside `cidre-doctor --rc-readiness` auditing local tree command files, docs, global path statuses, and state structures.
+- Release candidate diagnostics check-suite inside `jackrose-doctor --rc-readiness` auditing local tree command files, docs, global path statuses, and state structures.
 - Release candidate installer validation dry-run `install --rc-dry-run` compiling all profile and doctor tests in a single simulation sweep.
 - Consolidated documentation references for commands, profiles, package ownership, managed files, validation matrix, known limitations, and the v1.0.0 clean-install test plan.
 
 ## [0.8.0] - 2026-06-21
 ### Added
-- Integrated update controller script `cidre-update` supporting `--check`, `--dry-run`, `--apply`, and `--doctor`.
-- Everyday maintenance console `cidre-maintenance` supporting `status`, `prune`, `drift`, and `logs`.
-- New diagnostic check-suite inside `cidre-doctor --maintenance` covering state, manifest, log health, and configuration drift.
-- Enhanced snapshot pruning in `cidre-snapshot` supporting `--older-than` cutoff and interactive deletion prompts.
+- Integrated update controller script `jackrose-update` supporting `--check`, `--dry-run`, `--apply`, and `--doctor`.
+- Everyday maintenance console `jackrose-maintenance` supporting `status`, `prune`, `drift`, and `logs`.
+- New diagnostic check-suite inside `jackrose-doctor --maintenance` covering state, manifest, log health, and configuration drift.
+- Enhanced snapshot pruning in `jackrose-snapshot` supporting `--older-than` cutoff and interactive deletion prompts.
 - Integration updates in firstboot diagnostic audits, welcome banners, and guided installers.
-- Independent packaging definitions for `cidre-update` and `cidre-maintenance` packages under `packages/arch`.
+- Independent packaging definitions for `jackrose-update` and `jackrose-maintenance` packages under `packages/arch`.
 
 ## [0.7.0] - 2026-06-21
 ### Added
-- Dedicated snapshot utility command `cidre-snapshot` for configuration backups.
-- Automatic configuration pre-apply snapshot hooks inside `cidre-user-setup`.
-- Rollback and history subcommands to `cidre-user-setup`.
-- Extended `cidre-recovery` to run snapshots listings and rollback restores.
-- Saved diagnostic execution runs, with parameters `--last`, `--history`, and `--fix-suggestions` in `cidre-doctor`.
+- Dedicated snapshot utility command `jackrose-snapshot` for configuration backups.
+- Automatic configuration pre-apply snapshot hooks inside `jackrose-user-setup`.
+- Rollback and history subcommands to `jackrose-user-setup`.
+- Extended `jackrose-recovery` to run snapshots listings and rollback restores.
+- Saved diagnostic execution runs, with parameters `--last`, `--history`, and `--fix-suggestions` in `jackrose-doctor`.
 
 ## [0.6.0] - 2026-06-21
 ### Added
 - Sane keybindings for window and workspace navigation (Super + Enter for Ghostty).
 - Waybar native wireplumber audio volume and battery indicators.
 - Sane Print Screen key bindings for Grim/Slurp screenshot flows.
-- Extended volume, mute, unmute, and restart actions to `cidre-audio`.
-- Daily diagnostics `--daily` verification flag in `cidre-doctor`.
+- Extended volume, mute, unmute, and restart actions to `jackrose-audio`.
+- Daily diagnostics `--daily` verification flag in `jackrose-doctor`.
 
 ## [0.5.0] - 2026-06-21
 ### Added
 - Root-level `./install` entrypoint.
-- `cidre-installer` guided interactive CLI manager.
+- `jackrose-installer` guided interactive CLI manager.
 - `desktop`, `developer`, `minimal`, and `recovery` installation profiles.
-- `cidre-firstboot` first-boot verification helper script and package.
+- `jackrose-firstboot` first-boot verification helper script and package.
 - Onboarding documentation.
 - Integrated post-install check markers and installation logging.
 
 ## [0.4.0] - 2026-06-21
 ### Added
 - `--check` and `--dry-run` modes to `bootstrap.sh`.
-- `cidre-doctor` health diagnostics command.
-- `cidre-diagnostics` Arch package definition.
-- `doctor`, `list`, and `restore` subcommands to `cidre-recovery`.
+- `jackrose-doctor` health diagnostics command.
+- `jackrose-diagnostics` Arch package definition.
+- `doctor`, `list`, and `restore` subcommands to `jackrose-recovery`.
 - `check-packages` package verification script.
-- `verify` and `list` subcommands to `cidre-user-setup`.
+- `verify` and `list` subcommands to `jackrose-user-setup`.
 - Complete documentation guides for installation, recovery, and diagnostics.
 
 ## [0.3.0] - 2026-06-21
 ### Added
 - Unified Catppuccin Mocha theme configuration for Waybar, Ghostty, and fuzzel.
-- Premium abstract desktop wallpaper asset and `cidre-wallpapers` package.
+- Premium abstract desktop wallpaper asset and `jackrose-wallpapers` package.
 - Systemd user service `fcitx5.service` to manage Japanese Mozc inputs.
-- First-login dashboard CLI command `cidre-welcome`.
-- Python-based configuration setup manager `cidre-user-setup` with backups and profile levels.
+- First-login dashboard CLI command `jackrose-welcome`.
+- Python-based configuration setup manager `jackrose-user-setup` with backups and profile levels.
 
 ## [0.2.0] - 2026-06-21
 ### Added
 - Automated `bootstrap.sh` script to install packages, localectl keymaps, and configure `greetd`.
-- Core recovery tool `cidre-recovery` and audio profile settings `cidre-audio`.
-- Updated package templates for `niri-cidre` remote fetch.
+- Core recovery tool `jackrose-recovery` and audio profile settings `jackrose-audio`.
+- Updated package templates for `niri-jackrose` remote fetch.
 
 ## [0.1.0] - 2026-06-20
 ### Added

@@ -1,0 +1,32 @@
+# Maintainer: Yasuno <yasuno@example.invalid>
+
+pkgname=jackrose-session
+pkgver=1.0.0
+pkgrel=1
+pkgdesc='Jackrose session launcher and Wayland session entry'
+url='https://github.com/Yasuno-5555/Jackrose'
+arch=('any')
+license=('custom')
+depends=(
+  'niri'
+  'greetd'
+  'greetd-tuigreet'
+)
+source=(
+  'jackrose-session'
+  'jackrose.desktop'
+  'jackrose.service'
+  'jackrose-shutdown.target'
+  'fcitx5.service'
+  'profile.txt'
+)
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+
+package() {
+  install -Dm755 "${srcdir}/jackrose-session" "${pkgdir}/usr/bin/jackrose-session"
+  install -Dm644 "${srcdir}/jackrose.desktop" "${pkgdir}/usr/share/wayland-sessions/jackrose.desktop"
+  install -Dm644 "${srcdir}/jackrose.service" "${pkgdir}/usr/lib/systemd/user/jackrose.service"
+  install -Dm644 "${srcdir}/jackrose-shutdown.target" "${pkgdir}/usr/lib/systemd/user/jackrose-shutdown.target"
+  install -Dm644 "${srcdir}/fcitx5.service" "${pkgdir}/usr/lib/systemd/user/fcitx5.service"
+  install -Dm644 "${srcdir}/profile.txt" "${pkgdir}/usr/share/doc/${pkgname}/profile.txt"
+}

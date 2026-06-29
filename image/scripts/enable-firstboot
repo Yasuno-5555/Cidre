@@ -53,10 +53,10 @@ if [ "$ROOTFS" = "/" ] || [ -z "$ROOTFS" ]; then
 fi
 
 # Validation: Rootfs must not contain firstboot.done completion marker
-MARKER_PATH="$ROOTFS/var/lib/cidre/firstboot.done"
+MARKER_PATH="$ROOTFS/var/lib/jackrose/firstboot.done"
 if [ -f "$MARKER_PATH" ]; then
   echo "Invalid rootfs:" >&2
-  echo "  /var/lib/cidre/firstboot.done exists." >&2
+  echo "  /var/lib/jackrose/firstboot.done exists." >&2
   echo "  A seed rootfs must not contain this marker." >&2
   exit 2
 fi
@@ -66,13 +66,13 @@ if [ "$DRY_RUN" -eq 1 ]; then
   echo "  Target rootfs: $ROOTFS"
   echo "  [DRY-RUN] would execute: systemctl --root $ROOTFS enable NetworkManager.service"
   echo "  [DRY-RUN] would execute: systemctl --root $ROOTFS enable greetd.service"
-  echo "  [DRY-RUN] would execute: systemctl --root $ROOTFS enable cidre-firstboot-prep.service"
+  echo "  [DRY-RUN] would execute: systemctl --root $ROOTFS enable jackrose-firstboot-prep.service"
   echo "  Simulation complete. No services started. No modifications performed."
   exit 0
 fi
 
 # Apply mode (Requires systemctl on host/target context)
-echo "Enabling Cidre seed firstboot units inside $ROOTFS..."
+echo "Enabling Jackrose seed firstboot units inside $ROOTFS..."
 
 _enable_unit_root() {
   local unit="$1"
@@ -101,4 +101,4 @@ _disable_unit_root() {
 
 _enable_unit_root NetworkManager.service
 _enable_unit_root greetd.service
-_enable_unit_root cidre-firstboot-prep.service
+_enable_unit_root jackrose-firstboot-prep.service

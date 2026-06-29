@@ -1,0 +1,58 @@
+#!/bin/sh
+set -eu
+
+target=""
+fs_type="ext4"
+dry_run=false
+format_mode=false
+confirmed=false
+
+usage() {
+  cat <<EOF
+Usage: jackrose-rescue-target-format [options]
+
+Options:
+  --target <device>
+  --fs ext4
+  --dry-run
+  --format
+  --i-understand-this-erases-target
+  --help
+EOF
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --target) target="$2"; shift 2 ;;
+    --fs) fs_type="$2"; shift 2 ;;
+    --dry-run) dry_run=true; shift ;;
+    --format) format_mode=true; shift ;;
+    --i-understand-this-erases-target) confirmed=true; shift ;;
+    --help) usage; exit 0 ;;
+    *) printf 'ERROR: unknown option: %s\n' "$1" >&2; usage >&2; exit 1 ;;
+  esac
+done
+
+[ -n "$target" ] || { printf 'ERROR: --target is required\n' >&2; exit 1; }
+
+if [ "$dry_run" = "true" ] || [ "$format_mode" != "true" ]; then
+  printf 'Jackrose rescue target format (dry-run)\n\n'
+  printf 'Would format target: %s\n' "$target"
+  printf 'Filesystem: %s\n' "$fs_type"
+  printf 'No format executed.\n'
+  exit 0
+fi
+
+[ "$confirmed" = "true" ] || { printf 'ERROR: missing --i-understand-this-erases-target\n' >&2; exit 1; }
+case "$target" in
+  /|/dev/disk*|/dev/disk*s*|/dev/nvme*|/dev/mmcblk*)
+    :
+    ;;
+  *)
+    printf 'ERROR: refusing to format non-device target: %s\n' "$target" >&2
+    exit 1
+    ;;
+esac
+
+printf 'ERROR: real formatting is intentionally limited in this release.\n' >&2
+exit 1

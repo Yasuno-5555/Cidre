@@ -1,0 +1,14 @@
+pkgbase = jackrose-audio
+	pkgdesc = Jackrose audio diagnostics and profiling tool
+	pkgver = 1.0.0
+	pkgrel = 1
+	url = https://github.com/Yasuno-5555/Jackrose
+	arch = any
+	license = custom
+	depends = bash
+	depends = pipewire
+	depends = wireplumber
+	source = jackrose-audio
+	sha256sums = SKIP
+
+pkgname = jackrose-audio

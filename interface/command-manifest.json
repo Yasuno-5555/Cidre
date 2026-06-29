@@ -2,8 +2,8 @@
   "schema_version": 1,
   "commands": [
     {
-      "name": "cidre-app-readiness",
-      "path": "scripts/cidre-app-readiness",
+      "name": "jackrose-app-readiness",
+      "path": "scripts/jackrose-app-readiness",
       "category": "app",
       "supports_json": true,
       "supports_plain": true,
@@ -15,8 +15,8 @@
       "requires_linux": false
     },
     {
-      "name": "cidre-interface-doctor",
-      "path": "scripts/cidre-interface-doctor",
+      "name": "jackrose-interface-doctor",
+      "path": "scripts/jackrose-interface-doctor",
       "category": "app",
       "supports_json": true,
       "supports_plain": true,
@@ -28,8 +28,8 @@
       "requires_linux": false
     },
     {
-      "name": "cidre-report-index",
-      "path": "scripts/cidre-report-index",
+      "name": "jackrose-report-index",
+      "path": "scripts/jackrose-report-index",
       "category": "report",
       "supports_json": true,
       "supports_plain": true,
@@ -41,8 +41,8 @@
       "requires_linux": false
     },
     {
-      "name": "cidre-artifact-paths",
-      "path": "scripts/cidre-artifact-paths",
+      "name": "jackrose-artifact-paths",
+      "path": "scripts/jackrose-artifact-paths",
       "category": "report",
       "supports_json": true,
       "supports_plain": true,
@@ -54,8 +54,8 @@
       "requires_linux": false
     },
     {
-      "name": "cidre-app-safe-actions",
-      "path": "scripts/cidre-app-safe-actions",
+      "name": "jackrose-app-safe-actions",
+      "path": "scripts/jackrose-app-safe-actions",
       "category": "app",
       "supports_json": true,
       "supports_plain": true,
@@ -67,8 +67,8 @@
       "requires_linux": false
     },
     {
-      "name": "cidre-app-execution-policy",
-      "path": "scripts/cidre-app-execution-policy",
+      "name": "jackrose-app-execution-policy",
+      "path": "scripts/jackrose-app-execution-policy",
       "category": "app",
       "supports_json": true,
       "supports_plain": true,
@@ -80,8 +80,8 @@
       "requires_linux": false
     },
     {
-      "name": "cidre-install-dashboard",
-      "path": "scripts/cidre-install-dashboard",
+      "name": "jackrose-install-dashboard",
+      "path": "scripts/jackrose-install-dashboard",
       "category": "install",
       "supports_json": true,
       "supports_plain": true,
@@ -93,8 +93,8 @@
       "requires_linux": false
     },
     {
-      "name": "cidre-uninstall-dashboard",
-      "path": "scripts/cidre-uninstall-dashboard",
+      "name": "jackrose-uninstall-dashboard",
+      "path": "scripts/jackrose-uninstall-dashboard",
       "category": "uninstall",
       "supports_json": true,
       "supports_plain": true,
@@ -106,8 +106,8 @@
       "requires_linux": true
     },
     {
-      "name": "cidre-installer",
-      "path": "scripts/cidre-installer",
+      "name": "jackrose-installer",
+      "path": "scripts/jackrose-installer",
       "category": "install",
       "supports_json": false,
       "supports_plain": true,
@@ -119,8 +119,8 @@
       "requires_linux": false
     },
     {
-      "name": "cidre-uninstall-execute",
-      "path": "scripts/cidre-uninstall-execute",
+      "name": "jackrose-uninstall-execute",
+      "path": "scripts/jackrose-uninstall-execute",
       "category": "uninstall",
       "supports_json": true,
       "supports_plain": true,
@@ -132,8 +132,8 @@
       "requires_linux": true
     },
     {
-      "name": "cidre-doctor",
-      "path": "scripts/cidre-doctor",
+      "name": "jackrose-doctor",
+      "path": "scripts/jackrose-doctor",
       "category": "doctor",
       "supports_json": true,
       "supports_plain": true,
@@ -145,8 +145,8 @@
       "requires_linux": false
     },
     {
-      "name": "cidre-recovery",
-      "path": "scripts/cidre-recovery",
+      "name": "jackrose-recovery",
+      "path": "scripts/jackrose-recovery",
       "category": "recovery",
       "supports_json": true,
       "supports_plain": true,
@@ -158,8 +158,8 @@
       "requires_linux": false
     },
     {
-      "name": "cidre-app-disk-scan",
-      "path": "scripts/cidre-app-disk-scan",
+      "name": "jackrose-app-disk-scan",
+      "path": "scripts/jackrose-app-disk-scan",
       "category": "app",
       "supports_json": true,
       "supports_plain": true,
@@ -171,8 +171,8 @@
       "requires_linux": false
     },
     {
-      "name": "cidre-app-disk-plan",
-      "path": "scripts/cidre-app-disk-plan",
+      "name": "jackrose-app-disk-plan",
+      "path": "scripts/jackrose-app-disk-plan",
       "category": "app",
       "supports_json": true,
       "supports_plain": true,
@@ -184,8 +184,8 @@
       "requires_linux": false
     },
     {
-      "name": "cidre-app-helper-command",
-      "path": "scripts/cidre-app-helper-command",
+      "name": "jackrose-app-helper-command",
+      "path": "scripts/jackrose-app-helper-command",
       "category": "app",
       "supports_json": true,
       "supports_plain": true,
@@ -197,8 +197,8 @@
       "requires_linux": false
     },
     {
-      "name": "cidre-app-package",
-      "path": "scripts/cidre-app-package",
+      "name": "jackrose-app-package",
+      "path": "scripts/jackrose-app-package",
       "category": "app",
       "supports_json": false,
       "supports_plain": true,
@@ -210,8 +210,8 @@
       "requires_linux": false
     },
     {
-      "name": "cidre-app-launch",
-      "path": "scripts/cidre-app-launch",
+      "name": "jackrose-app-launch",
+      "path": "scripts/jackrose-app-launch",
       "category": "app",
       "supports_json": false,
       "supports_plain": true,

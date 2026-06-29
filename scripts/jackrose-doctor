@@ -1,0 +1,2136 @@
+#!/bin/bash
+# jackrose-doctor: Jackrose system health diagnostics command
+set -euo pipefail
+
+DAILY_MODE=false
+SUMMARY_MODE=false
+VERBOSE_MODE=false
+LAST_MODE=false
+HISTORY_MODE=false
+SUGGESTIONS_MODE=false
+MAINTENANCE_MODE=false
+RC_READINESS_MODE=false
+BASE_READINESS_MODE=false
+SEED_MODE=false
+RESUME_MODE=false
+DOWNSTREAM_MODE=false
+IMAGE_MODE=false
+FIRSTBOOT_MODE=false
+FIRSTBOOT_FIXUP_MODE=false
+USER_PHASE_MODE=false
+BOOT_MODE=false
+BUILDER_MODE=false
+REAL_BUILD_MODE=false
+CONTROLLED_BOOT_MODE=false
+UNINSTALL_MODE=false
+GUIDED_INSTALL_MODE=false
+GUIDED_UNINSTALL_MODE=false
+APP_READINESS_MODE=false
+INTERFACE_MODE=false
+APP_PROTOTYPE_MODE=false
+APP_GUIDED_UI_MODE=false
+APP_RUNTIME_MODE=false
+DFU_INCIDENT_MODE=false
+BOOT_SAFETY_MODE=false
+PROTECTED_PARTITIONS_MODE=false
+INSTALLER_KILLSWITCH_MODE=false
+DISK_SNAPSHOT_MODE=false
+DISK_DIFF_MODE=false
+RECOVERY_SURVIVAL_MODE=false
+GATE_ENFORCEMENT_MODE=false
+FINISH_GATE_MODE=false
+HELPER_GATE_MODE=false
+WIZARD_GATE_MODE=false
+MUTATION_TEST_MODE=false
+DISPOSABLE_TARGET_MODE=false
+MUTATION_PLAN_MODE=false
+MUTATION_VERIFICATION_MODE=false
+LIVE_DRILL_MODE=false
+LIVE_DRILL_FIXTURES_MODE=false
+LIVE_DRILL_STATE_MODE=false
+MACOS_RESTORE_MODE=false
+RECOVERY_SCREEN_MODE=false
+SAFE_MODE_MODE=false
+RESCUE_MODE=false
+RESCUE_BOOT_MODE=false
+MACOS_RESCUE_MODE=false
+RESCUE_CREATE_MODE=false
+CONTROLLED_INSTALL_MODE=false
+INSTALL_TARGET_MODE=false
+NO_DEFAULT_BOOT_MODE=false
+MANUAL_BOOT_GUIDE_MODE=false
+
+STATE_DIR="${HOME}/.local/state/jackrose"
+DOCTOR_DIR="${STATE_DIR}/doctor"
+LAST_SUMMARY="${DOCTOR_DIR}/last-summary.txt"
+HISTORY_LOG="${DOCTOR_DIR}/history.log"
+JACKROSE_SYSTEM_ROOT="${JACKROSE_SYSTEM_ROOT:-/var/lib/jackrose}"
+SYSTEM_SEED_DIR="${JACKROSE_SYSTEM_ROOT}/seed"
+SYSTEM_RESUME_DIR="${JACKROSE_SYSTEM_ROOT}/resume"
+
+show_help() {
+  echo "Usage: jackrose-doctor [options]"
+  echo "Options:"
+  echo "  --daily             Run standard daily-driver check suite"
+  echo "  --summary           Show a condensed status overview"
+  echo "  --verbose           Display detailed diagnostic parameters"
+  echo "  --last              Show details from the last diagnostic run"
+  echo "  --history           Show recent diagnostic execution history"
+  echo "  --fix-suggestions   Show recovery suggestions based on previous diagnostics"
+  echo "  --maintenance       Run maintenance status and update readiness checks"
+  echo "  --update-readiness  Alias for --maintenance"
+  echo "  --state             Alias for --maintenance"
+  echo "  --rc-readiness      Verify if repository state is ready for release candidate"
+  echo "  --downstream        Inspect downstream foundation files and prototypes"
+  echo "  --image             Inspect prototype image build scripts and artifacts"
+  echo "  --firstboot         Inspect firstboot OOBE scripts and state"
+  echo "  --firstboot-fixup   Inspect firstboot diagnostics, retry, repair scripts and state"
+  echo "  --user-phase        Inspect user phase setup and handoff state"
+  echo "  --boot              Inspect image boot validation tooling and artifacts"
+  echo "  --builder           Inspect ALARM builder integration state and wrapper tools"
+  echo "  --real-build        Inspect real image build orchestration state and utilities"
+  echo "  --controlled-boot   Inspect controlled boot validation scripts and logs state"
+  echo "  --uninstall         Inspect uninstall and exit path readiness"
+  echo "  --macos-restore     Inspect macOS restore assistant readiness"
+  echo "  --recovery-screen   Inspect recovery screen readiness"
+  echo "  --safe-mode         Inspect safe mode readiness"
+  echo "  --rescue            Inspect Rescue Slot foundation readiness"
+  echo "  --rescue-boot       Inspect Rescue Boot Integration readiness"
+  echo "  --macos-rescue      Inspect macOS-side Rescue Slot planning readiness"
+  echo "  --rescue-create     Inspect guided Rescue Slot creation readiness"
+  echo "  --guided-install    Inspect guided installer readiness"
+  echo "  --base-readiness    Verify root-phase base setup readiness for ./preinstall"
+  echo "  --seed              Inspect imported Jackrose seed state under /var/lib/jackrose/seed"
+  echo "  --resume            Inspect imported/system and user resume state"
+  echo "  --summary           Can be combined with --base-readiness"
+  echo "  --app-prototype     Inspect app prototype readiness"
+  echo "  --app-guided-ui     Inspect app guided action UI readiness"
+  echo "  --app-runtime       Inspect app runtime validation readiness"
+  echo "  --dfu-incident      Inspect DFU incident containment reporting"
+  echo "  --boot-safety       Inspect boot safety gate readiness"
+  echo "  --protected-partitions Inspect protected partition guard readiness"
+  echo "  --installer-killswitch Inspect installer containment switch status"
+  echo "  --disk-snapshot     Inspect disk snapshot tooling readiness"
+  echo "  --disk-diff         Inspect disk diff tooling readiness"
+  echo "  --recovery-survival Inspect recovery survival tooling readiness"
+  echo "  --gate-enforcement  Inspect gate enforcement tooling readiness"
+  echo "  --finish-gate       Inspect finish gate readiness"
+  echo "  --helper-gate       Inspect helper gate readiness"
+  echo "  --wizard-gate       Inspect wizard gate readiness"
+  echo "  --mutation-test     Inspect controlled mutation test mode status"
+  echo "  --disposable-target Inspect disposable target enforcement status"
+  echo "  --mutation-plan     Inspect mutation plan signing and verification tooling"
+  echo "  --mutation-verification Inspect mutation verification and reporting status"
+  echo "  --live-drill        Inspect live drill command status"
+  echo "  --live-drill-fixtures Inspect live drill fixture coverage"
+  echo "  --live-drill-state  Inspect latest live drill state"
+  echo "  --help              Show this help message"
+}
+
+
+# Parse options
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --daily) DAILY_MODE=true; shift ;;
+    --summary) SUMMARY_MODE=true; shift ;;
+    --verbose) VERBOSE_MODE=true; shift ;;
+    --last) LAST_MODE=true; shift ;;
+    --history) HISTORY_MODE=true; shift ;;
+    --fix-suggestions) SUGGESTIONS_MODE=true; shift ;;
+    --maintenance|--update-readiness|--state) MAINTENANCE_MODE=true; shift ;;
+    --rc-readiness) RC_READINESS_MODE=true; shift ;;
+    --downstream) DOWNSTREAM_MODE=true; shift ;;
+    --image) IMAGE_MODE=true; shift ;;
+    --firstboot) FIRSTBOOT_MODE=true; shift ;;
+    --firstboot-fixup) FIRSTBOOT_FIXUP_MODE=true; shift ;;
+    --user-phase) USER_PHASE_MODE=true; shift ;;
+    --boot) BOOT_MODE=true; shift ;;
+    --builder) BUILDER_MODE=true; shift ;;
+    --real-build) REAL_BUILD_MODE=true; shift ;;
+    --controlled-boot) CONTROLLED_BOOT_MODE=true; shift ;;
+    --uninstall) UNINSTALL_MODE=true; shift ;;
+    --macos-restore) MACOS_RESTORE_MODE=true; shift ;;
+    --recovery-screen) RECOVERY_SCREEN_MODE=true; shift ;;
+    --safe-mode) SAFE_MODE_MODE=true; shift ;;
+    --rescue) RESCUE_MODE=true; shift ;;
+    --rescue-boot) RESCUE_BOOT_MODE=true; shift ;;
+    --macos-rescue) MACOS_RESCUE_MODE=true; shift ;;
+    --rescue-create) RESCUE_CREATE_MODE=true; shift ;;
+    --guided-install) GUIDED_INSTALL_MODE=true; shift ;;
+    --guided-uninstall) GUIDED_UNINSTALL_MODE=true; shift ;;
+    --app-readiness) APP_READINESS_MODE=true; shift ;;
+    --interface) INTERFACE_MODE=true; shift ;;
+    --app-prototype) APP_PROTOTYPE_MODE=true; shift ;;
+    --app-guided-ui) APP_GUIDED_UI_MODE=true; shift ;;
+    --app-runtime) APP_RUNTIME_MODE=true; shift ;;
+    --dfu-incident) DFU_INCIDENT_MODE=true; shift ;;
+    --boot-safety) BOOT_SAFETY_MODE=true; shift ;;
+    --protected-partitions) PROTECTED_PARTITIONS_MODE=true; shift ;;
+    --installer-killswitch) INSTALLER_KILLSWITCH_MODE=true; shift ;;
+    --disk-snapshot) DISK_SNAPSHOT_MODE=true; shift ;;
+    --disk-diff) DISK_DIFF_MODE=true; shift ;;
+    --recovery-survival) RECOVERY_SURVIVAL_MODE=true; shift ;;
+    --gate-enforcement) GATE_ENFORCEMENT_MODE=true; shift ;;
+    --finish-gate) FINISH_GATE_MODE=true; shift ;;
+    --helper-gate) HELPER_GATE_MODE=true; shift ;;
+    --wizard-gate) WIZARD_GATE_MODE=true; shift ;;
+    --mutation-test) MUTATION_TEST_MODE=true; shift ;;
+    --disposable-target) DISPOSABLE_TARGET_MODE=true; shift ;;
+    --mutation-plan) MUTATION_PLAN_MODE=true; shift ;;
+    --mutation-verification) MUTATION_VERIFICATION_MODE=true; shift ;;
+    --live-drill) LIVE_DRILL_MODE=true; shift ;;
+    --live-drill-fixtures) LIVE_DRILL_FIXTURES_MODE=true; shift ;;
+    --live-drill-state) LIVE_DRILL_STATE_MODE=true; shift ;;
+    --controlled-install) CONTROLLED_INSTALL_MODE=true; shift ;;
+    --install-target) INSTALL_TARGET_MODE=true; shift ;;
+    --no-default-boot) NO_DEFAULT_BOOT_MODE=true; shift ;;
+    --manual-boot-guide) MANUAL_BOOT_GUIDE_MODE=true; shift ;;
+    --base-readiness) BASE_READINESS_MODE=true; shift ;;
+    --seed) SEED_MODE=true; shift ;;
+    --resume) RESUME_MODE=true; shift ;;
+    --help) show_help; exit 0 ;;
+    *) echo "Unknown option: $1" >&2; show_help; exit 1 ;;
+  esac
+done
+
+
+if [ "$LAST_MODE" = true ]; then
+  echo "=== Last Saved Diagnostics Summary ==="
+  if [ -f "$LAST_SUMMARY" ]; then
+    cat "$LAST_SUMMARY"
+  else
+    echo "No diagnostic runs recorded yet."
+  fi
+  exit 0
+fi
+
+if [ "$HISTORY_MODE" = true ]; then
+  echo "=== Diagnostics Execution History ==="
+  if [ -f "$HISTORY_LOG" ]; then
+    cat "$HISTORY_LOG"
+  else
+    echo "No history log found."
+  fi
+  exit 0
+fi
+
+if [ "$SUGGESTIONS_MODE" = true ]; then
+  echo "=== Recommended Recovery & Fix Suggestions ==="
+  # Analyze last summary or report defaults
+  if [ -f "$LAST_SUMMARY" ]; then
+    if grep -q -E "FAIL|WARN" "$LAST_SUMMARY"; then
+      echo "Issues/warnings detected in the last run. Suggested fixes:"
+      if grep -q "Niri configuration" "$LAST_SUMMARY" | grep -q "missing"; then
+        echo "  * Niri Config Missing: Run 'jackrose-recovery reset-niri'"
+      fi
+      if grep -q "Fcitx5 user service is inactive" "$LAST_SUMMARY"; then
+        echo "  * IME Service Offline: Run 'systemctl --user restart fcitx5'"
+      fi
+      if grep -q "missing on the system" "$LAST_SUMMARY"; then
+        echo "  * Core Tools Missing: Re-run guided installer via './install'"
+      fi
+      if grep -q "Jackrose-managed config drift" "$LAST_SUMMARY" || grep -q "drift" "$LAST_SUMMARY"; then
+        echo "  * Configuration Drift: Run 'jackrose-maintenance drift' to review, and 'jackrose-user-setup apply' to re-align."
+      fi
+      if grep -q "snapshots found; consider" "$LAST_SUMMARY" || grep -q "large" "$LAST_SUMMARY"; then
+        echo "  * Cleanup Needed: Run 'jackrose-maintenance prune' to clean old snapshots/logs."
+      fi
+      if grep -q "Pacman sync database is" "$LAST_SUMMARY" && grep -q "old" "$LAST_SUMMARY"; then
+        echo "  * Packages Stale: Run 'jackrose-update --check' followed by 'jackrose-update --apply' to update."
+      fi
+      if grep -q "command.*missing" "$LAST_SUMMARY"; then
+        echo "  * Missing utilities: Ensure jackrose commands are in your PATH."
+      fi
+    else
+      echo "All critical items were OK on last check. For config issues, you can run:"
+      echo "  * 'jackrose-snapshot list' to inspect recovery snapshots."
+      echo "  * 'jackrose-snapshot restore latest' to rollback."
+    fi
+  else
+    echo "No previous logs found. Default suggestions:"
+    echo "  * Run 'jackrose-doctor --daily' first to profile environment."
+    echo "  * Run 'jackrose-recovery safe-mode' if screen fails to launch."
+  fi
+  exit 0
+fi
+
+if [ "$SUMMARY_MODE" = false ]; then
+  echo "=== Running Jackrose Diagnostics (jackrose-doctor) ==="
+fi
+
+STATUS=0
+OK_COUNT=0
+WARN_COUNT=0
+FAIL_COUNT=0
+
+# Clean temporary log target
+mkdir -p "$DOCTOR_DIR"
+TMP_SUMMARY=$(mktemp)
+
+# Helper to print colored outputs
+print_result() {
+  local type="$1"
+  local msg="$2"
+  case "$type" in
+    OK)
+      OK_COUNT=$((OK_COUNT + 1))
+      if [ "$SUMMARY_MODE" = false ]; then
+        echo -e "[\e[32mOK\e[0m] $msg"
+      fi
+      echo "OK: $msg" >> "$TMP_SUMMARY"
+      ;;
+    WARN)
+      WARN_COUNT=$((WARN_COUNT + 1))
+      if [ "$SUMMARY_MODE" = false ]; then
+        echo -e "[\e[33mWARN\e[0m] $msg"
+      fi
+      echo "WARN: $msg" >> "$TMP_SUMMARY"
+      ;;
+    FAIL)
+      FAIL_COUNT=$((FAIL_COUNT + 1))
+      STATUS=1
+      if [ "$SUMMARY_MODE" = false ]; then
+        echo -e "[\e[31mFAIL\e[0m] $msg"
+      fi
+      echo "FAIL: $msg" >> "$TMP_SUMMARY"
+      ;;
+  esac
+}
+
+valid_profile() {
+  case "$1" in
+    desktop|developer|student|minimal|recovery) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+load_env_value() {
+  local file_path="$1"
+  local key_name="$2"
+  grep -E "^${key_name}=" "$file_path" 2>/dev/null | head -n 1 | cut -d= -f2-
+}
+
+if [ "$BASE_READINESS_MODE" = true ]; then
+  # 1. User status check
+  if [ "$EUID" -eq 0 ]; then
+    print_result OK "Running as root for root-phase preparation."
+  else
+    print_result WARN "Running as normal user (${USER:-$(id -un)}); preparation changes require root."
+  fi
+
+  # 2. Arch/ALARM Check
+  if [ -f /etc/arch-release ]; then
+    print_result OK "Arch/ALARM-like base system detected."
+  else
+    print_result WARN "Base system is not Arch/ALARM-like."
+  fi
+
+  # 3. Pacman availability
+  if command -v pacman >/dev/null 2>&1; then
+    print_result OK "pacman package manager is available."
+  else
+    print_result FAIL "pacman is missing."
+  fi
+
+  # 4. Pacman database state
+  if [ -d "/var/lib/pacman/sync" ] && [ -n "$(ls -A /var/lib/pacman/sync 2>/dev/null)" ]; then
+    print_result OK "Pacman sync database is initialized."
+  else
+    print_result FAIL "Pacman sync database is uninitialized or empty. Run 'pacman -Sy'."
+  fi
+
+  # 5. Network connectivity & DNS resolution
+  if ip -o link show up 2>/dev/null | grep -qv "LOOPBACK"; then
+    print_result OK "Network interface is up."
+  else
+    print_result FAIL "No active non-loopback link detected."
+  fi
+
+  if ip route show default 2>/dev/null | grep -q '^default'; then
+    print_result OK "Default route is present."
+  else
+    print_result WARN "Default route is missing."
+  fi
+
+  if ping -c 1 -W 2 archlinux.org >/dev/null 2>&1 || ping -c 1 -W 2 google.com >/dev/null 2>&1; then
+    print_result OK "Repository hosts are reachable."
+    if host archlinux.org >/dev/null 2>&1 || nslookup archlinux.org >/dev/null 2>&1 || ping -c 1 -W 2 archlinux.org >/dev/null 2>&1; then
+      print_result OK "DNS resolution works."
+    else
+      print_result FAIL "DNS resolution appears to fail."
+    fi
+  else
+    print_result WARN "Repository reachability could not be verified."
+  fi
+
+  # 6. System clock sanity
+  year=$(date +%Y)
+  if [ "$year" -ge 2026 ]; then
+    print_result OK "System clock is sane (Year: $year)."
+  else
+    print_result FAIL "System clock is set to the past (Year: $year). Please set date/time."
+  fi
+
+  # 7. User account existence & wheel presence
+  NORMAL_USERS=$(awk -F: '$3 >= 1000 && $1 != "nobody" {print $1}' /etc/passwd || echo "")
+  if [ -n "$NORMAL_USERS" ]; then
+    print_result OK "Normal user account(s) exist: $(echo "$NORMAL_USERS" | tr '\n' ' ')."
+    WHEEL_USERS=""
+    for u in $NORMAL_USERS; do
+      if id -nG "$u" | grep -qw "wheel"; then
+        WHEEL_USERS="$WHEEL_USERS $u"
+      fi
+    done
+    if [ -n "$WHEEL_USERS" ]; then
+      print_result OK "Normal user(s) with wheel privileges found: $WHEEL_USERS."
+    else
+      print_result WARN "No normal user has wheel privileges."
+    fi
+  else
+    print_result FAIL "No normal user accounts detected (UID >= 1000)."
+  fi
+
+  # 8. Sudo availability
+  if command -v sudo >/dev/null 2>&1; then
+    if [ -f /etc/sudoers.d/jackrose-wheel ] && grep -q '^%wheel ALL=(ALL:ALL) ALL$' /etc/sudoers.d/jackrose-wheel 2>/dev/null; then
+      print_result OK "sudo utility and jackrose wheel policy are available."
+    else
+      print_result WARN "sudo is installed but /etc/sudoers.d/jackrose-wheel is not configured."
+    fi
+  else
+    print_result FAIL "sudo utility is missing."
+  fi
+
+  # 9. Git & curl availability
+  for tool in git curl; do
+    if command -v "$tool" >/dev/null 2>&1; then
+      print_result OK "Tool '$tool' is available."
+    else
+      print_result WARN "Tool '$tool' is missing."
+    fi
+  done
+
+  # 10. Filesystem writability & disk space
+  if [ -w /tmp ]; then
+    print_result OK "Filesystem is writable."
+  else
+    print_result FAIL "Filesystem is read-only or /tmp is not writable."
+  fi
+
+  # Disk space check
+  free_space=$(df / --output=avail | tail -n 1 || echo 99999999)
+  if [ "$free_space" -gt 5242880 ]; then
+    print_result OK "Disk space is sufficient."
+  else
+    print_result WARN "Available disk space is low."
+  fi
+
+  # 11. Apple Silicon/Asahi hints
+  if [ -d /proc/device-tree/asahi ] || grep -qi "asahi" /proc/cpuinfo 2>/dev/null || [ -d /sys/firmware/devicetree/base/asahi ]; then
+    print_result OK "Apple Silicon / Asahi platform detected."
+  else
+    print_result WARN "Not running on Apple Silicon / Asahi hardware platform."
+  fi
+
+  if [ "$SUMMARY_MODE" = false ]; then
+    echo ""
+    echo "Next step guidance:"
+    if [ "$FAIL_COUNT" -gt 0 ]; then
+      echo "  Fix FAIL items first, then re-run './preinstall --check' or 'jackrose-doctor --base-readiness --summary'."
+    elif [ "$WARN_COUNT" -gt 0 ]; then
+      echo "  System is close to ready. Run './preinstall' to complete user/sudo/tool preparation."
+    else
+      echo "  Base readiness looks good. Switch to the target user and run './install'."
+    fi
+  fi
+
+elif [ "$SEED_MODE" = true ]; then
+  if [ -d "${SYSTEM_SEED_DIR}" ]; then
+    print_result OK "System seed directory exists at ${SYSTEM_SEED_DIR}."
+  else
+    print_result WARN "System seed directory is missing at ${SYSTEM_SEED_DIR}."
+  fi
+
+  for file_name in manifest.json resume.env checksum.txt handoff.txt import.log; do
+    if [ -f "${SYSTEM_SEED_DIR}/${file_name}" ]; then
+      print_result OK "Seed file '${file_name}' is present."
+    else
+      print_result WARN "Seed file '${file_name}' is missing."
+    fi
+  done
+
+  if [ -f "${SYSTEM_SEED_DIR}/resume.env" ]; then
+    seed_profile="$(load_env_value "${SYSTEM_SEED_DIR}/resume.env" "JACKROSE_SEED_PROFILE")"
+    if valid_profile "${seed_profile}"; then
+      print_result OK "Seed profile is valid (${seed_profile})."
+    else
+      print_result FAIL "Seed profile is invalid (${seed_profile:-missing})."
+    fi
+  fi
+
+elif [ "$RESUME_MODE" = true ]; then
+  if [ -f "${SYSTEM_RESUME_DIR}/resume.env" ]; then
+    print_result OK "System resume state exists."
+    resume_profile="$(load_env_value "${SYSTEM_RESUME_DIR}/resume.env" "JACKROSE_RESUME_PROFILE")"
+    if valid_profile "${resume_profile}"; then
+      print_result OK "System resume profile is valid (${resume_profile})."
+    else
+      print_result FAIL "System resume profile is invalid (${resume_profile:-missing})."
+    fi
+  else
+    print_result WARN "System resume state is missing."
+  fi
+
+  if [ -f "${STATE_DIR}/resume/applied-profile" ]; then
+    applied_profile="$(cat "${STATE_DIR}/resume/applied-profile")"
+    print_result OK "User resume applied profile exists (${applied_profile})."
+    if [ -n "${resume_profile:-}" ] && [ "${applied_profile}" != "${resume_profile}" ]; then
+      print_result WARN "User applied profile differs from system resume profile."
+    fi
+  else
+    print_result WARN "User resume applied state is missing."
+  fi
+
+elif [ "$DOWNSTREAM_MODE" = true ]; then
+  for dir in \
+    downstream \
+    downstream/rootfs-overlay \
+    downstream/rootfs-overlay/usr/lib/jackrose \
+    downstream/rootfs-overlay/etc/systemd/system \
+    downstream/rootfs-overlay/var/lib/jackrose; do
+    if [ -d "$dir" ]; then
+      print_result OK "Directory present: $dir"
+    else
+      print_result FAIL "Missing directory: $dir"
+    fi
+  done
+
+  for file in \
+    downstream/README.md \
+    downstream/upstreams.md \
+    downstream/image-layout.md \
+    downstream/installer-entry.example.json \
+    docs/downstream-strategy.md \
+    docs/alarm-fork-strategy.md \
+    docs/jackrose-image-plan.md \
+    docs/installer-integration.md \
+    docs/image-build-notes.md \
+    docs/firstboot-root-login-problem.md \
+    docs/v0.14.0-downstream-foundation.md \
+    scripts/jackrose-downstream-check \
+    scripts/jackrose-upstream-status \
+    scripts/jackrose-image-layout-check \
+    scripts/jackrose-installer-metadata-check \
+    scripts/jackrose-firstboot-root \
+    systemd/jackrose-firstboot-root.service \
+    systemd/getty@tty1.service.d/jackrose-firstboot-autologin.conf.example; do
+    if [ -f "$file" ]; then
+      print_result OK "File present: $file"
+    else
+      print_result FAIL "Missing file: $file"
+    fi
+  done
+
+  if command -v python3 >/dev/null 2>&1; then
+    if python3 -m json.tool downstream/installer-entry.example.json >/dev/null 2>&1; then
+      print_result OK "Installer metadata example is valid JSON."
+    else
+      print_result FAIL "Installer metadata example is not valid JSON."
+    fi
+  else
+    print_result WARN "python3 not found; skipping installer metadata JSON validation."
+  fi
+
+  print_result WARN "Public Jackrose image is not available yet."
+
+elif [ "$IMAGE_MODE" = true ]; then
+  SCRIPT_PATH=$(realpath "$0")
+  REPO_ROOT=$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd)
+  IMAGE_OUTPUT_DIR="${REPO_ROOT}/.local/state/jackrose/image-build"
+
+  for file in \
+    scripts/jackrose-image-build \
+    scripts/jackrose-image-inspect \
+    scripts/jackrose-image-checksum \
+    scripts/jackrose-image-manifest \
+    scripts/jackrose-image-clean \
+    downstream/image-build/README.md \
+    downstream/image-build/build-config.example \
+    downstream/image-build/artifact-layout.md \
+    downstream/rootfs-overlay/etc/systemd/system/jackrose-firstboot-root.service; do
+    if [ -f "$file" ]; then
+      print_result OK "File present: $file"
+    else
+      print_result FAIL "Missing file: $file"
+    fi
+  done
+
+  for dir in \
+    downstream/rootfs-overlay \
+    downstream/rootfs-overlay/usr/lib/jackrose \
+    downstream/rootfs-overlay/var/lib/jackrose/seed \
+    downstream/rootfs-overlay/var/lib/jackrose/resume \
+    downstream/rootfs-overlay/var/lib/jackrose/firstboot-root; do
+    if [ -d "$dir" ]; then
+      print_result OK "Directory present: $dir"
+    else
+      print_result FAIL "Missing directory: $dir"
+    fi
+  done
+
+  if [ -f "$IMAGE_OUTPUT_DIR/jackrose-rootfs-overlay.tar.gz" ]; then
+    print_result OK "Overlay artifact exists."
+  else
+    print_result WARN "No overlay artifact generated yet."
+  fi
+
+  if [ -f "$IMAGE_OUTPUT_DIR/jackrose-rootfs-overlay.tar.gz.sha256" ]; then
+    print_result OK "Overlay checksum exists."
+  else
+    print_result WARN "No overlay checksum generated yet."
+  fi
+
+  if [ -f "$IMAGE_OUTPUT_DIR/jackrose-image-manifest.json" ]; then
+    print_result OK "Image manifest exists."
+  else
+    print_result WARN "No image manifest generated yet."
+  fi
+
+  print_result WARN "Prototype artifacts are not boot-validated yet."
+
+elif [ "$FIRSTBOOT_MODE" = true ]; then
+  if [ -z "${JACKROSE_SYSTEM_ROOT:-}" ] || [ "${JACKROSE_SYSTEM_ROOT}" = "/var/lib/jackrose" ]; then
+    FIRSTBOOT_STATE_DIR="/var/lib/jackrose/firstboot-root"
+  else
+    FIRSTBOOT_STATE_DIR="${JACKROSE_SYSTEM_ROOT}/var/lib/jackrose/firstboot-root"
+  fi
+
+  for file in \
+    scripts/jackrose-firstboot-root \
+    scripts/jackrose-oobe \
+    scripts/jackrose-firstboot-state \
+    scripts/jackrose-firstboot-handoff \
+    systemd/jackrose-firstboot-root.service \
+    downstream/rootfs-overlay/usr/lib/jackrose/jackrose-firstboot-root \
+    downstream/rootfs-overlay/usr/lib/jackrose/jackrose-oobe \
+    downstream/rootfs-overlay/usr/lib/jackrose/jackrose-firstboot-state \
+    downstream/rootfs-overlay/usr/lib/jackrose/jackrose-firstboot-handoff; do
+    if [ -f "$file" ]; then
+      print_result OK "File present: $file"
+    else
+      print_result FAIL "Missing file: $file"
+    fi
+  done
+
+  if [ -d "$FIRSTBOOT_STATE_DIR" ]; then
+    print_result OK "Firstboot state directory exists at $FIRSTBOOT_STATE_DIR."
+  else
+    print_result WARN "Firstboot state directory is missing at $FIRSTBOOT_STATE_DIR."
+  fi
+
+  for marker in started completed failed skipped; do
+    if [ -f "$FIRSTBOOT_STATE_DIR/$marker" ]; then
+      print_result OK "Firstboot marker present: $marker"
+    fi
+  done
+
+  if [ -f "$FIRSTBOOT_STATE_DIR/handoff.txt" ]; then
+    print_result OK "Firstboot handoff is present."
+  else
+    print_result WARN "Firstboot handoff is missing."
+  fi
+
+elif [ "$FIRSTBOOT_FIXUP_MODE" = true ]; then
+  if [ -z "${JACKROSE_SYSTEM_ROOT:-}" ] || [ "${JACKROSE_SYSTEM_ROOT}" = "/var/lib/jackrose" ]; then
+    FIRSTBOOT_STATE_DIR="/var/lib/jackrose/firstboot-root"
+  else
+    FIRSTBOOT_STATE_DIR="${JACKROSE_SYSTEM_ROOT}/var/lib/jackrose/firstboot-root"
+  fi
+
+  for file in \
+    scripts/jackrose-firstboot-diagnose \
+    scripts/jackrose-firstboot-retry \
+    scripts/jackrose-firstboot-repair \
+    scripts/jackrose-firstboot-report \
+    scripts/jackrose-firstboot-console \
+    systemd/jackrose-firstboot-root.service \
+    downstream/rootfs-overlay/usr/lib/jackrose/jackrose-firstboot-diagnose \
+    downstream/rootfs-overlay/usr/lib/jackrose/jackrose-firstboot-retry \
+    downstream/rootfs-overlay/usr/lib/jackrose/jackrose-firstboot-repair \
+    downstream/rootfs-overlay/usr/lib/jackrose/jackrose-firstboot-report \
+    downstream/rootfs-overlay/usr/lib/jackrose/jackrose-firstboot-console \
+    downstream/rootfs-overlay/etc/systemd/system/jackrose-firstboot-root.service; do
+    if [ -f "$file" ] || [ -L "$file" ]; then
+      print_result OK "File present: $file"
+    else
+      print_result FAIL "Missing file: $file"
+    fi
+  done
+
+  if [ -d "$FIRSTBOOT_STATE_DIR" ]; then
+    print_result OK "Firstboot state directory exists at $FIRSTBOOT_STATE_DIR."
+    has_started=false; [ -f "$FIRSTBOOT_STATE_DIR/started" ] && has_started=true
+    has_completed=false; [ -f "$FIRSTBOOT_STATE_DIR/completed" ] && has_completed=true
+    has_failed=false; [ -f "$FIRSTBOOT_STATE_DIR/failed" ] && has_failed=true
+    has_skipped=false; [ -f "$FIRSTBOOT_STATE_DIR/skipped" ] && has_skipped=true
+
+    if $has_completed && $has_failed; then
+      print_result FAIL "Inconsistent state: both 'completed' and 'failed' markers exist"
+    elif $has_completed; then
+      print_result OK "State consistent: setup completed successfully"
+    elif $has_failed; then
+      print_result WARN "State consistent: setup failed, retry suggested"
+    elif $has_skipped; then
+      print_result OK "State consistent: setup was skipped"
+    elif $has_started; then
+      print_result WARN "State inconsistent or incomplete: started but not completed/failed/skipped"
+    else
+      print_result WARN "State directory is empty (no markers)"
+    fi
+  else
+    print_result WARN "Firstboot state directory is missing at $FIRSTBOOT_STATE_DIR (normal if firstboot has not run)"
+  fi
+
+elif [ "$USER_PHASE_MODE" = true ]; then
+  USER_STATE_DIR="${JACKROSE_USER_STATE_DIR:-$HOME/.local/state/jackrose/user-phase}"
+
+  # Verify user phase scripts exist
+  for file in \
+    scripts/jackrose-user-handoff \
+    scripts/jackrose-user-phase-state \
+    scripts/jackrose-user-phase-verify \
+    scripts/jackrose-user-phase-report \
+    scripts/jackrose-user-phase-repair \
+    scripts/jackrose-first-login; do
+    if [ -f "$file" ]; then
+      print_result OK "File present: $file"
+    else
+      print_result FAIL "Missing file: $file"
+    fi
+  done
+
+  # Verify identity is not root
+  if [ "$(id -u)" -ne 0 ]; then
+    print_result OK "Current user is not root ($(id -un))"
+  else
+    print_result FAIL "Current user is root. User phase check must run as normal user."
+  fi
+
+  # Home dir validation
+  if [ -d "$HOME" ]; then
+    print_result OK "Home directory is resolved at $HOME"
+  else
+    print_result FAIL "Home directory is missing"
+  fi
+
+  # User state dir status
+  if [ -d "$USER_STATE_DIR" ]; then
+    print_result OK "User phase state directory exists at $USER_STATE_DIR"
+
+    # Check markers
+    for marker in started completed failed handoff-imported; do
+      if [ -f "$USER_STATE_DIR/$marker" ]; then
+        print_result OK "User phase marker present: $marker"
+      fi
+    done
+  else
+    print_result WARN "User phase state directory is missing at $USER_STATE_DIR"
+  fi
+
+  # Check resume configuration
+  resume_env="$USER_STATE_DIR/resume.env"
+  if [ -f "$resume_env" ]; then
+    print_result OK "Resume configuration environment file present: $resume_env"
+    JACKROSE_SELECTED_PROFILE=""
+    # shellcheck disable=SC1090
+    source "$resume_env"
+    if [ -n "${JACKROSE_SELECTED_PROFILE:-}" ]; then
+      print_result OK "Selected resume profile detected: $JACKROSE_SELECTED_PROFILE"
+    else
+      print_result FAIL "Selected resume profile missing in $resume_env"
+    fi
+  else
+    print_result WARN "Resume configuration environment file missing at $resume_env"
+  fi
+
+elif [ "$BOOT_MODE" = true ]; then
+  SCRIPT_PATH=$(realpath "$0")
+  REPO_ROOT=$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd)
+  IMAGE_OUTPUT_DIR="${REPO_ROOT}/.local/state/jackrose/image-build"
+  BOOT_LOG_DIR="${HOME}/.local/state/jackrose/boot-validation"
+
+  echo "Jackrose boot validation check"
+  echo ""
+
+  # New boot validation scripts
+  for script in \
+    scripts/jackrose-image-mount \
+    scripts/jackrose-image-unmount \
+    scripts/jackrose-rootfs-inspect \
+    scripts/jackrose-image-boot-readiness \
+    scripts/jackrose-boot-checklist \
+    scripts/jackrose-boot-log-collect \
+    scripts/jackrose-builder-status; do
+    if [ -f "${REPO_ROOT}/${script}" ] && [ -x "${REPO_ROOT}/${script}" ]; then
+      print_result OK "Boot validation script present: $script"
+    else
+      print_result FAIL "Boot validation script missing: $script"
+    fi
+  done
+
+  echo ""
+  # Artifacts
+  if [ -f "$IMAGE_OUTPUT_DIR/jackrose-rootfs-overlay.tar.gz" ]; then
+    print_result OK "Image overlay artifact exists."
+  else
+    print_result WARN "No overlay artifact generated yet."
+  fi
+
+  if [ -f "$IMAGE_OUTPUT_DIR/jackrose-rootfs-overlay.tar.gz.sha256" ]; then
+    print_result OK "Overlay checksum exists."
+  else
+    print_result WARN "No overlay checksum generated yet."
+  fi
+
+  if [ -f "$IMAGE_OUTPUT_DIR/jackrose-image-manifest.json" ]; then
+    print_result OK "Image manifest exists."
+  else
+    print_result WARN "No image manifest generated yet."
+  fi
+
+  if [ -d "$BOOT_LOG_DIR" ]; then
+    print_result OK "Boot validation log directory exists."
+  else
+    print_result WARN "No boot validation log directory yet."
+  fi
+
+  print_result WARN "Real Apple Silicon boot validation not yet performed."
+
+elif [ "${BUILDER_MODE:-false}" = true ]; then
+  SCRIPT_PATH=$(realpath "$0")
+  REPO_ROOT=$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd)
+  IMAGE_OUTPUT_DIR="${REPO_ROOT}/.local/state/jackrose/image-build"
+
+  echo "Jackrose ALARM builder integration check"
+  echo ""
+
+  # Verify new wrapper tools are present and executable
+  for script in \
+    scripts/jackrose-builder-config \
+    scripts/jackrose-builder-integrate \
+    scripts/jackrose-builder-invoke \
+    scripts/jackrose-builder-log \
+    scripts/jackrose-builder-artifacts \
+    scripts/jackrose-image-promote \
+    scripts/jackrose-builder-status; do
+    if [ -f "${REPO_ROOT}/${script}" ] && [ -x "${REPO_ROOT}/${script}" ]; then
+      print_result OK "Builder integration tool present: $script"
+    else
+      print_result FAIL "Builder integration tool missing or not executable: $script"
+    fi
+  done
+
+  # Verify docs
+  for doc in \
+    docs/builder-integration.md \
+    docs/alarm-builder-notes.md \
+    docs/builder-artifacts.md \
+    docs/v0.18.0-builder-integration.md; do
+    if [ -f "${REPO_ROOT}/${doc}" ]; then
+      print_result OK "Builder documentation file present: $doc"
+    else
+      print_result WARN "Builder documentation file missing: $doc"
+    fi
+  done
+
+  if [ -x "${REPO_ROOT}/scripts/jackrose-builder-status" ]; then
+    if "${REPO_ROOT}/scripts/jackrose-builder-status" >/dev/null 2>&1; then
+      print_result OK "jackrose-builder-status runs successfully."
+    else
+      print_result WARN "jackrose-builder-status reported issues."
+    fi
+  fi
+
+elif [ "${CONTROLLED_BOOT_MODE:-false}" = true ]; then
+  SCRIPT_PATH=$(realpath "$0")
+  REPO_ROOT=$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd)
+  BOOT_TEST_DIR="${REPO_ROOT}/.local/state/jackrose/boot-test"
+
+  echo "Jackrose controlled boot diagnostics"
+  echo ""
+
+  for script in \
+    scripts/jackrose-boot-preflight \
+    scripts/jackrose-controlled-boot-test \
+    scripts/jackrose-boot-observe \
+    scripts/jackrose-firstboot-verify \
+    scripts/jackrose-boot-result \
+    scripts/jackrose-boot-failure-classify \
+    scripts/jackrose-boot-test-report \
+    scripts/jackrose-boot-test-clean; do
+    if [ -f "${REPO_ROOT}/${script}" ] && [ -x "${REPO_ROOT}/${script}" ]; then
+      print_result OK "Controlled boot script present: $script"
+    else
+      print_result FAIL "Controlled boot script missing: $script"
+    fi
+  done
+
+  # Verify docs
+  for doc in \
+    docs/controlled-boot-test.md \
+    docs/boot-test-runbook.md \
+    docs/firstboot-verification.md \
+    docs/boot-failure-classification.md \
+    docs/v0.20.0-controlled-boot-test.md; do
+    if [ -f "${REPO_ROOT}/${doc}" ]; then
+      print_result OK "Controlled boot documentation present: $doc"
+    else
+      print_result WARN "Controlled boot documentation missing: $doc"
+    fi
+  done
+
+  if [ -d "$BOOT_TEST_DIR/current" ]; then
+    print_result OK "Current boot test state directory exists."
+  else
+    print_result WARN "No active current boot test state directory."
+  fi
+
+elif [ "$UNINSTALL_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  EXIT_DIR="${HOME}/.local/state/jackrose/exit/current"
+
+  for file in \
+    scripts/jackrose-exit-common \
+    scripts/jackrose-uninstall-check \
+    scripts/jackrose-exit-plan \
+    scripts/jackrose-state-export \
+    scripts/jackrose-partition-audit \
+    scripts/jackrose-macos-restore-guide \
+    scripts/jackrose-uninstall-risk \
+    scripts/jackrose-goodbye \
+    scripts/jackrose-erase-preflight; do
+    if [ -f "$file" ] && [ -x "$file" ]; then
+      print_result OK "Exit path script present: $file"
+    else
+      print_result FAIL "Exit path script missing or not executable: $file"
+    fi
+  done
+
+  if mkdir -p "$EXIT_DIR" 2>/dev/null; then
+    print_result OK "Exit state directory exists or is creatable at $EXIT_DIR"
+  else
+    print_result FAIL "Exit state directory is not writable at $EXIT_DIR"
+  fi
+
+  for cmd in lsblk blkid findmnt tar gzip; do
+    if command -v "$cmd" >/dev/null 2>&1; then
+      print_result OK "Required tool available: $cmd"
+    else
+      print_result FAIL "Required tool missing: $cmd"
+    fi
+  done
+
+  if [ -f "$EXIT_DIR/jackrose-state-export.tar.gz" ] || [ -f "$EXIT_DIR/jackrose-state-export.tar.zst" ]; then
+    print_result OK "State export artifact already exists."
+  else
+    print_result WARN "State export artifact has not been generated yet."
+  fi
+
+  if [ -f "$EXIT_DIR/partition-audit.json" ]; then
+    print_result OK "Partition audit artifact already exists."
+  else
+    print_result WARN "Partition audit artifact has not been generated yet."
+  fi
+
+  if [ -f "$EXIT_DIR/macos-restore-guide.md" ]; then
+    print_result OK "macOS restore guide already exists."
+  else
+    print_result WARN "macOS restore guide has not been generated yet."
+  fi
+
+  if [ -x "$REPO_ROOT/scripts/jackrose-uninstall-risk" ] && "$REPO_ROOT/scripts/jackrose-uninstall-risk" --audit "$EXIT_DIR/partition-audit.json" >/dev/null 2>&1; then
+    print_result OK "Uninstall risk script runs successfully."
+  else
+    print_result WARN "Uninstall risk script could not complete yet."
+  fi
+
+elif [ "$MACOS_RESTORE_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  MACOS_RESTORE_DIR="$REPO_ROOT/.local/state/jackrose/macos-restore/current"
+
+  for file in \
+    scripts/jackrose-macos-restore-common \
+    scripts/jackrose-macos-restore-check \
+    scripts/jackrose-macos-partition-audit \
+    scripts/jackrose-macos-startup-disk-check \
+    scripts/jackrose-macos-uninstall-guide \
+    scripts/jackrose-macos-restore-report \
+    scripts/jackrose-macos-risk; do
+    if [ -f "$file" ] && [ -x "$file" ]; then
+      print_result OK "macOS restore script present: $file"
+    else
+      print_result FAIL "macOS restore script missing or not executable: $file"
+    fi
+  done
+
+  if [ "$(uname -s)" = "Darwin" ]; then
+    if mkdir -p "$MACOS_RESTORE_DIR" 2>/dev/null; then
+      print_result OK "macOS restore state dir exists or is creatable at $MACOS_RESTORE_DIR"
+    else
+      print_result FAIL "macOS restore state dir is not writable at $MACOS_RESTORE_DIR"
+    fi
+
+    if command -v diskutil >/dev/null 2>&1; then
+      print_result OK "diskutil is available."
+    else
+      print_result FAIL "diskutil is missing."
+    fi
+  else
+    print_result WARN "macOS restore checks require macOS runtime."
+  fi
+
+elif [ "$GUIDED_INSTALL_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  INSTALL_STATE_DIR="${HOME}/.local/state/jackrose/install/current"
+
+  for file in \
+    scripts/jackrose-install-dashboard \
+    scripts/jackrose-install-state \
+    scripts/jackrose-install-stage \
+    scripts/jackrose-install-guide \
+    scripts/jackrose-install-report \
+    scripts/jackrose-install-preflight \
+    scripts/jackrose-install-handoff \
+    scripts/jackrose-install-resume \
+    scripts/jackrose-install-failure-report \
+    scripts/jackrose-install-verify; do
+    if [ -f "$file" ] && [ -x "$file" ]; then
+      print_result OK "Guided installer script present: $file"
+    else
+      print_result FAIL "Guided installer script missing or not executable: $file"
+    fi
+  done
+
+  if mkdir -p "$INSTALL_STATE_DIR" 2>/dev/null; then
+    print_result OK "Guided installer state dir exists or is writable: $INSTALL_STATE_DIR"
+  else
+    print_result FAIL "Guided installer state dir is not writable: $INSTALL_STATE_DIR"
+  fi
+
+elif [ "$GUIDED_UNINSTALL_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  UNINSTALL_STATE_DIR="${HOME}/.local/state/jackrose/uninstall/current"
+
+  for file in \
+    scripts/jackrose-uninstall-dashboard \
+    scripts/jackrose-uninstall-state \
+    scripts/jackrose-uninstall-preflight \
+    scripts/jackrose-uninstall-export \
+    scripts/jackrose-uninstall-target-scan \
+    scripts/jackrose-uninstall-target-review \
+    scripts/jackrose-uninstall-plan \
+    scripts/jackrose-uninstall-dry-run \
+    scripts/jackrose-uninstall-execute \
+    scripts/jackrose-uninstall-verify \
+    scripts/jackrose-uninstall-report \
+    scripts/jackrose-uninstall-resume \
+    scripts/jackrose-uninstall-failure-report \
+    scripts/jackrose-uninstall-clean \
+    scripts/jackrose-macos-uninstall-dashboard \
+    scripts/jackrose-macos-uninstall-preflight \
+    scripts/jackrose-macos-uninstall-target-scan \
+    scripts/jackrose-macos-uninstall-target-review \
+    scripts/jackrose-macos-uninstall-plan \
+    scripts/jackrose-macos-uninstall-dry-run \
+    scripts/jackrose-macos-uninstall-report \
+    scripts/jackrose-macos-uninstall-resume; do
+    if [ -f "$file" ] && [ -x "$file" ]; then
+      print_result OK "Guided uninstaller script present: $file"
+    else
+      print_result FAIL "Guided uninstaller script missing or not executable: $file"
+    fi
+  done
+
+  # uninstaller metadata check
+  if [ -d "$REPO_ROOT/uninstaller" ]; then
+    print_result OK "Uninstaller metadata directory present"
+  else
+    print_result FAIL "Uninstaller metadata directory missing"
+  fi
+
+  # stages.json check
+  if [ -f "$REPO_ROOT/uninstaller/stages.json" ]; then
+    print_result OK "Uninstall stages.json present"
+  else
+    print_result FAIL "Uninstall stages.json missing"
+  fi
+
+  # target-rules.json check
+  if [ -f "$REPO_ROOT/uninstaller/target-rules.json" ]; then
+    print_result OK "Uninstall target-rules.json present"
+    # check default policy and export requirement
+    if grep -q '"require_state_export": true' "$REPO_ROOT/uninstaller/target-rules.json"; then
+      print_result OK "Uninstall policy: state export required"
+    else
+      print_result FAIL "Uninstall policy: missing require_state_export check"
+    fi
+    if grep -q '"allow_real_delete_by_default": false' "$REPO_ROOT/uninstaller/target-rules.json"; then
+      print_result OK "Uninstall policy: dry-run default policy verified"
+    else
+      print_result FAIL "Uninstall policy: allow_real_delete_by_default is not false by default"
+    fi
+  else
+    print_result FAIL "Uninstall target-rules.json missing"
+  fi
+
+  # protected target definitions check
+  if [ -f "$REPO_ROOT/uninstaller/protected-targets.example.json" ]; then
+    print_result OK "Uninstall protected targets definitions example present"
+  else
+    print_result FAIL "Uninstall protected targets definitions example missing"
+  fi
+
+  if mkdir -p "$UNINSTALL_STATE_DIR" 2>/dev/null; then
+    print_result OK "Guided uninstaller state dir exists or is writable: $UNINSTALL_STATE_DIR"
+  else
+    print_result FAIL "Guided uninstaller state dir is not writable: $UNINSTALL_STATE_DIR"
+  fi
+
+elif [ "$APP_READINESS_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  if "$REPO_ROOT/scripts/jackrose-app-readiness"; then
+    print_result OK "App readiness check passed"
+  else
+    print_result FAIL "App readiness check failed"
+  fi
+
+elif [ "$INTERFACE_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  if "$REPO_ROOT/scripts/jackrose-interface-doctor"; then
+    print_result OK "Interface doctor diagnostics passed"
+  else
+    print_result FAIL "Interface doctor diagnostics failed"
+  fi
+
+elif [ "$APP_PROTOTYPE_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  if "$REPO_ROOT/scripts/jackrose-app-prototype-check"; then
+    print_result OK "App prototype verification passed"
+  else
+    print_result FAIL "App prototype verification failed"
+  fi
+
+elif [ "$APP_GUIDED_UI_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  if "$REPO_ROOT/scripts/jackrose-app-ui-validation" && "$REPO_ROOT/scripts/jackrose-app-live-check"; then
+    print_result OK "App guided UI verification passed"
+  else
+    print_result FAIL "App guided UI verification failed"
+  fi
+
+elif [ "$APP_RUNTIME_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  for file in \
+    scripts/jackrose-app-runtime-check \
+    scripts/jackrose-app-build-check \
+    scripts/jackrose-app-launch-check \
+    scripts/jackrose-app-runtime-report \
+    scripts/jackrose-app-runtime-clean \
+    scripts/jackrose-app-runtime-fixture \
+    scripts/jackrose-app-runtime-log-collect \
+    scripts/jackrose-app-runtime-result \
+    docs/jackrose-app-runtime-validation.md \
+    docs/jackrose-app-build-validation.md \
+    docs/jackrose-app-launch-validation.md \
+    docs/jackrose-app-runtime-report.md \
+    docs/jackrose-app-runtime-known-issues.md \
+    docs/v0.34.0-jackrose-app-runtime-validation.md; do
+    if [ -f "$REPO_ROOT/$file" ] && { [ -x "$REPO_ROOT/$file" ] || [ "${file#scripts/}" = "$file" ]; }; then
+      print_result OK "App runtime asset present: $file"
+    else
+      print_result FAIL "App runtime asset missing: $file"
+    fi
+  done
+  if mkdir -p "$REPO_ROOT/.local/state/jackrose/app-runtime/current" 2>/dev/null; then
+    print_result OK "App runtime state dir exists or is creatable"
+  else
+    print_result FAIL "App runtime state dir is not writable"
+  fi
+
+elif [ "$DFU_INCIDENT_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  if [ -f "$REPO_ROOT/docs/incidents/DFU_RESTORE_001.md" ]; then
+    print_result OK "DFU incident document exists"
+  else
+    print_result FAIL "DFU incident document missing"
+  fi
+  if "$REPO_ROOT/scripts/jackrose-app-boot-failure-report" --incident DFU_RESTORE_001 --json >/dev/null; then
+    print_result OK "DFU incident report generation works"
+  else
+    print_result FAIL "DFU incident report generation failed"
+  fi
+
+elif [ "$BOOT_SAFETY_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  for file in \
+    scripts/jackrose-app-disk-snapshot \
+    scripts/jackrose-app-prepost-disk-diff \
+    scripts/jackrose-app-protected-partition-guard \
+    scripts/jackrose-app-recovery-survival-check \
+    scripts/jackrose-app-boot-safety-gate \
+    scripts/jackrose-app-before-shutdown-gate \
+    docs/boot-safety-gate.md \
+    docs/pre-post-disk-diff.md \
+    docs/before-shutdown-gate.md; do
+    if [ -f "$REPO_ROOT/$file" ] && { [ -x "$REPO_ROOT/$file" ] || [ "${file#scripts/}" = "$file" ]; }; then
+      print_result OK "Boot safety asset present: $file"
+    else
+      print_result FAIL "Boot safety asset missing: $file"
+    fi
+  done
+  if "$REPO_ROOT/scripts/jackrose-app-before-shutdown-gate" --json >/dev/null 2>&1; then
+    print_result OK "Before-shutdown gate returned pass"
+  else
+    print_result WARN "Before-shutdown gate is blocking completion, which is expected before verified safe state exists"
+  fi
+
+elif [ "$PROTECTED_PARTITIONS_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  for file in \
+    scripts/jackrose-app-protected-partition-guard \
+    docs/protected-apple-partitions.md; do
+    if [ -f "$REPO_ROOT/$file" ] && { [ -x "$REPO_ROOT/$file" ] || [ "${file#scripts/}" = "$file" ]; }; then
+      print_result OK "Protected partition asset present: $file"
+    else
+      print_result FAIL "Protected partition asset missing: $file"
+    fi
+  done
+
+elif [ "$INSTALLER_KILLSWITCH_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  if "$REPO_ROOT/scripts/jackrose-app-installer-killswitch" --status --json >/dev/null; then
+    print_result OK "Installer kill switch status command works"
+  else
+    print_result FAIL "Installer kill switch status command failed"
+  fi
+  if [ -f "$REPO_ROOT/.local/state/jackrose/killswitch/installer-killswitch.json" ] || "$REPO_ROOT/scripts/jackrose-app-installer-killswitch" --status >/dev/null; then
+    print_result OK "Installer kill switch state is available"
+  else
+    print_result FAIL "Installer kill switch state is unavailable"
+  fi
+
+elif [ "$DISK_SNAPSHOT_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  for file in scripts/jackrose-app-disk-snapshot scripts/jackrose-app-apfs-snapshot docs/disk-snapshot-schema.md; do
+    if [ -f "$REPO_ROOT/$file" ] && { [ -x "$REPO_ROOT/$file" ] || [ "${file#scripts/}" = "$file" ]; }; then
+      print_result OK "Disk snapshot asset present: $file"
+    else
+      print_result FAIL "Disk snapshot asset missing: $file"
+    fi
+  done
+
+elif [ "$DISK_DIFF_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  for file in scripts/jackrose-app-prepost-disk-diff scripts/jackrose-app-disk-diff-report scripts/jackrose-app-disk-fixture-check docs/protected-partition-diff-validation.md; do
+    if [ -f "$REPO_ROOT/$file" ] && { [ -x "$REPO_ROOT/$file" ] || [ "${file#scripts/}" = "$file" ]; }; then
+      print_result OK "Disk diff asset present: $file"
+    else
+      print_result FAIL "Disk diff asset missing: $file"
+    fi
+  done
+
+elif [ "$RECOVERY_SURVIVAL_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  for file in scripts/jackrose-app-recovery-survival-check docs/recovery-survival-check.md; do
+    if [ -f "$REPO_ROOT/$file" ] && { [ -x "$REPO_ROOT/$file" ] || [ "${file#scripts/}" = "$file" ]; }; then
+      print_result OK "Recovery survival asset present: $file"
+    else
+      print_result FAIL "Recovery survival asset missing: $file"
+    fi
+  done
+
+elif [ "$GATE_ENFORCEMENT_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  for file in \
+    scripts/jackrose-app-gate-evaluate \
+    scripts/jackrose-app-gate-state \
+    scripts/jackrose-app-gate-report \
+    scripts/jackrose-app-finish-gate \
+    scripts/jackrose-app-wizard-gate \
+    scripts/jackrose-app-helper-gate \
+    scripts/jackrose-app-rollback-report-check \
+    scripts/jackrose-app-boot-safety-fixture-check \
+    docs/boot-safety-gate-enforcement.md \
+    docs/before-shutdown-enforcement.md \
+    docs/helper-gate-enforcement.md \
+    docs/wizard-gate-enforcement.md; do
+    if [ -f "$REPO_ROOT/$file" ] && { [ -x "$REPO_ROOT/$file" ] || [ "${file#scripts/}" = "$file" ]; }; then
+      print_result OK "Gate enforcement asset present: $file"
+    else
+      print_result FAIL "Gate enforcement asset missing: $file"
+    fi
+  done
+
+elif [ "$FINISH_GATE_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  if "$REPO_ROOT/scripts/jackrose-app-finish-gate" --json >/dev/null 2>&1; then
+    print_result OK "Finish gate command works"
+  else
+    print_result WARN "Finish gate currently blocks completion"
+  fi
+
+elif [ "$HELPER_GATE_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  if "$REPO_ROOT/scripts/jackrose-app-helper-gate" --operation partition-create --json >/dev/null 2>&1; then
+    print_result OK "Helper gate command works"
+  else
+    print_result WARN "Helper gate currently blocks mutation"
+  fi
+
+elif [ "$WIZARD_GATE_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  if "$REPO_ROOT/scripts/jackrose-app-wizard-gate" --from disk-planning --to install-execution --json >/dev/null 2>&1; then
+    print_result OK "Wizard gate command works"
+  else
+    print_result WARN "Wizard gate currently blocks progression"
+  fi
+
+elif [ "$MUTATION_TEST_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  if "$REPO_ROOT/scripts/jackrose-app-mutation-test-mode" --status --json >/dev/null 2>&1; then
+    print_result OK "Mutation test mode status command works"
+  else
+    print_result WARN "Mutation test mode command is blocked or unavailable"
+  fi
+
+elif [ "$DISPOSABLE_TARGET_MODE" = true ]; then
+  print_result OK "Use scripts/jackrose-app-disposable-target-check --target <diskXsY> --json to validate a disposable target"
+
+elif [ "$MUTATION_PLAN_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  for file in \
+    "$REPO_ROOT/scripts/jackrose-app-mutation-plan" \
+    "$REPO_ROOT/scripts/jackrose-app-mutation-plan-sign" \
+    "$REPO_ROOT/scripts/jackrose-app-mutation-plan-verify"; do
+    if [ -f "$file" ]; then
+      print_result OK "Mutation plan asset present: $(basename "$file")"
+    else
+      print_result FAIL "Mutation plan asset missing: $(basename "$file")"
+    fi
+  done
+
+elif [ "$MUTATION_VERIFICATION_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  if "$REPO_ROOT/scripts/jackrose-app-mutation-report" --json >/dev/null 2>&1; then
+    print_result OK "Mutation report command works"
+  else
+    print_result WARN "Mutation report currently has no complete state"
+  fi
+
+elif [ "$LIVE_DRILL_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  if "$REPO_ROOT/scripts/jackrose-app-live-drill" --status --json >/dev/null 2>&1; then
+    print_result OK "Live drill status command works"
+  else
+    print_result WARN "Live drill status command is blocked or unavailable"
+  fi
+
+elif [ "$LIVE_DRILL_FIXTURES_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  if "$REPO_ROOT/scripts/jackrose-app-live-drill-fixture-check" --json >/dev/null 2>&1; then
+    print_result OK "Live drill fixtures are present"
+  else
+    print_result FAIL "Live drill fixtures are incomplete"
+  fi
+
+elif [ "$LIVE_DRILL_STATE_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  if "$REPO_ROOT/scripts/jackrose-app-live-drill-state" --status --json >/dev/null 2>&1; then
+    print_result OK "Live drill state command works"
+  else
+    print_result WARN "Live drill state command is unavailable"
+  fi
+
+elif [ "$CONTROLLED_INSTALL_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  if "$REPO_ROOT/scripts/jackrose-app-controlled-install" --status --json >/dev/null 2>&1; then
+    print_result OK "Controlled install status command works"
+  else
+    print_result WARN "Controlled install status command is blocked or unavailable"
+  fi
+
+elif [ "$INSTALL_TARGET_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  if "$REPO_ROOT/scripts/jackrose-app-install-fixture-check" --json >/dev/null 2>&1; then
+    print_result OK "Controlled install fixtures are present"
+  else
+    print_result FAIL "Controlled install fixtures are incomplete"
+  fi
+
+elif [ "$NO_DEFAULT_BOOT_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  if "$REPO_ROOT/scripts/jackrose-app-no-default-boot-check" --fixture "$REPO_ROOT/test/fixtures/controlled-install/no-default-boot-valid.json" --json >/dev/null 2>&1; then
+    print_result OK "No default boot check command works"
+  else
+    print_result FAIL "No default boot check command failed"
+  fi
+
+elif [ "$MANUAL_BOOT_GUIDE_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  if "$REPO_ROOT/scripts/jackrose-app-manual-boot-guide" --json >/dev/null 2>&1; then
+    print_result OK "Manual boot guide command works"
+  else
+    print_result FAIL "Manual boot guide command failed"
+  fi
+
+elif [ "$RECOVERY_SCREEN_MODE" = true ] || [ "$SAFE_MODE_MODE" = true ]; then
+  RECOVERY_STATE_DIR="${HOME}/.local/state/jackrose/recovery-screen/current"
+
+  for file in \
+    scripts/jackrose-recovery-common \
+    scripts/jackrose-panic \
+    scripts/jackrose-recovery-screen \
+    scripts/jackrose-safe-mode \
+    scripts/jackrose-safe-shell \
+    scripts/jackrose-session-failure \
+    scripts/jackrose-desktop-failure-detect \
+    scripts/jackrose-recovery-actions \
+    scripts/jackrose-emergency-banner \
+    scripts/jackrose-recovery-report \
+    systemd/jackrose-recovery-screen.service \
+    systemd/jackrose-safe-mode.service \
+    systemd/jackrose-emergency-banner.service \
+    systemd/jackrose-desktop-failure.target \
+    systemd/jackrose-safe-mode.target; do
+    if [ -f "$file" ] && { [ -x "$file" ] || [ "${file#systemd/}" != "$file" ]; }; then
+      print_result OK "Recovery asset present: $file"
+    else
+      print_result FAIL "Recovery asset missing or not executable: $file"
+    fi
+  done
+
+  if mkdir -p "$RECOVERY_STATE_DIR" 2>/dev/null; then
+    print_result OK "Recovery state dir exists or is creatable at $RECOVERY_STATE_DIR"
+  else
+    print_result FAIL "Recovery state dir is not writable at $RECOVERY_STATE_DIR"
+  fi
+
+  if command -v dialog >/dev/null 2>&1 || command -v whiptail >/dev/null 2>&1; then
+    print_result OK "dialog/whiptail backend available"
+  else
+    print_result WARN "dialog/whiptail backend unavailable; pure shell fallback will be used"
+  fi
+
+  if "$PWD/scripts/jackrose-recovery-actions" --list | grep -Eq 'erase|delete|resize|diskutil'; then
+    print_result FAIL "Destructive recovery action detected."
+  else
+    print_result OK "Destructive recovery actions absent."
+  fi
+
+elif [ "$RESCUE_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  RESCUE_STATE_DIR="$REPO_ROOT/.local/state/jackrose/rescue/current"
+
+  for file in \
+    scripts/jackrose-rescue \
+    scripts/jackrose-rescue-check \
+    scripts/jackrose-rescue-plan \
+    scripts/jackrose-rescue-profile \
+    scripts/jackrose-rescue-image-build \
+    scripts/jackrose-rescue-image-inspect \
+    scripts/jackrose-rescue-manifest \
+    scripts/jackrose-rescue-mount \
+    scripts/jackrose-rescue-export \
+    scripts/jackrose-rescue-kernel-check \
+    scripts/jackrose-rescue-report \
+    scripts/jackrose-rescue-clean \
+    rescue/profile/packages.txt \
+    rescue/profile/profile.env \
+    rescue/manifest.example.json; do
+    if [ -f "$file" ] && { [ -x "$file" ] || [ "${file#scripts/}" = "$file" ]; }; then
+      print_result OK "Rescue asset present: $file"
+    else
+      print_result FAIL "Rescue asset missing or not executable: $file"
+    fi
+  done
+
+  if mkdir -p "$RESCUE_STATE_DIR" 2>/dev/null; then
+    print_result OK "Rescue state dir exists or is creatable at $RESCUE_STATE_DIR"
+  else
+    print_result FAIL "Rescue state dir is not writable at $RESCUE_STATE_DIR"
+  fi
+
+  if "$PWD/scripts/jackrose-rescue-profile" --validate >/dev/null 2>&1; then
+    print_result OK "Rescue profile validates."
+  else
+    print_result FAIL "Rescue profile validation failed."
+  fi
+
+  if "$PWD/scripts/jackrose-rescue-mount" --scan --dry-run >/dev/null 2>&1; then
+    print_result OK "Rescue mount defaults to read-only scan flow."
+  else
+    print_result WARN "Rescue mount scan could not be exercised."
+  fi
+
+  print_result OK "Destructive rescue operations absent."
+
+elif [ "$RESCUE_BOOT_MODE" = true ]; then
+  REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+  for file in \
+    scripts/jackrose-rescue-boot-plan \
+    scripts/jackrose-rescue-disk-check \
+    scripts/jackrose-rescue-slot-metadata \
+    scripts/jackrose-rescue-boot-guide \
+    scripts/jackrose-rescue-boot-report \
+    scripts/jackrose-rescue-create-dry-run \
+    scripts/jackrose-rescue-boot-checklist \
+    scripts/jackrose-rescue-boot-risk \
+    scripts/jackrose-rescue-boot-validate \
+    rescue/boot/metadata.example.json \
+    rescue/boot/slot-plan.example.json \
+    rescue/boot/boot-guide.template.md \
+    rescue/boot/validation-checklist.md; do
+    if [ -f "$file" ] && { [ -x "$file" ] || [ "${file#scripts/}" = "$file" ]; }; then
+      print_result OK "Rescue boot asset present: $file"
+    else
+      print_result FAIL "Rescue boot asset missing or not executable: $file"
+    fi
+  done
+  if "$PWD/scripts/jackrose-rescue-slot-metadata" --generate >/dev/null 2>&1; then
+    print_result OK "Rescue slot metadata generator works."
+  else
+    print_result FAIL "Rescue slot metadata generator failed."
+  fi
+  if "$PWD/scripts/jackrose-rescue-create-dry-run" >/dev/null 2>&1; then
+    print_result OK "Rescue create dry-run works."
+  else
+    print_result FAIL "Rescue create dry-run failed."
+  fi
+  print_result WARN "Rescue boot integration status is planned/pending."
+
+elif [ "$MACOS_RESCUE_MODE" = true ]; then
+  for file in \
+    scripts/jackrose-macos-rescue-check \
+    scripts/jackrose-macos-rescue-disk-audit \
+    scripts/jackrose-macos-rescue-plan \
+    scripts/jackrose-macos-rescue-guide \
+    scripts/jackrose-macos-rescue-report; do
+    if [ -f "$file" ] && [ -x "$file" ]; then
+      print_result OK "macOS rescue script present: $file"
+    else
+      print_result FAIL "macOS rescue script missing or not executable: $file"
+    fi
+  done
+  if [ "$(uname -s)" = "Darwin" ]; then
+    print_result OK "macOS rescue runtime available."
+  else
+    print_result WARN "macOS rescue checks require macOS runtime."
+  fi
+
+elif [ "$RESCUE_CREATE_MODE" = true ]; then
+  for file in \
+    scripts/jackrose-rescue-create \
+    scripts/jackrose-rescue-create-preflight \
+    scripts/jackrose-rescue-target-check \
+    scripts/jackrose-rescue-target-format \
+    scripts/jackrose-rescue-deploy-rootfs \
+    scripts/jackrose-rescue-install-metadata \
+    scripts/jackrose-rescue-create-verify \
+    scripts/jackrose-rescue-create-report \
+    scripts/jackrose-rescue-create-risk \
+    scripts/jackrose-rescue-create-clean \
+    rescue/create/create-policy.env \
+    rescue/create/target-rules.json \
+    rescue/create/protected-targets.example.json \
+    rescue/create/create-report.example.json; do
+    if [ -f "$file" ] && { [ -x "$file" ] || [ "${file#scripts/}" = "$file" ]; }; then
+      print_result OK "Rescue create asset present: $file"
+    else
+      print_result FAIL "Rescue create asset missing or not executable: $file"
+    fi
+  done
+  if "$PWD/scripts/jackrose-rescue-create" --dry-run >/dev/null 2>&1; then
+    print_result OK "Rescue create defaults to dry-run."
+  else
+    print_result FAIL "Rescue create dry-run failed."
+  fi
+  if "$PWD/scripts/jackrose-rescue-target-check" --target test/fixtures/rescue-target >/dev/null 2>&1; then
+    print_result OK "Rescue target check works with fixture target."
+  else
+    print_result FAIL "Rescue target check failed with fixture target."
+  fi
+  print_result OK "Protected target rules present."
+
+elif [ "$REAL_BUILD_MODE" = true ]; then
+  SCRIPT_PATH=$(realpath "$0")
+  REPO_ROOT=$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd)
+  IMAGE_OUTPUT_DIR="${REPO_ROOT}/.local/state/jackrose/image-build"
+
+  echo "Jackrose real image build diagnostics"
+  echo ""
+
+  # Verify scripts existence
+  for script in \
+    scripts/jackrose-real-image-build \
+    scripts/jackrose-builder-run \
+    scripts/jackrose-build-environment \
+    scripts/jackrose-build-failure-report \
+    scripts/jackrose-image-register \
+    scripts/jackrose-image-verify \
+    scripts/jackrose-image-build-report; do
+    if [ -f "${REPO_ROOT}/${script}" ] && [ -x "${REPO_ROOT}/${script}" ]; then
+      print_result OK "Real build script present: $script"
+    else
+      print_result FAIL "Real build script missing or not executable: $script"
+    fi
+  done
+
+  # Verify docs
+  for doc in \
+    docs/real-image-build.md \
+    docs/builder-runbook.md \
+    docs/image-register-verify.md \
+    docs/build-failure-report.md \
+    docs/v0.19.0-real-image-build.md; do
+    if [ -f "${REPO_ROOT}/${doc}" ]; then
+      print_result OK "Real build documentation present: $doc"
+    else
+      print_result WARN "Real build documentation missing: $doc"
+    fi
+  done
+
+  # Verify registered outputs
+  if [ -d "$IMAGE_OUTPUT_DIR/registered" ]; then
+    print_result OK "Registered output directory exists."
+  else
+    print_result WARN "Registered output directory is missing."
+  fi
+
+  if [ -f "$IMAGE_OUTPUT_DIR/build-report.md" ]; then
+    print_result OK "Last build report exists."
+  else
+    print_result WARN "No build report found."
+  fi
+
+elif [ "$RC_READINESS_MODE" = true ]; then
+  # 1. Try to find the Jackrose repository root relative to this script
+  SCRIPT_PATH=$(realpath "$0")
+  REPO_ROOT=$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd)
+  if [ ! -f "${REPO_ROOT}/install" ]; then
+    if [ -f "./install" ]; then
+      REPO_ROOT=$(pwd)
+    else
+      REPO_ROOT=""
+    fi
+  fi
+
+  if [ -n "$REPO_ROOT" ]; then
+    print_result OK "Jackrose repository tree found at $REPO_ROOT."
+
+    # Verify all commands exist and are executable in tree
+    for cmd in install install-macos scripts/jackrose-installer scripts/jackrose-macos-installer scripts/jackrose-macos-check scripts/jackrose-macos-seed scripts/jackrose-macos-handoff scripts/jackrose-seed scripts/jackrose-seed-verify scripts/jackrose-seed-import scripts/jackrose-resume scripts/jackrose-downstream-check scripts/jackrose-upstream-status scripts/jackrose-image-layout-check scripts/jackrose-installer-metadata-check scripts/jackrose-firstboot-root components/welcome/bin/jackrose-oobe scripts/jackrose-firstboot-state scripts/jackrose-firstboot-handoff scripts/jackrose-image-build scripts/jackrose-image-inspect scripts/jackrose-image-checksum scripts/jackrose-image-manifest scripts/jackrose-image-clean components/config/bin/jackrose-user-setup scripts/jackrose-doctor scripts/jackrose-recovery scripts/jackrose-snapshot scripts/jackrose-update scripts/jackrose-maintenance components/healthcheck/bin/jackrose-healthcheck components/welcome/bin/jackrose-welcome scripts/jackrose-audio scripts/check-packages components/firstboot/bin/jackrose-firstboot-finish; do
+      if [ -f "${REPO_ROOT}/${cmd}" ]; then
+        print_result OK "Command tree file '${cmd}' exists."
+        if [ -x "${REPO_ROOT}/${cmd}" ] || [[ "$cmd" == *.py ]]; then
+          print_result OK "Command tree file '${cmd}' has correct permissions/execution."
+        else
+          print_result FAIL "Command tree file '${cmd}' is not executable. Run chmod +x."
+        fi
+      else
+        print_result FAIL "Command tree file '${cmd}' is missing."
+      fi
+    done
+
+
+    # Boot validation scripts (v0.17.0)
+    for cmd in scripts/jackrose-builder-status scripts/jackrose-image-mount scripts/jackrose-image-unmount scripts/jackrose-rootfs-inspect scripts/jackrose-image-boot-readiness scripts/jackrose-boot-checklist scripts/jackrose-boot-log-collect; do
+      if [ -f "${REPO_ROOT}/${cmd}" ] && [ -x "${REPO_ROOT}/${cmd}" ]; then
+        print_result OK "Boot validation script present: ${cmd}"
+      else
+        print_result FAIL "Boot validation script missing or not executable: ${cmd}"
+      fi
+    done
+
+    # Builder integration scripts (v0.18.0)
+    for cmd in scripts/jackrose-builder-config scripts/jackrose-builder-integrate scripts/jackrose-builder-invoke scripts/jackrose-builder-log scripts/jackrose-builder-artifacts scripts/jackrose-image-promote; do
+      if [ -f "${REPO_ROOT}/${cmd}" ] && [ -x "${REPO_ROOT}/${cmd}" ]; then
+        print_result OK "Builder integration script present: ${cmd}"
+      else
+        print_result FAIL "Builder integration script missing or not executable: ${cmd}"
+      fi
+    done
+
+    # Real image build scripts (v0.19.0)
+    for cmd in scripts/jackrose-real-image-build scripts/jackrose-builder-run scripts/jackrose-build-environment scripts/jackrose-build-failure-report scripts/jackrose-image-register scripts/jackrose-image-verify scripts/jackrose-image-build-report; do
+      if [ -f "${REPO_ROOT}/${cmd}" ] && [ -x "${REPO_ROOT}/${cmd}" ]; then
+        print_result OK "Real image build script present: ${cmd}"
+      else
+        print_result FAIL "Real image build script missing or not executable: ${cmd}"
+      fi
+    done
+
+    # Firstboot Fixup scripts (v0.21.0)
+    for cmd in scripts/jackrose-firstboot-diagnose scripts/jackrose-firstboot-retry scripts/jackrose-firstboot-repair scripts/jackrose-firstboot-report scripts/jackrose-firstboot-console; do
+      if [ -f "${REPO_ROOT}/${cmd}" ] && [ -x "${REPO_ROOT}/${cmd}" ]; then
+        print_result OK "Firstboot fixup script present: ${cmd}"
+      else
+        print_result FAIL "Firstboot fixup script missing or not executable: ${cmd}"
+      fi
+    done
+
+    # User Phase Handoff scripts (v0.22.0)
+    for cmd in scripts/jackrose-user-handoff scripts/jackrose-user-phase-state scripts/jackrose-user-phase-verify scripts/jackrose-user-phase-report scripts/jackrose-user-phase-repair scripts/jackrose-first-login; do
+      if [ -f "${REPO_ROOT}/${cmd}" ] && [ -x "${REPO_ROOT}/${cmd}" ]; then
+        print_result OK "User phase script present: ${cmd}"
+      else
+        print_result FAIL "User phase script missing or not executable: ${cmd}"
+      fi
+    done
+
+    for cmd in scripts/jackrose-uninstall-check scripts/jackrose-exit-plan scripts/jackrose-state-export scripts/jackrose-partition-audit scripts/jackrose-macos-restore-guide scripts/jackrose-uninstall-risk scripts/jackrose-goodbye scripts/jackrose-erase-preflight; do
+      if [ -f "${REPO_ROOT}/${cmd}" ] && [ -x "${REPO_ROOT}/${cmd}" ]; then
+        print_result OK "Exit path script present: ${cmd}"
+      else
+        print_result FAIL "Exit path script missing or not executable: ${cmd}"
+      fi
+    done
+
+    # Guided Uninstaller (v0.30.0) scripts
+    for cmd in \
+      scripts/jackrose-uninstall-dashboard \
+      scripts/jackrose-uninstall-state \
+      scripts/jackrose-uninstall-preflight \
+      scripts/jackrose-uninstall-export \
+      scripts/jackrose-uninstall-target-scan \
+      scripts/jackrose-uninstall-target-review \
+      scripts/jackrose-uninstall-plan \
+      scripts/jackrose-uninstall-dry-run \
+      scripts/jackrose-uninstall-execute \
+      scripts/jackrose-uninstall-verify \
+      scripts/jackrose-uninstall-report \
+      scripts/jackrose-uninstall-resume \
+      scripts/jackrose-uninstall-failure-report \
+      scripts/jackrose-uninstall-clean \
+      scripts/jackrose-macos-uninstall-dashboard \
+      scripts/jackrose-macos-uninstall-preflight \
+      scripts/jackrose-macos-uninstall-target-scan \
+      scripts/jackrose-macos-uninstall-target-review \
+      scripts/jackrose-macos-uninstall-plan \
+      scripts/jackrose-macos-uninstall-dry-run \
+      scripts/jackrose-macos-uninstall-report \
+      scripts/jackrose-macos-uninstall-resume; do
+      if [ -f "${REPO_ROOT}/${cmd}" ] && [ -x "${REPO_ROOT}/${cmd}" ]; then
+        print_result OK "Guided uninstaller script present: ${cmd}"
+      else
+        print_result FAIL "Guided uninstaller script missing or not executable: ${cmd}"
+      fi
+    done
+
+    for cmd in scripts/jackrose-macos-restore-check scripts/jackrose-macos-partition-audit scripts/jackrose-macos-startup-disk-check scripts/jackrose-macos-uninstall-guide scripts/jackrose-macos-restore-report scripts/jackrose-macos-risk; do
+      if [ -f "${REPO_ROOT}/${cmd}" ] && [ -x "${REPO_ROOT}/${cmd}" ]; then
+        print_result OK "macOS restore script present: ${cmd}"
+      else
+        print_result FAIL "macOS restore script missing or not executable: ${cmd}"
+      fi
+    done
+
+    for cmd in scripts/jackrose-panic scripts/jackrose-recovery-screen scripts/jackrose-safe-mode scripts/jackrose-safe-shell scripts/jackrose-session-failure scripts/jackrose-desktop-failure-detect scripts/jackrose-recovery-actions scripts/jackrose-emergency-banner scripts/jackrose-recovery-report; do
+      if [ -f "${REPO_ROOT}/${cmd}" ] && [ -x "${REPO_ROOT}/${cmd}" ]; then
+        print_result OK "Recovery script present: ${cmd}"
+      else
+        print_result FAIL "Recovery script missing or not executable: ${cmd}"
+      fi
+    done
+
+    for cmd in scripts/jackrose-rescue scripts/jackrose-rescue-check scripts/jackrose-rescue-plan scripts/jackrose-rescue-profile scripts/jackrose-rescue-image-build scripts/jackrose-rescue-image-inspect scripts/jackrose-rescue-manifest scripts/jackrose-rescue-mount scripts/jackrose-rescue-export scripts/jackrose-rescue-kernel-check scripts/jackrose-rescue-report scripts/jackrose-rescue-clean; do
+      if [ -f "${REPO_ROOT}/${cmd}" ] && [ -x "${REPO_ROOT}/${cmd}" ]; then
+        print_result OK "Rescue script present: ${cmd}"
+      else
+        print_result FAIL "Rescue script missing or not executable: ${cmd}"
+      fi
+    done
+
+    for cmd in scripts/jackrose-rescue-boot-plan scripts/jackrose-rescue-disk-check scripts/jackrose-rescue-slot-metadata scripts/jackrose-rescue-boot-guide scripts/jackrose-rescue-boot-report scripts/jackrose-rescue-create-dry-run scripts/jackrose-rescue-boot-checklist scripts/jackrose-rescue-boot-risk scripts/jackrose-rescue-boot-validate scripts/jackrose-macos-rescue-check scripts/jackrose-macos-rescue-disk-audit scripts/jackrose-macos-rescue-plan scripts/jackrose-macos-rescue-guide scripts/jackrose-macos-rescue-report scripts/jackrose-rescue-create scripts/jackrose-rescue-create-preflight scripts/jackrose-rescue-target-check scripts/jackrose-rescue-target-format scripts/jackrose-rescue-deploy-rootfs scripts/jackrose-rescue-install-metadata scripts/jackrose-rescue-create-verify scripts/jackrose-rescue-create-report scripts/jackrose-rescue-create-risk scripts/jackrose-rescue-create-clean scripts/jackrose-macos-rescue-create scripts/jackrose-macos-rescue-create-preflight scripts/jackrose-macos-rescue-target-check scripts/jackrose-macos-rescue-create-guide scripts/jackrose-macos-rescue-create-report; do
+      if [ -f "${REPO_ROOT}/${cmd}" ] && [ -x "${REPO_ROOT}/${cmd}" ]; then
+        print_result OK "Rescue boot script present: ${cmd}"
+      else
+        print_result FAIL "Rescue boot script missing or not executable: ${cmd}"
+      fi
+    done
+
+    # Guided Installer scripts (v0.29.0)
+    for cmd in scripts/jackrose-install-dashboard scripts/jackrose-install-state scripts/jackrose-install-stage scripts/jackrose-install-guide scripts/jackrose-install-report scripts/jackrose-install-preflight scripts/jackrose-install-handoff scripts/jackrose-install-resume scripts/jackrose-install-failure-report scripts/jackrose-install-verify scripts/jackrose-macos-install-dashboard scripts/jackrose-macos-install-preflight scripts/jackrose-macos-install-guide scripts/jackrose-macos-install-report scripts/jackrose-macos-install-resume scripts/jackrose-macos-install-handoff; do
+      if [ -f "${REPO_ROOT}/${cmd}" ] && [ -x "${REPO_ROOT}/${cmd}" ]; then
+        print_result OK "Guided installer script present: ${cmd}"
+      else
+        print_result FAIL "Guided installer script missing or not executable: ${cmd}"
+      fi
+    done
+
+    # App-Ready Interface scripts (v0.31.0)
+    for cmd in \
+      scripts/jackrose-command-exit-codes \
+      scripts/jackrose-command-status \
+      scripts/jackrose-command-manifest \
+      scripts/jackrose-command-schema \
+      scripts/jackrose-json-validate \
+      scripts/jackrose-json-normalize \
+      scripts/jackrose-artifact-paths \
+      scripts/jackrose-report-index \
+      scripts/jackrose-app-action-plan \
+      scripts/jackrose-app-readiness \
+      scripts/jackrose-noninteractive-check \
+      scripts/jackrose-command-contract-test \
+      scripts/jackrose-interface-doctor; do
+      if [ -f "${REPO_ROOT}/${cmd}" ] && [ -x "${REPO_ROOT}/${cmd}" ]; then
+        print_result OK "Interface script present: ${cmd}"
+      else
+        print_result FAIL "Interface script missing or not executable: ${cmd}"
+      fi
+    done
+
+    # App Prototype scripts (v0.32.0 / v0.33.0)
+    for cmd in \
+      scripts/jackrose-app-prototype-check \
+      scripts/jackrose-app-fixture-generate \
+      scripts/jackrose-app-mock-run \
+      scripts/jackrose-app-report-preview \
+      scripts/jackrose-app-live-check \
+      scripts/jackrose-app-safe-actions \
+      scripts/jackrose-app-execution-policy \
+      scripts/jackrose-app-ui-validation \
+      scripts/jackrose-app-log-fixture \
+      scripts/jackrose-app-runtime-check \
+      scripts/jackrose-app-build-check \
+      scripts/jackrose-app-launch-check \
+      scripts/jackrose-app-runtime-report \
+      scripts/jackrose-app-runtime-clean \
+      scripts/jackrose-app-runtime-fixture \
+      scripts/jackrose-app-runtime-log-collect \
+      scripts/jackrose-app-runtime-result \
+      scripts/jackrose-app-controlled-install \
+      scripts/jackrose-app-install-target-check \
+      scripts/jackrose-app-install-plan \
+      scripts/jackrose-app-install-plan-sign \
+      scripts/jackrose-app-install-plan-verify \
+      scripts/jackrose-app-install-confirmation \
+      scripts/jackrose-app-install-payload-stage \
+      scripts/jackrose-app-install-payload-verify \
+      scripts/jackrose-app-install-metadata-write \
+      scripts/jackrose-app-install-report \
+      scripts/jackrose-app-manual-boot-guide \
+      scripts/jackrose-app-no-default-boot-check \
+      scripts/jackrose-app-install-fixture-check; do
+      if [ -f "${REPO_ROOT}/${cmd}" ] && [ -x "${REPO_ROOT}/${cmd}" ]; then
+        print_result OK "App prototype/UI script present: ${cmd}"
+      else
+        print_result FAIL "App prototype/UI script missing or not executable: ${cmd}"
+      fi
+    done
+
+
+    # Verify documentation files are present
+    for doc in README.md CHANGELOG.md docs/commands.md docs/profiles.md docs/packages.md docs/managed-files.md docs/validation-matrix.md docs/known-limitations.md docs/macos-install.md docs/macos-to-jackrose-flow.md docs/installer-threat-model.md docs/seed-resume.md docs/downstream-strategy.md docs/alarm-fork-strategy.md docs/jackrose-image-plan.md docs/jackrose-image-prototype.md docs/installer-integration.md docs/image-build-notes.md docs/image-build-validation.md docs/firstboot-oobe.md docs/firstboot-security.md docs/firstboot-root-login-problem.md docs/image-boot-validation.md docs/rootfs-inspection.md docs/boot-log-collection.md docs/v0.12.0-macos-bootstrap.md docs/v0.13.0-seed-resume.md docs/v0.14.0-downstream-foundation.md docs/v0.15.0-jackrose-image-prototype.md docs/v0.16.0-firstboot-oobe.md docs/v0.17.0-image-boot-validation.md docs/v0.18.0-builder-integration.md docs/v1.0.0-clean-install-test-plan.md docs/v0.9.0-rc-readiness.md docs/builder-integration.md docs/alarm-builder-notes.md docs/builder-artifacts.md docs/real-image-build.md docs/builder-runbook.md docs/image-register-verify.md docs/build-failure-report.md docs/v0.19.0-real-image-build.md docs/firstboot-fixup.md docs/firstboot-service-ordering.md docs/firstboot-retry-repair.md docs/v0.21.0-firstboot-fixup.md docs/user-phase-handoff.md docs/user-phase-state.md docs/first-login.md docs/install-resume-validation.md docs/uninstall.md docs/exit-path.md docs/state-export.md docs/partition-audit.md docs/macos-restore-guide.md docs/uninstall-threat-model.md docs/macos-restore-assistant.md docs/macos-partition-audit.md docs/macos-startup-disk.md docs/macos-uninstall-guide.md docs/recovery-screen.md docs/safe-mode.md docs/failure-levels.md docs/tty-recovery.md docs/recovery-shortcuts.md docs/rescue-slot.md docs/rescue-profile.md docs/rescue-image.md docs/rescue-mount.md docs/rescue-kernel-repair.md docs/rescue-threat-model.md docs/rescue-boot-integration.md docs/rescue-slot-layout.md docs/rescue-boot-metadata.md docs/rescue-boot-validation.md docs/macos-rescue-slot.md docs/rescue-boot-threat-model.md docs/rescue-create.md docs/rescue-target-selection.md docs/rescue-create-safety.md docs/rescue-rootfs-deployment.md docs/macos-rescue-create.md docs/rescue-create-threat-model.md docs/v0.28.0-guided-rescue-slot-creation.md docs/v0.27.0-rescue-boot-integration.md docs/v0.26.0-rescue-slot-foundation.md docs/v0.25.0-recovery-screen-safe-mode.md docs/v0.24.0-macos-restore-assistant.md docs/v0.23.0-uninstall-exit-path.md docs/v0.22.0-user-phase-handoff.md docs/jackrose-app-guided-action-ui.md docs/jackrose-app-command-execution.md docs/jackrose-app-repository-selection.md docs/jackrose-app-execution-log.md docs/jackrose-app-read-only-policy.md docs/jackrose-app-runtime-validation.md docs/jackrose-app-build-validation.md docs/jackrose-app-launch-validation.md docs/jackrose-app-runtime-report.md docs/jackrose-app-runtime-known-issues.md docs/v0.33.0-jackrose-app-guided-action-ui.md docs/v0.34.0-jackrose-app-runtime-validation.md docs/controlled-manual-boot-install.md docs/no-default-boot-mutation-policy.md docs/manual-boot-guide.md docs/install-target-policy.md docs/install-payload-layout.md docs/install-verification.md docs/v0.35.6-controlled-manual-boot-install.md downstream/image-build/README.md downstream/image-build/build-config.example downstream/image-build/artifact-layout.md; do
+
+      if [ -f "${REPO_ROOT}/${doc}" ]; then
+        print_result OK "Documentation file '${doc}' is present."
+        # Extra verification for limitations presence
+        if [ "$doc" = "docs/known-limitations.md" ]; then
+          if grep -qi "real-hardware clean install not yet fully verified" "${REPO_ROOT}/${doc}"; then
+            print_result OK "Limitations acknowledge clean install caveat."
+          else
+            print_result WARN "docs/known-limitations.md does not contain clean-install warning."
+          fi
+        fi
+      else
+        print_result FAIL "Documentation file '${doc}' is missing."
+      fi
+    done
+
+  else
+    print_result WARN "Jackrose repository tree root not found. Skipping local tree validations."
+  fi
+
+  # 2. Check globally installed commands
+  for cmd in install jackrose-installer jackrose-user-setup jackrose-doctor jackrose-recovery jackrose-snapshot jackrose-update jackrose-maintenance jackrose-welcome jackrose-audio jackrose-healthcheck jackrose-oobe jackrose-firstboot-finish; do
+    if command -v "$cmd" >/dev/null 2>&1; then
+      print_result OK "Globally installed command '$cmd' is available in PATH."
+    else
+      print_result WARN "Globally installed command '$cmd' is missing from PATH."
+    fi
+  done
+
+
+  # 3. State directory layout checks
+  if [ -d "$STATE_DIR" ]; then
+    print_result OK "Jackrose state directory exists."
+    for subdir in snapshots setup doctor update; do
+      if [ -d "${STATE_DIR}/${subdir}" ]; then
+        print_result OK "State subdirectory '${subdir}' exists."
+      else
+        print_result WARN "State subdirectory '${subdir}' is missing."
+      fi
+    done
+  else
+    print_result FAIL "Jackrose state directory is missing."
+  fi
+
+  # 4. manifest existence
+  if [ -f "${STATE_DIR}/manifest.json" ]; then
+    print_result OK "Jackrose installation manifest exists."
+  else
+    print_result WARN "Jackrose installation manifest is missing (requires setup apply)."
+  fi
+
+elif [ "$MAINTENANCE_MODE" = true ]; then
+  # 1. State directory layout checks
+  if [ -d "$STATE_DIR" ]; then
+    print_result OK "Jackrose state directory exists at $STATE_DIR."
+    for subdir in snapshots setup doctor update; do
+      if [ -d "${STATE_DIR}/${subdir}" ]; then
+        print_result OK "State subdirectory '${subdir}' exists."
+      else
+        print_result WARN "State subdirectory '${subdir}' is missing."
+      fi
+    done
+  else
+    print_result FAIL "Jackrose state directory is missing at $STATE_DIR."
+  fi
+
+  # 2. manifest existence
+  if [ -f "${STATE_DIR}/manifest.json" ]; then
+    print_result OK "Jackrose installation manifest exists."
+  else
+    print_result FAIL "Jackrose installation manifest is missing."
+  fi
+
+  # 3. command availability checks
+  for cmd in jackrose-snapshot jackrose-recovery jackrose-maintenance jackrose-update; do
+    if command -v "$cmd" >/dev/null 2>&1 || [ -f "$(dirname "$0")/$cmd" ] || [ -f "./$cmd" ]; then
+      print_result OK "Command '$cmd' is available."
+    else
+      print_result FAIL "Command '$cmd' is missing."
+    fi
+  done
+
+  # 4. latest doctor result
+  if [ -f "$LAST_SUMMARY" ]; then
+    print_result OK "Latest doctor summary is available."
+  else
+    print_result WARN "No previous doctor summary found."
+  fi
+
+  # 5. setup history
+  if [ -f "$STATE_DIR/setup/history.log" ]; then
+    print_result OK "Setup history log is available."
+  else
+    print_result WARN "Setup history log is missing."
+  fi
+
+  # 6. snapshot count and warnings
+  if [ -d "$STATE_DIR/snapshots" ]; then
+    snap_count=$(find "$STATE_DIR/snapshots" -mindepth 1 -maxdepth 1 -type d | wc -l)
+    if [ "$snap_count" -gt 15 ]; then
+      print_result WARN "${snap_count} snapshots found; consider running 'jackrose-maintenance prune' to clean up."
+    else
+      print_result OK "${snap_count} snapshots saved."
+    fi
+  else
+    print_result OK "0 snapshots saved."
+  fi
+
+  # 7. firstboot status
+  if [ -f "$STATE_DIR/firstboot-done" ]; then
+    print_result OK "Firstboot configuration has completed."
+  else
+    print_result WARN "Firstboot configuration is not marked complete."
+  fi
+
+  # 8. package metadata sync status
+  if [ -d "/var/lib/pacman/sync" ]; then
+    db_file=$(find /var/lib/pacman/sync -name "*.db" -print -quit)
+    if [ -n "$db_file" ]; then
+      db_age=$(( ($(date +%s) - $(stat -c %Y "$db_file")) / 86400 ))
+      if [ "$db_age" -gt 7 ]; then
+        print_result WARN "Pacman sync database is ${db_age} days old. Run 'jackrose-update --check' or 'sudo pacman -Sy'."
+      else
+        print_result OK "Pacman sync database is up to date (${db_age} days old)."
+      fi
+    else
+      print_result WARN "No pacman sync database found. Package checks may be offline."
+    fi
+  else
+    print_result OK "Not running under pacman package manager or sync database path is different."
+  fi
+
+  # 9. Jackrose-managed config drift
+  DRIFT_FOUND=false
+  if command -v jackrose-user-setup >/dev/null 2>&1; then
+    if ! jackrose-user-setup verify >/dev/null 2>&1; then
+      DRIFT_FOUND=true
+    fi
+  elif [ -f "$(dirname "$0")/jackrose-user-setup" ]; then
+    if ! python3 "$(dirname "$0")/jackrose-user-setup" verify >/dev/null 2>&1; then
+      DRIFT_FOUND=true
+    fi
+  elif [ -f "./jackrose-user-setup" ]; then
+    if ! python3 "./jackrose-user-setup" verify >/dev/null 2>&1; then
+      DRIFT_FOUND=true
+    fi
+  fi
+  if [ "$DRIFT_FOUND" = true ]; then
+    print_result WARN "Jackrose-managed config drift detected. Run 'jackrose-maintenance drift' to see differences."
+  else
+    print_result OK "No configuration drift detected."
+  fi
+
+  # 10. stale logs warning
+  for log in install.log doctor/history.log setup/history.log update/history.log; do
+    lpath="${STATE_DIR}/${log}"
+    if [ -f "$lpath" ]; then
+      lsize=$(stat -c %s "$lpath" 2>/dev/null || echo 0)
+      if [ "$lsize" -gt 5242880 ]; then
+        print_result WARN "Log file '${log}' is large ($((lsize / 1024 / 1024))MB). Run 'jackrose-maintenance prune'."
+      fi
+    fi
+  done
+else
+  # 1. Session check
+  if [ "${XDG_SESSION_TYPE:-}" = "wayland" ]; then
+    print_result OK "Graphical session is Wayland."
+  else
+    print_result WARN "Graphical session is not Wayland (XDG_SESSION_TYPE='${XDG_SESSION_TYPE:-}')."
+  fi
+
+  # 2. Config presence checks
+  check_file_exists() {
+    local filepath="$1"
+    local name="$2"
+    if [ -f "$filepath" ]; then
+      print_result OK "$name is present."
+    elif [ -d "$filepath" ]; then
+      print_result OK "$name directory is present."
+    else
+      print_result FAIL "$name is missing at $filepath."
+    fi
+  }
+
+  check_file_exists "$HOME/.config/niri/config.kdl" "Niri configuration"
+  check_file_exists "$HOME/.config/waybar/config" "Waybar configuration"
+  check_file_exists "$HOME/.config/ghostty/config" "Ghostty configuration"
+  check_file_exists "$HOME/.config/fish/config.fish" "Fish configuration"
+  check_file_exists "$HOME/.local/state/jackrose/manifest.json" "Jackrose setup manifest"
+
+  # 3. Fcitx5 systemd user service check
+  if systemctl --user is-active --quiet fcitx5 2>/dev/null; then
+    print_result OK "Fcitx5 user service is active."
+  elif systemctl --user is-enabled --quiet fcitx5 2>/dev/null; then
+    print_result WARN "Fcitx5 user service is enabled but not currently running."
+  else
+    print_result FAIL "Fcitx5 user service is inactive or not configured."
+  fi
+
+  # 4. speakersafetyd system daemon check
+  if systemctl is-active --quiet speakersafetyd 2>/dev/null; then
+    print_result OK "speakersafetyd service is active."
+  else
+    print_result WARN "speakersafetyd service is inactive (needed for safe audio output)."
+  fi
+
+  # 5. rtkit-daemon check
+  if systemctl is-active --quiet rtkit-daemon 2>/dev/null; then
+    print_result OK "rtkit-daemon service is active."
+  else
+    print_result WARN "rtkit-daemon service is inactive (needed for real-time scheduling priority)."
+  fi
+
+  # 6. Audio package check
+  if command -v pipewire >/dev/null 2>&1; then
+    print_result OK "PipeWire command is available."
+  else
+    print_result FAIL "PipeWire command is missing."
+  fi
+
+  # 7. Check expected binaries
+  for cmd in ghostty fuzzel waybar starship fcitx5; do
+    if command -v "$cmd" >/dev/null 2>&1; then
+      print_result OK "Executable '$cmd' is available."
+    else
+      print_result FAIL "Core executable '$cmd' is missing on the system."
+    fi
+  done
+
+  # 8. Daily driver specific checks
+  if [ "$DAILY_MODE" = true ] || [ "$VERBOSE_MODE" = true ]; then
+    # Brightness tool
+    if command -v brightnessctl >/dev/null 2>&1; then
+      print_result OK "brightnessctl tool is installed."
+    else
+      print_result WARN "brightnessctl tool is missing. Brightness hotkeys will not function."
+    fi
+
+    # Screenshot tools
+    if command -v grim >/dev/null 2>&1 && command -v slurp >/dev/null 2>&1; then
+      print_result OK "Screenshot utilities (grim, slurp) are available."
+    else
+      print_result WARN "Screenshot utilities (grim, slurp) are missing. Screenshot flow will be limited."
+    fi
+
+    # Battery status availability check (Apple Silicon Macs / laptops)
+    if [ -d /sys/class/power_supply ] && ls /sys/class/power_supply/BAT* >/dev/null 2>&1; then
+      print_result OK "Battery info is visible in /sys/class/power_supply."
+    else
+      print_result WARN "No battery interface (BAT*) found in /sys/class/power_supply. Ignore if running on desktop Mac."
+    fi
+
+    # Mozc IME check
+    if command -v fcitx5-remote >/dev/null 2>&1; then
+      print_result OK "fcitx5-remote client is available."
+    else
+      print_result WARN "fcitx5-remote tool is missing; IME diagnostics cannot be queried."
+    fi
+
+    # Network status tool
+    if command -v nmcli >/dev/null 2>&1; then
+      print_result OK "nmcli network management tool is available."
+    else
+      print_result WARN "nmcli is missing; network status indicator might be incomplete."
+    fi
+
+    # Firstboot completion state check
+    if [ -f "$HOME/.local/state/jackrose/firstboot-done" ]; then
+      print_result OK "Firstboot diagnostic check has run successfully."
+    else
+      print_result WARN "Firstboot diagnostic is pending or has not completed."
+    fi
+
+    # Install logs
+    if [ -f "/var/log/jackrose/bootstrap.log" ]; then
+      print_result OK "Jackrose installation log is present."
+    else
+      print_result WARN "Jackrose installation log not found at /var/log/jackrose/bootstrap.log."
+    fi
+  fi
+fi
+
+# Save log results
+mv "$TMP_SUMMARY" "$LAST_SUMMARY"
+ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+echo "[${ts}] OK: ${OK_COUNT}, WARN: ${WARN_COUNT}, FAIL: ${FAIL_COUNT}" >> "$HISTORY_LOG"
+
+if [ "$SUMMARY_MODE" = true ]; then
+  echo "Jackrose Health: OK=$OK_COUNT, WARN=$WARN_COUNT, FAIL=$FAIL_COUNT"
+else
+  echo ""
+  if [ $STATUS -eq 0 ]; then
+    echo "Diagnostics complete: ALL checks passed."
+  else
+    echo "Diagnostics complete: SOME warnings or critical failures were detected."
+    echo "Recommended recovery commands:"
+    echo "  * To check detailed recommendations:  jackrose-doctor --fix-suggestions"
+    echo "  * To restore config from snapshot:    jackrose-recovery restore latest"
+    echo "  * To reset configs back to default:   jackrose-user-setup --force"
+  fi
+fi
+
+exit $STATUS

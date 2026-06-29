@@ -1,0 +1,20 @@
+# Maintainer: Yasuno <yasuno@example.invalid>
+
+pkgname=jackrose-preinstall
+pkgver=1.0.0
+pkgrel=1
+pkgdesc='Jackrose root-phase preinstall dashboard and setup wizard'
+url='https://github.com/Yasuno-5555/Jackrose'
+arch=('any')
+license=('custom')
+depends=('bash' 'pacman' 'sudo')
+optdepends=(
+  'dialog: preferred TUI backend for guided preinstall'
+  'libnewt: whiptail backend for guided preinstall'
+)
+source=('jackrose-preinstall')
+sha256sums=('SKIP')
+
+package() {
+  install -Dm755 "${srcdir}/jackrose-preinstall" "${pkgdir}/usr/bin/jackrose-preinstall"
+}

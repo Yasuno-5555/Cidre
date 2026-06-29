@@ -1,0 +1,421 @@
+#!/bin/bash
+# jackrose-welcome: Jackrose first-login interactive welcome dashboard
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Source shared UI if available
+if [ -f "$SCRIPT_DIR/../lib/jackrose/ui.sh" ]; then
+  # shellcheck disable=SC1091
+  source "$SCRIPT_DIR/../lib/jackrose/ui.sh"
+fi
+
+NO_COLOR=false
+SKIP_INTRO=false
+
+FIRST_RUN=false
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --no-color) NO_COLOR=true; shift ;;
+    --skip-intro) SKIP_INTRO=true; shift ;;
+    --first-run) FIRST_RUN=true; shift ;;
+    --help|-h)
+      echo "Usage: jackrose-welcome [--skip-intro] [--no-color] [--first-run]"
+      echo "Jackrose first-login welcome dashboard."
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      exit 1
+      ;;
+  esac
+done
+
+C_GREEN='\e[32m'; C_YELLOW='\e[33m'; C_RED='\e[31m'
+C_CYAN='\e[36m'; C_MAGENTA='\e[35m'; C_BOLD='\e[1m'; C_RESET='\e[0m'
+if [ "$NO_COLOR" = true ]; then
+  C_GREEN='' C_YELLOW='' C_RED='' C_CYAN='' C_MAGENTA='' C_BOLD='' C_RESET=''
+  export C_GREEN C_YELLOW C_RED C_CYAN C_MAGENTA C_BOLD C_RESET
+fi
+
+# =====================================================================
+show_banner() {
+  clear
+  echo -e "${C_CYAN}====================================================${C_RESET}"
+  echo -e "${C_MAGENTA}          Welcome to Jackrose Linux Desktop!          ${C_RESET}"
+  echo -e "${C_CYAN}====================================================${C_RESET}"
+  echo "  The cider after Homebrew."
+  echo ""
+}
+
+show_keybindings() {
+  echo -e "${C_BOLD}Keybindings (Basic Navigation):${C_RESET}"
+  echo -e "  ${C_YELLOW}Super + Enter${C_RESET}      Open Ghostty Terminal"
+  echo -e "  ${C_YELLOW}Super + Alt + T${C_RESET}    Open Fallback Terminal (foot)"
+  echo -e "  ${C_YELLOW}Super + D${C_RESET}          Open fuzzel Launcher"
+  echo -e "  ${C_YELLOW}Super + Q${C_RESET}          Close Window"
+  echo -e "  ${C_YELLOW}Super + Shift + E${C_RESET}  Exit Graphical Session (Logout)"
+  echo -e "  ${C_YELLOW}Super + Shift + R${C_RESET}  Reload Niri Configuration"
+  echo -e "  ${C_YELLOW}Super + F${C_RESET}          Toggle Fullscreen"
+  echo -e "  ${C_YELLOW}Print${C_RESET}              Take screenshot"
+  echo ""
+}
+
+show_maintenance() {
+  echo -e "${C_BOLD}Maintenance & Recovery:${C_RESET}"
+  echo "  Check desktop health:"
+  echo -e "    ${C_YELLOW}jackrose-doctor --daily${C_RESET}"
+  echo "  If graphical session breaks (Ctrl+Alt+F2):"
+  echo -e "    ${C_YELLOW}jackrose-recovery status${C_RESET}"
+  echo -e "    ${C_YELLOW}jackrose-repair --session${C_RESET}"
+  echo "  Audio issues:"
+  echo -e "    ${C_YELLOW}jackrose-repair --audio${C_RESET}"
+  echo -e "    ${C_YELLOW}jackrose-audio profile stable${C_RESET}"
+  echo ""
+}
+
+# =====================================================================
+# Interactive actions
+# =====================================================================
+
+action_input_method() {
+  echo ""
+  echo "=== Input Method Setup ==="
+  echo ""
+  echo "Fcitx5 with Mozc (Japanese) is configured by default."
+  echo "Toggle IME: Ctrl + Space"
+  echo ""
+
+  if systemctl --user is-active --quiet fcitx5 2>/dev/null; then
+    echo "[OK] fcitx5 is running"
+  else
+    echo "[WARN] fcitx5 is not running"
+    echo "Start it with: systemctl --user start fcitx5"
+  fi
+
+  echo ""
+  echo "To add more input methods:"
+  echo "  fcitx5-configtool"
+  echo ""
+  read -r -p "Press Enter to continue..." _
+}
+
+action_test_audio() {
+  echo ""
+  echo "=== Audio Test ==="
+  echo ""
+
+  # Run quick audio status
+  if systemctl --user is-active --quiet pipewire 2>/dev/null && \
+     systemctl --user is-active --quiet wireplumber 2>/dev/null; then
+    echo "[OK] PipeWire and WirePlumber are running"
+
+    if systemctl is-active --quiet speakersafetyd 2>/dev/null; then
+      echo "[OK] speakersafetyd is running"
+    else
+      echo "[WARN] speakersafetyd is not running — audio may be unsafe at high volume"
+    fi
+
+    echo ""
+    echo "Current volume:"
+    if command -v wpctl >/dev/null 2>&1; then
+      wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>/dev/null || echo "  (could not query)"
+    fi
+
+    echo ""
+    echo "Audio profile:"
+    local conf="$HOME/.config/wireplumber/wireplumber.conf.d/99-jackrose-audio.conf"
+    if [ -f "$conf" ]; then
+      if grep -q "node.quantum = 1024" "$conf" 2>/dev/null; then
+        echo "  stable (recommended — fixes seek pop-noises)"
+      elif grep -q "node.quantum = 512" "$conf" 2>/dev/null; then
+        echo "  balanced"
+      elif grep -q "node.quantum = 256" "$conf" 2>/dev/null; then
+        echo "  low-latency"
+      else
+        echo "  custom"
+      fi
+    else
+      echo "  default (not yet configured)"
+      echo "  Run: jackrose-audio profile stable"
+    fi
+  else
+    echo "[FAIL] Audio services are not running"
+    echo "Run: jackrose-repair --audio"
+  fi
+
+  echo ""
+  read -r -p "Press Enter to continue..." _
+}
+
+action_choose_terminal() {
+  echo ""
+  echo "=== Choose Default Terminal ==="
+  echo ""
+  echo "[1] Ghostty (recommended — GPU-accelerated)"
+  echo "[2] foot (lightweight fallback)"
+  echo ""
+
+  read -r -p "Select option [1-2] (default: 1): " opt
+
+  case "$opt" in
+    2)
+      echo "Setting foot as default terminal..."
+      mkdir -p "$HOME/.config/jackrose"
+      echo "foot" > "$HOME/.config/jackrose/default-terminal"
+      echo "[OK] Default terminal set to foot"
+      ;;
+    *)
+      echo "Keeping Ghostty as default terminal."
+      mkdir -p "$HOME/.config/jackrose"
+      echo "ghostty" > "$HOME/.config/jackrose/default-terminal"
+      echo "[OK] Default terminal set to Ghostty"
+      ;;
+  esac
+
+  echo ""
+  echo "Tip: Super+Enter opens Ghostty, Super+Alt+T opens foot as fallback."
+  echo ""
+  read -r -p "Press Enter to continue..." _
+}
+
+action_choose_shell() {
+  echo ""
+  echo "=== Choose Default Shell ==="
+  echo ""
+  echo "[1] fish (recommended — friendly, modern)"
+  echo "[2] bash (standard, widely compatible)"
+  echo ""
+
+  read -r -p "Select option [1-2] (default: 1): " opt
+
+  case "$opt" in
+    2)
+      echo "Keeping bash as default shell."
+      echo "[OK] Default shell is bash"
+      ;;
+    *)
+      if command -v fish >/dev/null 2>&1; then
+        echo "Fish shell is available."
+        echo "To set fish as your default: chsh -s $(which fish)"
+        echo ""
+        echo "Or add to ~/.bashrc: exec fish"
+        echo "[OK] fish is ready to use"
+      else
+        echo "[WARN] fish is not installed."
+        echo "Install with: sudo pacman -S fish"
+      fi
+      ;;
+  esac
+
+  echo ""
+  read -r -p "Press Enter to continue..." _
+}
+
+action_show_docs() {
+  echo ""
+  echo "=== Jackrose Documentation ==="
+  echo ""
+  echo "Available docs (in the Jackrose repository):"
+  echo "  README.md              — Project overview"
+  echo "  INSTALL.md             — Installation guide"
+  echo "  docs/install.md        — Detailed install docs"
+  echo "  docs/recovery.md       — Recovery procedures"
+  echo "  docs/troubleshooting.md — Common issues"
+  echo ""
+  echo "Online:"
+  echo "  https://github.com/Yasuno-5555/Jackrose"
+  echo ""
+  read -r -p "Press Enter to continue..." _
+}
+
+# =====================================================================
+# Main loop
+# =====================================================================
+
+main_loop() {
+  while true; do
+    show_banner
+
+    if [ "$SKIP_INTRO" = false ]; then
+      show_keybindings
+    fi
+
+    echo -e "${C_BOLD}Recommended next steps:${C_RESET}"
+    echo "  [1] Set up input method"
+    echo "  [2] Test audio"
+    echo "  [3] Choose terminal: foot / ghostty"
+    echo "  [4] Choose shell: bash / fish"
+    echo "  [5] Open Jackrose docs"
+    echo "  [6] Show keybindings"
+    echo "  [7] System diagnostics"
+    echo "  [0] Exit"
+    echo ""
+
+    read -r -p "Select option [0-7]: " opt
+
+    case "$opt" in
+      1) action_input_method ;;
+      2) action_test_audio ;;
+      3) action_choose_terminal ;;
+      4) action_choose_shell ;;
+      5) action_show_docs ;;
+      6)
+        clear
+        show_banner
+        show_keybindings
+        show_maintenance
+        read -r -p "Press Enter to return to menu..." _
+        ;;
+      7)
+        echo ""
+        echo "Running quick diagnostics..."
+        if [ -x "$SCRIPT_DIR/jackrose-doctor" ]; then
+          "$SCRIPT_DIR/jackrose-doctor" --daily
+        else
+          echo "[WARN] jackrose-doctor not found"
+        fi
+        echo ""
+        read -r -p "Press Enter to return to menu..." _
+        ;;
+      0)
+        echo ""
+        echo "Enjoy Jackrose!"
+        echo "Run 'jackrose-welcome' anytime to see this menu again."
+        echo ""
+        exit 0
+        ;;
+      *)
+        echo "Invalid option."
+        sleep 1
+        ;;
+    esac
+  done
+}
+
+action_optimized_experience() {
+  clear
+  show_banner
+  echo -e "${C_BOLD}=== Optimized Jackrose Experience Upgrade (Placeholder) ===${C_RESET}"
+  echo ""
+  echo "Jackrose can later build and configure the optimized desktop experience:"
+  echo "  - Terminal: Ghostty (custom build)"
+  echo "  - Compositor: niri-jackrose (optimized build)"
+  echo "  - Shell: fish shell (modern friendly prompt)"
+  echo "  - Custom configuration tuning"
+  echo ""
+  echo "This feature is currently a placeholder and will be fully automated in the next phase."
+  echo "Currently falling back to: foot terminal + upstream niri compositor."
+  echo ""
+  read -r -p "Press Enter to return to setup..." _
+}
+
+first_run_flow() {
+  local welcome_done="/var/lib/jackrose/welcome.done"
+  local log_file="/var/log/jackrose/experience-upgrade.log"
+
+  # If already done, skip first run but check state
+  if [ -f "$welcome_done" ]; then
+    echo "Jackrose Welcome setup already completed."
+    exit 0
+  fi
+
+  while true; do
+    show_banner
+    echo -e "${C_BOLD}=== Jackrose Desktop First-Run Setup ===${C_RESET}"
+    echo "Current desktop:"
+    echo "  Baseline Jackrose Desktop"
+    echo "  - upstream niri"
+    echo "  - foot"
+    echo "  - fuzzel"
+    echo "  - waybar"
+    echo ""
+    echo "Recommended:"
+    echo "  Build Optimized Jackrose Experience"
+    echo "  - Ghostty"
+    echo "  - fish"
+    echo "  - niri-jackrose"
+    echo ""
+    echo "This upgrade process may take a while."
+    echo ""
+    echo "Options:"
+    echo "  [1] Build optimized experience"
+    echo "  [2] Skip for now"
+    echo "  [3] View optimized setup status"
+    echo "  [4] View logs"
+    echo "  [5] Open repair tools (diagnostics)"
+    echo "  [6] Finish Welcome"
+    echo ""
+    
+    read -r -p "Select option [1-6]: " opt
+    case "$opt" in
+      1)
+        echo "Launching upgrade pipeline..."
+        if command -v jackrose-experience-upgrade >/dev/null 2>&1; then
+          sudo jackrose-experience-upgrade --run || echo "Upgrade failed."
+        else
+          # Fallback to local script if not in path yet
+          sudo "$SCRIPT_DIR/jackrose-experience-upgrade" --run || echo "Upgrade failed."
+        fi
+        read -r -p "Press Enter to return to menu..." _
+        ;;
+      2)
+        echo "Skipping upgrade for now."
+        exit 0
+        ;;
+      3)
+        echo ""
+        if command -v jackrose-experience-upgrade >/dev/null 2>&1; then
+          jackrose-experience-upgrade --status
+        else
+          "$SCRIPT_DIR/jackrose-experience-upgrade" --status
+        fi
+        echo ""
+        read -r -p "Press Enter to return to menu..." _
+        ;;
+      4)
+        echo ""
+        if [ -f "$log_file" ]; then
+          cat "$log_file"
+        else
+          echo "No upgrade log found at $log_file"
+        fi
+        echo ""
+        read -r -p "Press Enter to return to menu..." _
+        ;;
+      5)
+        echo ""
+        echo "Running quick diagnostics..."
+        if [ -x "$SCRIPT_DIR/jackrose-doctor" ]; then
+          "$SCRIPT_DIR/jackrose-doctor" --daily
+        else
+          echo "[WARN] jackrose-doctor not found"
+        fi
+        echo ""
+        read -r -p "Press Enter to return to menu..." _
+        ;;
+      6)
+        # Create welcome.done completion marker
+        mkdir -p /var/lib/jackrose
+        touch "$welcome_done"
+        echo ""
+        echo "Jackrose Welcome setup completed successfully!"
+        echo "Enjoy your Jackrose Desktop Experience."
+        echo ""
+        sleep 2
+        exit 0
+        ;;
+      *)
+        echo "Invalid option."
+        sleep 1
+        ;;
+    esac
+  done
+}
+
+if [ "$FIRST_RUN" = true ]; then
+  first_run_flow
+else
+  main_loop
+fi

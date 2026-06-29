@@ -2302,8 +2302,8 @@ impl State {
         windows.insert(
             self.niri.casting.dynamic_cast_id_for_portal.get(),
             gnome_shell_introspect::WindowProperties {
-                title: String::from("Cidre Dynamic Cast Target"),
-                app_id: String::from("cidre.desktop"),
+                title: String::from("Jackrose Dynamic Cast Target"),
+                app_id: String::from("jackrose.desktop"),
             },
         );
 

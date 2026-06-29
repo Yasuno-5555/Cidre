@@ -1,0 +1,143 @@
+#!/bin/bash
+# validate-jackrose-wrapper-selection: Validates selected-image.json structure and rules
+set -euo pipefail
+
+SELECTION=""
+POLICY=""
+STRICT=0
+
+usage() {
+  echo "Usage: $0 --selection <path> [--asset-policy <path>] [--strict]"
+  exit 1
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --selection)
+      if [ $# -lt 2 ]; then
+        echo "ERROR: --selection requires a path." >&2
+        exit 1
+      fi
+      SELECTION="$2"
+      shift 2
+      ;;
+    --asset-policy)
+      if [ $# -lt 2 ]; then
+        echo "ERROR: --asset-policy requires a path." >&2
+        exit 1
+      fi
+      POLICY="$2"
+      shift 2
+      ;;
+    --strict)
+      STRICT=1
+      shift
+      ;;
+    *)
+      echo "ERROR: Unknown option: $1" >&2
+      usage
+      ;;
+  esac
+done
+
+if [ -z "$SELECTION" ]; then
+  echo "ERROR: --selection is required." >&2
+  usage
+fi
+
+if [ ! -f "$SELECTION" ]; then
+  echo "ERROR: Selection file not found: $SELECTION" >&2
+  exit 1
+fi
+
+if ! jq . "$SELECTION" >/dev/null 2>&1; then
+  echo "ERROR: Invalid JSON shape in selection file." >&2
+  exit 1
+fi
+
+# Load variables
+s_ver=$(jq -r '.selection_version' "$SELECTION")
+s_id=$(jq -r '.selected_id' "$SELECTION")
+name=$(jq -r '.name' "$SELECTION")
+version=$(jq -r '.version' "$SELECTION")
+arch=$(jq -r '.arch' "$SELECTION")
+platform=$(jq -r '.platform' "$SELECTION")
+package=$(jq -r '.package' "$SELECTION")
+url=$(jq -r '.url' "$SELECTION")
+manifest=$(jq -r '.manifest' "$SELECTION")
+sha256=$(jq -r '.sha256' "$SELECTION")
+fb=$(jq -r '.first_boot_mode' "$SELECTION")
+allowed=$(jq -r '.install_allowed' "$SELECTION")
+reason=$(jq -r '.reason' "$SELECTION")
+layout_type=$(jq -r '.asset_layout | type' "$SELECTION")
+
+# Basic existence check
+if [ "$s_ver" = "null" ] || [ "$s_id" = "null" ] || [ "$name" = "null" ] || [ "$version" = "null" ] || \
+   [ "$package" = "null" ] || [ "$url" = "null" ] || [ "$manifest" = "null" ] || [ "$sha256" = "null" ] || \
+   [ "$reason" = "null" ] || [ "$layout_type" != "object" ]; then
+  echo "ERROR: Missing required fields in selected-image." >&2
+  exit 1
+fi
+
+# Value checks
+if [ "$arch" != "aarch64" ]; then
+  echo "ERROR: Invalid architecture: $arch" >&2
+  exit 1
+fi
+
+if [ "$platform" != "apple-silicon" ]; then
+  echo "ERROR: Invalid platform: $platform" >&2
+  exit 1
+fi
+
+if [ "$fb" != "desktop-welcome" ]; then
+  echo "ERROR: Invalid first_boot_mode: $fb" >&2
+  exit 1
+fi
+
+if [ "$allowed" != "false" ]; then
+  echo "ERROR: install_allowed must be false in Phase 27." >&2
+  exit 1
+fi
+
+# Strict rules
+if [ "$STRICT" -eq 1 ]; then
+  if [ "$sha256" = "PLACEHOLDER_SHA256" ] || [ -z "$sha256" ]; then
+    echo "ERROR: PLACEHOLDER_SHA256 or empty checksum is not allowed in strict mode." >&2
+    exit 2
+  fi
+  if [ -z "$manifest" ] || [ "$manifest" = "null" ]; then
+    echo "ERROR: Manifest endpoint is required." >&2
+    exit 2
+  fi
+  if [ -z "$url" ] || [ "$url" = "null" ]; then
+    echo "ERROR: URL endpoint is required." >&2
+    exit 2
+  fi
+  
+  # Policy format verification
+  if [ -n "$POLICY" ] && [ -f "$POLICY" ]; then
+    accepted_exts=$(jq -r '.accepted_extensions[]' "$POLICY")
+    matched=0
+    for ext in $accepted_exts; do
+      if [[ "$package" == *"$ext" ]]; then
+        matched=1
+        break
+      fi
+    done
+    if [ $matched -eq 0 ]; then
+      echo "ERROR: Unsupported package format: $package" >&2
+      exit 2
+    fi
+  fi
+fi
+
+# Ensure layout is tar.zst format
+fmt=$(jq -r '.asset_layout.artifact_format' "$SELECTION")
+if [ "$fmt" != "tar.zst" ]; then
+  echo "ERROR: Unsupported layout format: $fmt. Only tar.zst is allowed." >&2
+  exit 1
+fi
+
+echo "Selected image validates successfully."
+exit 0

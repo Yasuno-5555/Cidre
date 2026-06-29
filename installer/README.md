@@ -1,4 +1,4 @@
-# Cidre Installer Workspace
+# Jackrose Installer Workspace
 
 This directory manages the installer integration metadata and local selection simulators.
 
@@ -15,7 +15,7 @@ This directory manages the installer integration metadata and local selection si
   - `simulate-installer-selection`: Performs user selection dry-run simulator.
   - `run-local-integration-tests`: Tests all local scripts.
   - `inspect-asahi-installer-data`: Inspects upstream metadata schemas.
-  - `compare-installer-metadata-shape`: Analyzes mappings overlap between Cidre and Asahi.
+  - `compare-installer-metadata-shape`: Analyzes mappings overlap between Jackrose and Asahi.
   - `run-installer-compat-study-tests`: Runs compatibility study validator.
 
 ---
@@ -80,82 +80,82 @@ installer/scripts/run-bootstrap-safe-mode-probe-tests
 
 ---
 
-## 8. Cidre Wrapper Metadata Selection
+## 8. Jackrose Wrapper Metadata Selection
 
 To run the wrapper selection tests suite:
 
 ```bash
-installer/scripts/run-cidre-wrapper-selection-tests
+installer/scripts/run-jackrose-wrapper-selection-tests
 ```
 
 ---
 
-## 9. Cidre Wrapper Artifact Fetch and Integrity Verification
+## 9. Jackrose Wrapper Artifact Fetch and Integrity Verification
 
 To run the wrapper artifact fetch tests suite:
 
 ```bash
-installer/scripts/run-cidre-wrapper-artifact-tests
+installer/scripts/run-jackrose-wrapper-artifact-tests
 ```
 
 ---
 
-## 10. Cidre Wrapper Artifact Structure Inspection and Sandbox Extraction
+## 10. Jackrose Wrapper Artifact Structure Inspection and Sandbox Extraction
 
 To run the sandbox extraction tests suite:
 
 ```bash
-installer/scripts/run-cidre-wrapper-extraction-tests
+installer/scripts/run-jackrose-wrapper-extraction-tests
 ```
 
 ---
 
-## 11. Cidre Rootfs Validation and Review-only Install Plan
+## 11. Jackrose Rootfs Validation and Review-only Install Plan
 
 To run the rootfs content and plan tests suite:
 
 ```bash
-installer/scripts/run-cidre-rootfs-plan-tests
+installer/scripts/run-jackrose-rootfs-plan-tests
 ```
 
 ---
 
-## 12. Cidre Read-only Target Discovery
+## 12. Jackrose Read-only Target Discovery
 
 To run the read-only target discovery tests suite:
 
 ```bash
-installer/scripts/run-cidre-target-discovery-tests
+installer/scripts/run-jackrose-target-discovery-tests
 ```
 
 ---
 
-## 13. Cidre Target Selection Gate
+## 13. Jackrose Target Selection Gate
 
 To run the target selection tests suite:
 
 ```bash
-installer/scripts/run-cidre-target-selection-tests
+installer/scripts/run-jackrose-target-selection-tests
 ```
 
 ---
 
-## 14. Cidre Final Install Contract
+## 14. Jackrose Final Install Contract
 
 To run the final contract tests suite:
 
 ```bash
-installer/scripts/run-cidre-final-contract-tests
+installer/scripts/run-jackrose-final-contract-tests
 ```
 
 ---
 
-## 15. Cidre Installer MVP Freeze
+## 15. Jackrose Installer MVP Freeze
 
 To run the full installer MVP tests suite:
 
 ```bash
-installer/scripts/run-cidre-installer-mvp-tests
+installer/scripts/run-jackrose-installer-mvp-tests
 ```
 
 ---
@@ -165,5 +165,5 @@ installer/scripts/run-cidre-installer-mvp-tests
 To run the GUI integration smoke tests:
 
 ```bash
-installer/scripts/run-cidre-gui-integration-smoke-tests
+installer/scripts/run-jackrose-gui-integration-smoke-tests
 ```

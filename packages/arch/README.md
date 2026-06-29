@@ -1,43 +1,43 @@
-# Cidre Arch Package Drafts
+# Jackrose Arch Package Drafts
 
-This directory contains draft Arch Linux ARM / ALARM package definitions for the planned Cidre meta packages.
+This directory contains draft Arch Linux ARM / ALARM package definitions for the planned Jackrose meta packages.
 
 Current package set:
 
-- `niri-cidre`
-- `cidre-meta-core`
-- `cidre-meta-desktop`
-- `cidre-meta-dev`
-- `cidre-meta-diagnostics`
-- `cidre-meta-optional`
-- `cidre-session`
-- `cidre-config`
+- `niri-jackrose`
+- `jackrose-meta-core`
+- `jackrose-meta-desktop`
+- `jackrose-meta-dev`
+- `jackrose-meta-diagnostics`
+- `jackrose-meta-optional`
+- `jackrose-session`
+- `jackrose-config`
 
-These are packaging drafts for `Cidre v1.0` planning, not yet published repository packages.
+These are packaging drafts for `Jackrose v1.0` planning, not yet published repository packages.
 
 Planned standard install:
 
-- `cidre-meta-core`
-- `cidre-meta-desktop`
-- `cidre-meta-dev`
+- `jackrose-meta-core`
+- `jackrose-meta-desktop`
+- `jackrose-meta-dev`
 
 ## Design Notes
 
-- `niri-cidre` owns the compositor binary.
-- `cidre-meta-core` owns the base system and Asahi platform baseline.
-- `cidre-meta-desktop` owns the default login stack and desktop runtime.
-- `cidre-meta-dev` owns the default developer toolchain.
-- `cidre-meta-diagnostics` and `cidre-meta-optional` are additive profiles.
-- `cidre-session` owns the public login entry and session launcher.
-- `cidre-config` owns the default Cidre configuration assets.
+- `niri-jackrose` owns the compositor binary.
+- `jackrose-meta-core` owns the base system and Asahi platform baseline.
+- `jackrose-meta-desktop` owns the default login stack and desktop runtime.
+- `jackrose-meta-dev` owns the default developer toolchain.
+- `jackrose-meta-diagnostics` and `jackrose-meta-optional` are additive profiles.
+- `jackrose-session` owns the public login entry and session launcher.
+- `jackrose-config` owns the default Jackrose configuration assets.
 
 Intended dependency direction:
 
-- `cidre-session -> niri-cidre`
-- `cidre-meta-desktop -> niri-cidre, cidre-session, cidre-config`
-- `niri-cidre` does not depend on `cidre-session`
+- `jackrose-session -> niri-jackrose`
+- `jackrose-meta-desktop -> niri-jackrose, jackrose-session, jackrose-config`
+- `niri-jackrose` does not depend on `jackrose-session`
 
 For the current public package model, see:
 
-- [docs/cidre-v1-package-plan.md](../../docs/cidre-v1-package-plan.md)
+- [docs/jackrose-v1-package-plan.md](../../docs/jackrose-v1-package-plan.md)
 - [GREETD.md](../../GREETD.md)

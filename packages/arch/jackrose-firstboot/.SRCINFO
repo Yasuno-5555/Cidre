@@ -1,0 +1,12 @@
+pkgbase = jackrose-firstboot
+	pkgdesc = Jackrose environment first-boot diagnostic verification script
+	pkgver = 1.0.0
+	pkgrel = 1
+	url = https://github.com/Yasuno-5555/Jackrose
+	arch = any
+	license = custom
+	depends = bash
+	source = jackrose-firstboot
+	sha256sums = SKIP
+
+pkgname = jackrose-firstboot

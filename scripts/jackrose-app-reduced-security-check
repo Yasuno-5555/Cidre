@@ -1,0 +1,125 @@
+#!/bin/sh
+set -eu
+# jackrose-app-reduced-security-check
+# Checks whether Reduced Security is enabled for a given Volume Group UUID.
+# On Apple Silicon, Reduced Security is required to boot unsigned bootloaders (m1n1).
+# Accepts --vg-uuid directly or --target to auto-discover the VG UUID.
+
+vg_uuid=""
+target=""
+json_mode=false
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --vgid|--vg-uuid) vg_uuid="$2"; shift 2 ;;
+    --target) target="$2"; shift 2 ;;
+    --json) json_mode=true; shift ;;
+    --help|-h) echo "Usage: jackrose-app-reduced-security-check --vgid <uuid>|--target <device> [--json]"; exit 0 ;;
+    *) echo "ERROR: unknown option: $1" >&2; exit 2 ;;
+  esac
+done
+
+# Auto-discover VG UUID from target if not provided directly
+if [ -z "$vg_uuid" ] && [ -n "$target" ]; then
+  vg_uuid="$(diskutil apfs listVolumeGroups -plist 2>/dev/null | python3 -c "
+import plistlib, sys
+target = '$target'
+d = plistlib.loads(sys.stdin.buffer.read())
+for c in d.get('Containers', []):
+    for vg in c.get('VolumeGroups', []):
+        for v in vg.get('Volumes', []):
+            if v.get('DeviceIdentifier') == target:
+                print(vg.get('APFSVolumeGroupUUID', ''))
+                break
+" 2>/dev/null || echo "")"
+fi
+
+[ -n "$vg_uuid" ] || { echo "ERROR: --vgid or --target (with existing VG) is required" >&2; exit 2; }
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+
+# Write bputil -e output to temp file (avoid shell argument mangling with large output)
+bputil_tmp="${TMPDIR:-/tmp}/jackrose-bputil-output.$$.txt"
+/usr/bin/osascript \
+  -e 'on run argv' \
+  -e 'do shell script (item 1 of argv) with administrator privileges' \
+  -e 'end run' \
+  "/usr/bin/bputil -e" > "$bputil_tmp" 2>/dev/null || true
+
+python3 - "$vg_uuid" "$json_mode" < "$bputil_tmp" <<'PY'
+import json, sys
+
+vg_uuid = sys.argv[1]
+json_mode = sys.argv[2] == "true"
+
+# Read bputil output from stdin (temp file redirected)
+bputil_output = sys.stdin.read()
+
+status = "unknown"
+security_mode = "unknown"
+summary = ""
+guide = ""
+
+# Normalize line endings: osascript returns \r instead of \n
+normalized = bputil_output.replace("\r", "\n")
+
+# Parse bputil -e output for the given VG UUID
+if vg_uuid in normalized:
+    sections = normalized.split("Local policy for volume group")
+    for section in sections:
+        if vg_uuid in section:
+            for line in section.split("\n"):
+                if "Security Mode:" in line:
+                    if "Reduced" in line:
+                        security_mode = "reduced"
+                        status = "passed"
+                        summary = f"Reduced Security is enabled for {vg_uuid}. m1n1 can boot."
+                        break
+                    elif "Full" in line:
+                        security_mode = "full"
+                        status = "blocked"
+                        summary = f"Full Security is enabled for {vg_uuid}. Reduced Security required for m1n1."
+                        guide = (
+                            "To enable Reduced Security:\n"
+                            "1. Shut down your Mac\n"
+                            "2. Press and hold the power button until Startup Options appears\n"
+                            "3. Select Options (gear icon) in Startup Security Utility\n"
+                            "4. Select the Jackrose volume\n"
+                            "5. Choose Reduced Security\n"
+                            "6. Restart back to macOS\n"
+                            "7. Reopen Jackrose and continue the wizard"
+                        )
+                        break
+                    elif "Permissive" in line:
+                        security_mode = "permissive"
+                        status = "passed"
+                        summary = f"Permissive Security is enabled for {vg_uuid}."
+                        break
+            break
+
+if security_mode == "unknown":
+    status = "blocked"
+    summary = f"No LocalPolicy found for Volume Group {vg_uuid}. Run boot-policy-create first."
+    guide = "Boot policy has not been created yet. Complete the install execution step."
+
+ssu_required = (security_mode == "full")
+reduced_security_status = "set-via-bputil" if security_mode in ("reduced", "permissive") else "manual-recovery-required"
+
+payload = {
+    "schema_version": 1,
+    "command": "jackrose-app-reduced-security-check",
+    "status": status,
+    "summary": summary,
+    "exit_code": 0 if status == "passed" else 4,
+    "volume_group_uuid": vg_uuid,
+    "security_mode": security_mode,
+    "reduced_security_status": reduced_security_status,
+    "ssu_required": ssu_required,
+    "reduced_security_guide": guide if guide else None,
+}
+
+print(json.dumps(payload, indent=2) if json_mode else payload["summary"])
+sys.exit(payload["exit_code"])
+PY
+
+rm -f "$bputil_tmp"

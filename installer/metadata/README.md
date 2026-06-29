@@ -1,4 +1,4 @@
-# Cidre Installer Metadata Workspace
+# Jackrose Installer Metadata Workspace
 
 This directory contains installer metadata schemas, fixtures, and validators.
 
@@ -9,7 +9,7 @@ This directory contains installer metadata schemas, fixtures, and validators.
 To validate the current metadata layout, run the validator script:
 
 ```bash
-installer/scripts/validate-installer-metadata installer/metadata/cidre-seed.local.json
+installer/scripts/validate-installer-metadata installer/metadata/jackrose-seed.local.json
 ```
 
 ---

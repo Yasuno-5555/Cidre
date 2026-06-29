@@ -1,0 +1,99 @@
+#!/bin/sh
+set -eu
+
+usage() {
+  cat <<'EOF'
+Usage:
+  jackrose-app-fixture-generate [options]
+
+Options:
+  --output <dir>
+  --json
+  --help
+EOF
+}
+
+output_dir=""
+json_mode=false
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --output) output_dir="$2"; shift 2 ;;
+    --json) json_mode=true; shift ;;
+    --help|-h|help) usage; exit 0 ;;
+    *) printf 'ERROR: Unknown option: %s\n' "$1" >&2; usage; exit 2 ;;
+  esac
+done
+
+python3 -c '
+import sys, os, json, shutil
+
+output_dir = sys.argv[1]
+json_mode = sys.argv[2] == "true"
+repo_root = os.environ.get("JACKROSE_REPO_ROOT", "/home/yasuno/Projects/Jackrose")
+
+if not output_dir:
+    output_dir = os.path.join(repo_root, "apps/macos/JackroseApp/Fixtures")
+
+os.makedirs(output_dir, exist_ok=True)
+
+# Generate command-manifest.sample.json
+manifest_src = os.path.join(repo_root, "interface/command-manifest.json")
+manifest_dst = os.path.join(output_dir, "command-manifest.sample.json")
+if os.path.exists(manifest_src):
+    shutil.copyfile(manifest_src, manifest_dst)
+
+# Generate app-actions.sample.json
+actions_src = os.path.join(repo_root, "interface/app-actions.json")
+actions_dst = os.path.join(output_dir, "app-actions.sample.json")
+if os.path.exists(actions_src):
+    shutil.copyfile(actions_src, actions_dst)
+
+# Generate command-result.pass.json
+pass_result = {
+  "schema_version": 1,
+  "command": "jackrose-install-preflight",
+  "status": "pass",
+  "summary": "Guided preflight checks completed successfully.",
+  "exit_code": 0,
+  "warnings": [],
+  "errors": []
+}
+with open(os.path.join(output_dir, "command-result.pass.json"), "w") as f:
+    json.dump(pass_result, f, indent=2)
+
+# Generate command-result.blocked.json
+blocked_result = {
+  "schema_version": 1,
+  "command": "jackrose-uninstall-execute",
+  "status": "blocked",
+  "reason": "confirmation-required",
+  "exit_code": 8,
+  "warnings": [],
+  "errors": [
+    {
+      "code": "confirmation-required",
+      "message": "Explicit confirmation phrase is required."
+    }
+  ],
+  "required_confirmation": "I UNDERSTAND THIS DELETES JACKROSE",
+  "next_actions": [
+    {
+      "label": "Review uninstall dry-run",
+      "command": "scripts/jackrose-uninstall-dry-run --target <target>"
+    }
+  ]
+}
+with open(os.path.join(output_dir, "command-result.blocked.json"), "w") as f:
+    json.dump(blocked_result, f, indent=2)
+
+res = {
+    "status": "success",
+    "output_directory": output_dir
+}
+
+if json_mode:
+    print(json.dumps(res, indent=2))
+else:
+    print("Simulated fixtures copied and generated in: %s" % output_dir)
+' "$output_dir" "$([ "$json_mode" = "true" ] && echo "true" || echo "false")"

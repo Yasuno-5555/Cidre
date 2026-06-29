@@ -96,7 +96,7 @@ if [ "$matched_count" -eq 0 ]; then
   exit 2
 fi
 
-echo "Available Cidre installer entries:"
+echo "Available Jackrose installer entries:"
 echo ""
 
 index=1

@@ -1,0 +1,35 @@
+# Maintainer: Yasuno <yasuno@example.invalid>
+
+pkgname=jackrose-meta-desktop-baseline
+pkgver=1.0.0
+pkgrel=1
+pkgdesc='Jackrose minimum graphical desktop baseline meta-package'
+url='https://github.com/Yasuno-5555/Jackrose'
+arch=('any')
+license=('custom')
+depends=(
+  'niri'
+  'foot'
+  'fuzzel'
+  'waybar'
+  'firefox'
+  'fcitx5'
+  'fcitx5-mozc'
+  'greetd'
+  'networkmanager'
+  'jackrose-session'
+  'jackrose-config'
+  'jackrose-welcome'
+  'jackrose-user-setup'
+  'jackrose-healthcheck'
+)
+source=()
+sha256sums=()
+
+# Monorepo-local packaging path.
+_repo_root="${startdir}/../../.."
+
+package() {
+  # This is a meta-package; no files installed.
+  true
+}

@@ -1,0 +1,190 @@
+#!/bin/sh
+set -eu
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+REPO_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+
+target=""
+fixture=""
+json_mode=false
+
+usage() {
+  echo "Usage: jackrose-app-install-target-check (--target diskXsY | --fixture file.json) [--json]"
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --target) target="$2"; shift 2 ;;
+    --fixture) fixture="$2"; shift 2 ;;
+    --json) json_mode=true; shift ;;
+    --help|-h) usage; exit 0 ;;
+    *) echo "ERROR: unknown option: $1" >&2; usage; exit 2 ;;
+  esac
+done
+
+[ -n "$target$fixture" ] || { echo "ERROR: --target or --fixture is required" >&2; exit 2; }
+
+python3 - "$REPO_ROOT" "$target" "$fixture" "$json_mode" <<'PY'
+import json
+import os
+import subprocess
+import sys
+
+repo_root, target, fixture, json_mode = sys.argv[1:]
+json_mode = json_mode == "true"
+state_path = os.path.join(repo_root, ".local", "state", "jackrose", "install", "current", "install-target.json")
+
+def print_result(payload):
+    os.makedirs(os.path.dirname(state_path), exist_ok=True)
+    with open(state_path, "w", encoding="utf-8") as handle:
+        json.dump(payload, handle, indent=2)
+        handle.write("\n")
+    print(json.dumps(payload, indent=2) if json_mode else payload["summary"])
+    sys.exit(payload["exit_code"])
+
+if fixture:
+    try:
+        with open(fixture, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+        print_result(data)
+    except Exception as e:
+        print_result({
+            "schema_version": 1,
+            "command": "jackrose-app-install-target-check",
+            "status": "failed",
+            "summary": f"Failed to read fixture: {e}",
+            "exit_code": 8,
+            "target": None,
+            "classification": "unknown",
+            "errors": [{"code": "fixture-read-error", "message": str(e)}]
+        })
+
+def run_plist(*args):
+    completed = subprocess.run(["/usr/sbin/diskutil", *args], check=True, capture_output=True)
+    import plistlib
+    return plistlib.loads(completed.stdout)
+
+if os.uname().sysname != "Darwin":
+    print_result({
+        "schema_version": 1,
+        "command": "jackrose-app-install-target-check",
+        "status": "blocked",
+        "summary": "Install target validation requires macOS disk inspection.",
+        "exit_code": 4,
+        "target": target,
+        "classification": "unknown",
+        "errors": [{"code": "requires-macos", "message": "Install target validation requires macOS disk inspection."}]
+    })
+
+try:
+    info = run_plist("info", "-plist", target)
+    root = run_plist("info", "-plist", "/")
+except Exception as e:
+    print_result({
+        "schema_version": 1,
+        "command": "jackrose-app-install-target-check",
+        "status": "failed",
+        "summary": f"Install target inspection failed: {e}",
+        "exit_code": 8,
+        "target": target,
+        "classification": "missing",
+        "errors": [{"code": "target-not-found", "message": f"Install target inspection failed: {e}"}]
+    })
+
+identifier = info.get("DeviceIdentifier") or target
+content = (info.get("Content") or info.get("FilesystemType") or "").lower()
+mount_point = info.get("MountPoint")
+startup_container = root.get("APFSContainerReference")
+startup_stores = {
+    item.get("APFSPhysicalStore")
+    for item in root.get("APFSPhysicalStores", [])
+    if isinstance(item, dict) and item.get("APFSPhysicalStore")
+}
+metadata = {
+    "content": info.get("Content"),
+    "volume_name": info.get("VolumeName") or info.get("MediaName"),
+    "mount_point": mount_point,
+    "apfs_container_reference": info.get("APFSContainerReference"),
+    "startup_container_reference": startup_container,
+    "startup_physical_stores": sorted(startup_stores),
+    "whole_disk": info.get("ParentWholeDisk"),
+}
+
+if identifier == startup_container:
+    print_result({
+        "schema_version": 1,
+        "command": "jackrose-app-install-target-check",
+        "status": "passed",
+        "summary": "Selected target is the current startup APFS container and may be resized for controlled install.",
+        "exit_code": 0,
+        "target": target,
+        "classification": "startup-container",
+        "errors": [],
+        "metadata": metadata,
+    })
+
+if identifier in startup_stores and "apple_apfs" in content:
+    print_result({
+        "schema_version": 1,
+        "command": "jackrose-app-install-target-check",
+        "status": "passed",
+        "summary": "Selected target is the current startup APFS physical store and may be resized for controlled install.",
+        "exit_code": 0,
+        "target": target,
+        "classification": "startup-physical-store",
+        "errors": [],
+        "metadata": metadata,
+    })
+
+filesystem_type = (info.get("FilesystemType") or "").lower()
+is_apfs = (
+    "apfs" in content
+    or "apple_apfs" in content
+    or "apfs" in filesystem_type
+    or "41504653-0000-11aa-aa11-00306543ecac" in content
+)
+
+is_jackrose_volume = (
+    is_apfs
+    and (metadata.get("volume_name") == "Jackrose" or (mount_point and mount_point.endswith("/Jackrose")))
+    and mount_point != "/"
+)
+
+if is_jackrose_volume:
+    print_result({
+        "schema_version": 1,
+        "command": "jackrose-app-install-target-check",
+        "status": "passed",
+        "summary": "Selected target is a valid Jackrose APFS volume target.",
+        "exit_code": 0,
+        "target": target,
+        "classification": "jackrose-volume",
+        "errors": [],
+        "metadata": metadata,
+    })
+
+if mount_point == "/":
+    code = "target-is-mounted-system-volume"
+    summary = "Select the startup APFS physical store or startup container, not the mounted system volume."
+elif "recovery" in content:
+    code = "target-is-recovery"
+    summary = "Recovery partitions cannot be used as the install resize target."
+elif identifier.startswith("disk") and "guid_partition_scheme" in content:
+    code = "target-is-whole-disk"
+    summary = "Select the startup APFS physical store, not the whole disk."
+else:
+    code = "target-is-not-startup-apfs-store"
+    summary = "Selected target is not the current startup APFS container or its physical store."
+
+print_result({
+    "schema_version": 1,
+    "command": "jackrose-app-install-target-check",
+    "status": "failed",
+    "summary": summary,
+    "exit_code": 8,
+    "target": target,
+    "classification": "invalid-install-target",
+    "errors": [{"code": code, "message": summary}],
+    "metadata": metadata,
+})
+PY

@@ -1,0 +1,83 @@
+#!/bin/sh
+set -eu
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+REPO_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+STATE_ROOT="${JACKROSE_RESCUE_CREATE_STATE_ROOT:-$REPO_ROOT/.local/state/jackrose/rescue-create}"
+CURRENT_DIR="$STATE_ROOT/current"
+target=""
+json_output=false
+output_file="$CURRENT_DIR/create-verify.json"
+
+usage() {
+  cat <<EOF
+Usage: jackrose-rescue-create-verify [options]
+
+Options:
+  --target <mountpoint>
+  --json
+  --help
+EOF
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --target) target="$2"; shift 2 ;;
+    --json) json_output=true; shift ;;
+    --help) usage; exit 0 ;;
+    *) printf 'ERROR: unknown option: %s\n' "$1" >&2; usage >&2; exit 1 ;;
+  esac
+done
+
+[ -n "$target" ] || { printf 'ERROR: --target is required\n' >&2; exit 1; }
+[ -d "$target" ] || { printf 'ERROR: target not found: %s\n' "$target" >&2; exit 1; }
+mkdir -p "$CURRENT_DIR"
+
+bash_ok=false
+rescue_ok=false
+check_ok=false
+metadata_ok=false
+manifest_ok=false
+no_desktop_marker=false
+
+[ -x "$target/bin/bash" ] && bash_ok=true
+[ -f "$target/etc/jackrose/profile.env" ] && bash_ok=true
+[ -f "$target/usr/lib/jackrose/jackrose-rescue" ] && rescue_ok=true
+[ -f "$target/usr/lib/jackrose/jackrose-rescue-check" ] && check_ok=true
+[ -f "$target/var/lib/jackrose/rescue/rescue-slot-metadata.json" ] && metadata_ok=true
+[ -f "$target/var/lib/jackrose/rescue/manifest.json" ] && manifest_ok=true
+[ -f "$target/etc/jackrose-rescue" ] && no_desktop_marker=true
+
+status="verified"
+if [ "$bash_ok" != "true" ] || [ "$rescue_ok" != "true" ] || [ "$check_ok" != "true" ] || \
+   [ "$metadata_ok" != "true" ] || [ "$manifest_ok" != "true" ]; then
+  status="failed"
+fi
+
+cat > "$output_file" <<EOF
+{
+  "schema_version": 1,
+  "target": "$(printf '%s' "$target" | sed 's/"/\\"/g')",
+  "status": "$status",
+  "bash_or_fixture_ok": $bash_ok,
+  "jackrose_rescue_ok": $rescue_ok,
+  "jackrose_rescue_check_ok": $check_ok,
+  "metadata_ok": $metadata_ok,
+  "manifest_ok": $manifest_ok,
+  "no_desktop_marker": $no_desktop_marker
+}
+EOF
+
+if [ "$json_output" = "true" ]; then
+  cat "$output_file"
+else
+  printf 'Jackrose rescue create verify\n\n'
+  printf '[%s] bash marker or fixture equivalent detected\n' "$( [ "$bash_ok" = "true" ] && printf OK || printf FAIL )"
+  printf '[%s] jackrose-rescue detected\n' "$( [ "$rescue_ok" = "true" ] && printf OK || printf FAIL )"
+  printf '[%s] jackrose-rescue-check detected\n' "$( [ "$check_ok" = "true" ] && printf OK || printf FAIL )"
+  printf '[%s] metadata detected\n' "$( [ "$metadata_ok" = "true" ] && printf OK || printf FAIL )"
+  printf '[%s] manifest detected\n' "$( [ "$manifest_ok" = "true" ] && printf OK || printf FAIL )"
+  printf '%s\n' "$output_file"
+fi
+
+[ "$status" = "verified" ]

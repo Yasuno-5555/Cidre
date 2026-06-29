@@ -7,7 +7,7 @@
 	<key>CFBundleExecutable</key>
 	<string>step2_launcher</string>
 	<key>CFBundleIdentifier</key>
-	<string>org.cidre.step2</string>
+	<string>org.jackrose.step2</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>

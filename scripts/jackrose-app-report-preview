@@ -1,0 +1,83 @@
+#!/bin/sh
+set -eu
+
+usage() {
+  cat <<'EOF'
+Usage:
+  jackrose-app-report-preview [options]
+
+Options:
+  --install
+  --uninstall
+  --recovery
+  --rescue
+  --json
+  --help
+EOF
+}
+
+cat_install=false
+cat_uninstall=false
+cat_recovery=false
+cat_rescue=false
+json_mode=false
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --install) cat_install=true; shift ;;
+    --uninstall) cat_uninstall=true; shift ;;
+    --recovery) cat_recovery=true; shift ;;
+    --rescue) cat_rescue=true; shift ;;
+    --json) json_mode=true; shift ;;
+    --help|-h|help) usage; exit 0 ;;
+    *) printf 'ERROR: Unknown option: %s\n' "$1" >&2; usage; exit 2 ;;
+  esac
+done
+
+if [ "$cat_install" = "false" ] && [ "$cat_uninstall" = "false" ] && [ "$cat_recovery" = "false" ] && [ "$cat_rescue" = "false" ]; then
+  cat_install=true
+fi
+
+python3 -c '
+import sys, json
+
+cat_install = sys.argv[1] == "true"
+cat_uninstall = sys.argv[2] == "true"
+cat_recovery = sys.argv[3] == "true"
+cat_rescue = sys.argv[4] == "true"
+json_mode = sys.argv[5] == "true"
+
+res = {}
+if cat_install:
+    res = {
+        "role": "install-report",
+        "title": "Jackrose Installation Report (Mock Sample)",
+        "summary": "Status: SUCCESS. Hostname: macbook-pro. Target: disk0s3",
+        "path": "apps/macos/JackroseApp/Fixtures/install-report.sample.md"
+    }
+elif cat_uninstall:
+    res = {
+        "role": "uninstall-report",
+        "title": "Jackrose Uninstall Report (Mock Sample)",
+        "summary": "Status: READY TO EXIT. Selected Target: disk0s3. macOS Restore Assistance: Ready",
+        "path": "apps/macos/JackroseApp/Fixtures/uninstall-report.sample.md"
+    }
+else:
+    res = {
+        "role": "report-preview",
+        "title": "Mock Report",
+        "summary": "Preview summary matches general report parameters.",
+        "path": ""
+    }
+
+if json_mode:
+    print(json.dumps(res, indent=2))
+else:
+    print("Report Preview: %s" % res["title"])
+    print("  Summary: %s" % res["summary"])
+    print("  Path:    %s" % res["path"])
+' "$([ "$cat_install" = "true" ] && echo "true" || echo "false")" \
+  "$([ "$cat_uninstall" = "true" ] && echo "true" || echo "false")" \
+  "$([ "$cat_recovery" = "true" ] && echo "true" || echo "false")" \
+  "$([ "$cat_rescue" = "true" ] && echo "true" || echo "false")" \
+  "$([ "$json_mode" = "true" ] && echo "true" || echo "false")"

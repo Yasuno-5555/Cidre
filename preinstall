@@ -1,6 +1,6 @@
 #!/bin/sh
-# preinstall: Root-level entrypoint script to launch Cidre preinstall helper
+# preinstall: Root-level entrypoint script to launch Jackrose preinstall helper
 set -eu
 
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
-exec "${SCRIPT_DIR}/scripts/cidre-preinstall" "$@"
+exec "${SCRIPT_DIR}/scripts/jackrose-preinstall" "$@"

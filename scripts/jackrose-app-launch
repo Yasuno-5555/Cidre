@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+REPO_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+APP_BUNDLE="$REPO_ROOT/dist/Jackrose.app"
+
+if [ ! -x "$APP_BUNDLE/Contents/MacOS/JackroseApp" ]; then
+  "$SCRIPT_DIR/jackrose-app-package" >/dev/null
+fi
+open "$APP_BUNDLE"

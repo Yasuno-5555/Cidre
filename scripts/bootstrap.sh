@@ -1,5 +1,5 @@
 #!/bin/bash
-# bootstrap.sh — Cidre system bootstrap (root phase)
+# bootstrap.sh — Jackrose system bootstrap (root phase)
 # Installs base packages, creates user, configures greetd, deploys configs.
 set -euo pipefail
 
@@ -99,7 +99,7 @@ if [ "$PRESET" = "japan" ]; then
 fi
 
 # ----- Logging -----
-LOG_FILE="/var/log/cidre/bootstrap.log"
+LOG_FILE="/var/log/jackrose/bootstrap.log"
 if [ "$EUID" -eq 0 ]; then
   mkdir -p "$(dirname "$LOG_FILE")" || true
   exec > >(tee -a "$LOG_FILE") 2>&1 || true
@@ -225,7 +225,7 @@ detect_greeter() {
 # Main install
 # =====================================================================
 run_install() {
-  echo "=== Cidre Bootstrap Installer ==="
+  echo "=== Jackrose Bootstrap Installer ==="
   echo "Started at $(date)"
   echo "  User:     ${USERNAME:-<will prompt>}"
   echo "  Timezone: $TIMEZONE"
@@ -367,7 +367,7 @@ run_install() {
   if [ "$DRY_RUN" = false ]; then
     cat <<EOF > /etc/greetd/config.toml
 [default_session]
-command = "$greeter_cmd --time --cmd cidre-session"
+command = "$greeter_cmd --time --cmd jackrose-session"
 user = "greeter"
 EOF
   else
@@ -378,49 +378,49 @@ EOF
     run_cmd "Enabling greetd service" systemctl enable greetd || true
   fi
 
-  # --- Deploy defaults to /usr/share/cidre/defaults/ ---
-  run_cmd "Creating defaults folders" mkdir -p /usr/share/cidre/defaults/{niri,ghostty,fcitx5,environment.d,fish,starship,fuzzel,waybar,applications}
+  # --- Deploy defaults to /usr/share/jackrose/defaults/ ---
+  run_cmd "Creating defaults folders" mkdir -p /usr/share/jackrose/defaults/{niri,ghostty,fcitx5,environment.d,fish,starship,fuzzel,waybar,applications}
 
   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  CIDRE_ROOT="$(dirname "$SCRIPT_DIR")"
+  JACKROSE_ROOT="$(dirname "$SCRIPT_DIR")"
 
-  run_cmd "Deploying niri config"        cp -r "$CIDRE_ROOT"/config/niri/*          /usr/share/cidre/defaults/niri/
-  run_cmd "Deploying Ghostty config"     cp -r "$CIDRE_ROOT"/config/ghostty/*       /usr/share/cidre/defaults/ghostty/
-  run_cmd "Deploying Fcitx5 config"      cp -r "$CIDRE_ROOT"/config/fcitx5/*        /usr/share/cidre/defaults/fcitx5/
-  run_cmd "Deploying environment vars"   cp -r "$CIDRE_ROOT"/config/environment.d/* /usr/share/cidre/defaults/environment.d/
-  run_cmd "Deploying fish config"        cp -r "$CIDRE_ROOT"/config/fish/*          /usr/share/cidre/defaults/fish/
-  run_cmd "Deploying Starship config"    cp -r "$CIDRE_ROOT"/config/starship/*      /usr/share/cidre/defaults/starship/
-  run_cmd "Deploying fuzzel config"      cp -r "$CIDRE_ROOT"/config/fuzzel/*        /usr/share/cidre/defaults/fuzzel/
-  run_cmd "Deploying Waybar config"      cp -r "$CIDRE_ROOT"/config/waybar/*        /usr/share/cidre/defaults/waybar/
-  run_cmd "Deploying desktop entries"    cp -r "$CIDRE_ROOT"/config/applications/*  /usr/share/cidre/defaults/applications/
+  run_cmd "Deploying niri config"        cp -r "$JACKROSE_ROOT"/config/niri/*          /usr/share/jackrose/defaults/niri/
+  run_cmd "Deploying Ghostty config"     cp -r "$JACKROSE_ROOT"/config/ghostty/*       /usr/share/jackrose/defaults/ghostty/
+  run_cmd "Deploying Fcitx5 config"      cp -r "$JACKROSE_ROOT"/config/fcitx5/*        /usr/share/jackrose/defaults/fcitx5/
+  run_cmd "Deploying environment vars"   cp -r "$JACKROSE_ROOT"/config/environment.d/* /usr/share/jackrose/defaults/environment.d/
+  run_cmd "Deploying fish config"        cp -r "$JACKROSE_ROOT"/config/fish/*          /usr/share/jackrose/defaults/fish/
+  run_cmd "Deploying Starship config"    cp -r "$JACKROSE_ROOT"/config/starship/*      /usr/share/jackrose/defaults/starship/
+  run_cmd "Deploying fuzzel config"      cp -r "$JACKROSE_ROOT"/config/fuzzel/*        /usr/share/jackrose/defaults/fuzzel/
+  run_cmd "Deploying Waybar config"      cp -r "$JACKROSE_ROOT"/config/waybar/*        /usr/share/jackrose/defaults/waybar/
+  run_cmd "Deploying desktop entries"    cp -r "$JACKROSE_ROOT"/config/applications/*  /usr/share/jackrose/defaults/applications/
 
   run_cmd "Creating backgrounds folder" mkdir -p /usr/share/backgrounds
-  run_cmd "Deploying wallpaper"  cp "$CIDRE_ROOT"/config/cidre-wallpaper.png /usr/share/backgrounds/cidre-wallpaper.png
+  run_cmd "Deploying wallpaper"  cp "$JACKROSE_ROOT"/config/jackrose-wallpaper.png /usr/share/backgrounds/jackrose-wallpaper.png
 
-  # --- Install cidre-session ---
-  local pkg_dir="$CIDRE_ROOT/packages/arch/cidre-session"
+  # --- Install jackrose-session ---
+  local pkg_dir="$JACKROSE_ROOT/packages/arch/jackrose-session"
   if [ -d "$pkg_dir" ]; then
-    run_cmd "Installing cidre-session runner"      cp "$pkg_dir/cidre-session"        /usr/bin/cidre-session
-    run_cmd "Making session runner executable"     chmod +x /usr/bin/cidre-session
-    run_cmd "Installing desktop session entry"     cp "$pkg_dir/cidre.desktop"        /usr/share/wayland-sessions/cidre.desktop
+    run_cmd "Installing jackrose-session runner"      cp "$pkg_dir/jackrose-session"        /usr/bin/jackrose-session
+    run_cmd "Making session runner executable"     chmod +x /usr/bin/jackrose-session
+    run_cmd "Installing desktop session entry"     cp "$pkg_dir/jackrose.desktop"        /usr/share/wayland-sessions/jackrose.desktop
     run_cmd "Creating systemd user config dir"     mkdir -p /usr/lib/systemd/user/
-    run_cmd "Installing systemd session service"   cp "$pkg_dir/cidre.service"        /usr/lib/systemd/user/cidre.service
-    run_cmd "Installing systemd shutdown target"   cp "$pkg_dir/cidre-shutdown.target" /usr/lib/systemd/user/cidre-shutdown.target
+    run_cmd "Installing systemd session service"   cp "$pkg_dir/jackrose.service"        /usr/lib/systemd/user/jackrose.service
+    run_cmd "Installing systemd shutdown target"   cp "$pkg_dir/jackrose-shutdown.target" /usr/lib/systemd/user/jackrose-shutdown.target
     run_cmd "Installing fcitx5 systemd service"    cp "$pkg_dir/fcitx5.service"       /usr/lib/systemd/user/fcitx5.service
   else
-    echo "[WARN] cidre-session package dir not found at $pkg_dir"
+    echo "[WARN] jackrose-session package dir not found at $pkg_dir"
   fi
 
-  # --- Install cidre scripts to /usr/bin ---
-  for script in cidre-user-setup cidre-welcome cidre-oobe cidre-healthcheck cidre-firstboot-finish cidre-audio cidre-recovery cidre-doctor cidre-snapshot cidre-repair; do
+  # --- Install jackrose scripts to /usr/bin ---
+  for script in jackrose-user-setup jackrose-welcome jackrose-oobe jackrose-healthcheck jackrose-firstboot-finish jackrose-audio jackrose-recovery jackrose-doctor jackrose-snapshot jackrose-repair; do
     local src_path=""
     case "$script" in
-      cidre-user-setup)        src_path="$CIDRE_ROOT/components/config/bin/cidre-user-setup" ;;
-      cidre-welcome)           src_path="$CIDRE_ROOT/components/welcome/bin/cidre-welcome" ;;
-      cidre-oobe)              src_path="$CIDRE_ROOT/components/welcome/bin/cidre-oobe" ;;
-      cidre-healthcheck)       src_path="$CIDRE_ROOT/components/healthcheck/bin/cidre-healthcheck" ;;
-      cidre-firstboot-finish)  src_path="$CIDRE_ROOT/components/firstboot/bin/cidre-firstboot-finish" ;;
-      *)                       src_path="$CIDRE_ROOT/scripts/$script" ;;
+      jackrose-user-setup)        src_path="$JACKROSE_ROOT/components/config/bin/jackrose-user-setup" ;;
+      jackrose-welcome)           src_path="$JACKROSE_ROOT/components/welcome/bin/jackrose-welcome" ;;
+      jackrose-oobe)              src_path="$JACKROSE_ROOT/components/welcome/bin/jackrose-oobe" ;;
+      jackrose-healthcheck)       src_path="$JACKROSE_ROOT/components/healthcheck/bin/jackrose-healthcheck" ;;
+      jackrose-firstboot-finish)  src_path="$JACKROSE_ROOT/components/firstboot/bin/jackrose-firstboot-finish" ;;
+      *)                       src_path="$JACKROSE_ROOT/scripts/$script" ;;
     esac
 
     if [ -f "$src_path" ]; then
@@ -430,39 +430,39 @@ EOF
   done
 
   # Install firstboot systemd unit
-  if [ -f "$CIDRE_ROOT/components/firstboot/systemd/cidre-firstboot.service" ]; then
-    run_cmd "Installing firstboot systemd unit" cp "$CIDRE_ROOT/components/firstboot/systemd/cidre-firstboot.service" "/usr/lib/systemd/system/cidre-firstboot.service"
+  if [ -f "$JACKROSE_ROOT/components/firstboot/systemd/jackrose-firstboot.service" ]; then
+    run_cmd "Installing firstboot systemd unit" cp "$JACKROSE_ROOT/components/firstboot/systemd/jackrose-firstboot.service" "/usr/lib/systemd/system/jackrose-firstboot.service"
   fi
 
 
   # Also install lib/ if present
-  if [ -d "$CIDRE_ROOT/lib" ]; then
-    run_cmd "Installing lib/ to /usr/lib/cidre" mkdir -p /usr/lib/cidre
-    run_cmd "Copying lib/" cp -r "$CIDRE_ROOT/lib/cidre"/* /usr/lib/cidre/
+  if [ -d "$JACKROSE_ROOT/lib" ]; then
+    run_cmd "Installing lib/ to /usr/lib/jackrose" mkdir -p /usr/lib/jackrose
+    run_cmd "Copying lib/" cp -r "$JACKROSE_ROOT/lib/jackrose"/* /usr/lib/jackrose/
   fi
 
   # --- Recovery hints ---
   if [ "$DRY_RUN" = false ]; then
-    cat <<EOF > /etc/cidre-recovery-hints
-=== Cidre Recovery Hints ===
+    cat <<EOF > /etc/jackrose-recovery-hints
+=== Jackrose Recovery Hints ===
 If niri or greetd fails to start:
 1. Access fallback TTY using Ctrl+Alt+F2
 2. Log in as your user
 3. Run emergency commands:
-   sudo cidre-recovery disable-greetd
-   cidre-user-setup --force
-   cidre-repair --session
-   cidre-repair --configs
-   cidre-repair --audio
+   sudo jackrose-recovery disable-greetd
+   jackrose-user-setup --force
+   jackrose-repair --session
+   jackrose-repair --configs
+   jackrose-repair --audio
 EOF
   else
-    echo "[Dry-Run] Would write recovery hints to /etc/cidre-recovery-hints"
+    echo "[Dry-Run] Would write recovery hints to /etc/jackrose-recovery-hints"
   fi
 
   echo ""
-  echo "=== Cidre Bootstrap Complete ==="
+  echo "=== Jackrose Bootstrap Complete ==="
   echo "Next: Switch to user '$USERNAME' and run:"
-  echo "  cd $CIDRE_ROOT"
+  echo "  cd $JACKROSE_ROOT"
   echo "  ./install.sh --desktop"
   echo ""
   echo "Or if you have a seed to resume:"

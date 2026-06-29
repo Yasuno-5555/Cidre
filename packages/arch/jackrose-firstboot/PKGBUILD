@@ -1,0 +1,31 @@
+# Maintainer: Yasuno <yasuno@example.invalid>
+
+pkgname=jackrose-firstboot
+pkgver=1.0.0
+pkgrel=1
+pkgdesc='Jackrose environment first-boot OOBE systemd service and triggers'
+url='https://github.com/Yasuno-5555/Jackrose'
+arch=('any')
+license=('custom')
+depends=('bash')
+source=()
+sha256sums=()
+
+# Monorepo-local packaging path.
+# This will be replaced by source=() when packages move to jackrose-packages.
+_repo_root="${startdir}/../../.."
+
+package() {
+  # Install the systemd service file
+  install -Dm644 "${_repo_root}/components/firstboot/systemd/jackrose-firstboot.service" \
+    "${pkgdir}/usr/lib/systemd/system/jackrose-firstboot.service"
+  install -Dm644 "${_repo_root}/components/firstboot/systemd/jackrose-firstboot-prep.service" \
+    "${pkgdir}/usr/lib/systemd/system/jackrose-firstboot-prep.service"
+
+  # Install the finish script
+  install -Dm755 "${_repo_root}/components/firstboot/bin/jackrose-firstboot-finish" \
+    "${pkgdir}/usr/bin/jackrose-firstboot-finish"
+  install -Dm755 "${_repo_root}/components/firstboot/bin/jackrose-firstboot-prep" \
+    "${pkgdir}/usr/bin/jackrose-firstboot-prep"
+}
+

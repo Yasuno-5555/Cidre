@@ -1,6 +1,6 @@
 {
   "policy_version": "0.1",
-  "artifact_kind": "cidre-seed-rootfs",
+  "artifact_kind": "jackrose-seed-rootfs",
   "accepted_extensions": [".tar.zst"],
   "repo_base_mode": "absolute-url-or-derived",
   "package_mode": "filename-or-relative-path",
@@ -8,5 +8,5 @@
   "sha256_required": true,
   "boundary_probe_support": true,
   "upstream_installer_compatibility": "unproven",
-  "warning": ".tar.zst is Cidre-supported for boundary probing. This does not prove upstream installer compatibility."
+  "warning": ".tar.zst is Jackrose-supported for boundary probing. This does not prove upstream installer compatibility."
 }

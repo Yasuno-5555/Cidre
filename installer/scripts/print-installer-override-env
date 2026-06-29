@@ -62,26 +62,26 @@ env_block=""
 
 if [ "$FORMAT" = "markdown" ]; then
   env_block=$(cat <<EOF
-# Cidre Installer Override Environment
+# Jackrose Installer Override Environment
 
 To configure the installer override variables during dry-run tests:
 
 \`\`\`sh
 export INSTALLER_DATA="$DATA_URL"
 export REPO_BASE="$REPO_BASE"
-export CIDRE_INSTALLER_OVERRIDE_DRYRUN="1"
+export JACKROSE_INSTALLER_OVERRIDE_DRYRUN="1"
 \`\`\`
 EOF
 )
 else
   env_block=$(cat <<EOF
-# Cidre installer override prototype.
+# Jackrose installer override prototype.
 # Phase 19 dry-run only.
 # Do not execute installer scripts with this yet.
 
 export INSTALLER_DATA="$DATA_URL"
 export REPO_BASE="$REPO_BASE"
-export CIDRE_INSTALLER_OVERRIDE_DRYRUN="1"
+export JACKROSE_INSTALLER_OVERRIDE_DRYRUN="1"
 EOF
 )
 fi

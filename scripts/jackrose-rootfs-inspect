@@ -1,0 +1,213 @@
+#!/usr/bin/env bash
+# jackrose-rootfs-inspect: Inspect a mounted rootfs for Jackrose components
+set -euo pipefail
+
+SCRIPT_VERSION="0.17.0"
+SCRIPT_NAME="jackrose-rootfs-inspect"
+
+rootfs_path=""
+rescue_rootfs_path=""
+strict=false
+json_output=false
+
+usage() {
+  cat <<EOF
+Usage: $SCRIPT_NAME --rootfs <path> [options]
+
+Inspect a mounted rootfs for required Jackrose components.
+
+Options:
+  --rootfs <path>   Path to mounted main rootfs
+  --rescue-rootfs <path> Path to mounted rescue rootfs
+  --strict          Enable strict checks (executable bits, symlink targets)
+  --json            Output as JSON (reserved)
+  --help            Show this help
+EOF
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --rootfs) rootfs_path="$2"; shift 2 ;;
+    --rescue-rootfs) rescue_rootfs_path="$2"; shift 2 ;;
+    --strict) strict=true; shift ;;
+    --json) json_output=true; shift ;;
+    --help) usage; exit 0 ;;
+    *) echo "ERROR: unknown option: $1" >&2; usage >&2; exit 1 ;;
+  esac
+done
+
+if [ -n "$rescue_rootfs_path" ]; then
+  rootfs_path="$rescue_rootfs_path"
+fi
+
+if [ -z "$rootfs_path" ]; then
+  echo "ERROR: --rootfs <path> or --rescue-rootfs <path> is required" >&2
+  usage >&2
+  exit 1
+fi
+
+if [ ! -d "$rootfs_path" ]; then
+  echo "ERROR: rootfs path not found: $rootfs_path" >&2
+  exit 1
+fi
+
+echo "Jackrose rootfs inspection"
+echo "rootfs: $rootfs_path"
+echo ""
+
+if [ -n "$rescue_rootfs_path" ]; then
+  echo "Mode: rescue-rootfs"
+  echo ""
+fi
+
+result_ok=0
+result_warn=0
+result_fail=0
+
+_check() {
+  local status="$1" label="$2"
+  case "$status" in
+    OK)   echo "[OK]   $label"; result_ok=$((result_ok+1)) ;;
+    WARN) echo "[WARN] $label"; result_warn=$((result_warn+1)) ;;
+    FAIL) echo "[FAIL] $label"; result_fail=$((result_fail+1)) ;;
+  esac
+}
+
+check_file() {
+  local rel="$1"
+  local full="$rootfs_path/$rel"
+  if [ -f "$full" ]; then
+    _check OK "$rel"
+  else
+    _check FAIL "$rel (missing)"
+  fi
+}
+
+check_dir() {
+  local rel="$1"
+  local full="$rootfs_path/$rel"
+  if [ -d "$full" ]; then
+    _check OK "$rel/"
+  else
+    _check FAIL "$rel/ (missing)"
+  fi
+}
+
+echo "Jackrose scripts:"
+check_file "usr/lib/jackrose/jackrose-firstboot-root"
+check_file "usr/lib/jackrose/jackrose-oobe"
+check_file "usr/lib/jackrose/jackrose-firstboot-state"
+check_file "usr/lib/jackrose/jackrose-firstboot-handoff"
+check_file "usr/lib/jackrose/jackrose-seed"
+check_file "usr/lib/jackrose/jackrose-resume"
+check_file "usr/lib/jackrose/jackrose-preinstall"
+check_file "usr/lib/jackrose/jackrose-installer"
+check_file "usr/lib/jackrose/jackrose-panic"
+check_file "usr/lib/jackrose/jackrose-recovery-screen"
+check_file "usr/lib/jackrose/jackrose-safe-mode"
+check_file "usr/lib/jackrose/jackrose-safe-shell"
+check_file "usr/lib/jackrose/jackrose-session-failure"
+check_file "usr/lib/jackrose/jackrose-desktop-failure-detect"
+check_file "usr/lib/jackrose/jackrose-recovery-actions"
+check_file "usr/lib/jackrose/jackrose-emergency-banner"
+check_file "usr/lib/jackrose/jackrose-recovery-report"
+check_file "usr/lib/jackrose/jackrose-rescue"
+check_file "usr/lib/jackrose/jackrose-rescue-check"
+check_file "usr/lib/jackrose/jackrose-rescue-plan"
+check_file "usr/lib/jackrose/jackrose-rescue-profile"
+check_file "usr/lib/jackrose/jackrose-rescue-image-build"
+check_file "usr/lib/jackrose/jackrose-rescue-image-inspect"
+check_file "usr/lib/jackrose/jackrose-rescue-manifest"
+check_file "usr/lib/jackrose/jackrose-rescue-mount"
+check_file "usr/lib/jackrose/jackrose-rescue-export"
+check_file "usr/lib/jackrose/jackrose-rescue-kernel-check"
+check_file "usr/lib/jackrose/jackrose-rescue-report"
+check_file "usr/lib/jackrose/jackrose-rescue-clean"
+check_file "usr/lib/jackrose/jackrose-rescue-boot-plan"
+check_file "usr/lib/jackrose/jackrose-rescue-disk-check"
+check_file "usr/lib/jackrose/jackrose-rescue-slot-metadata"
+check_file "usr/lib/jackrose/jackrose-rescue-boot-guide"
+check_file "usr/lib/jackrose/jackrose-rescue-boot-report"
+check_file "usr/lib/jackrose/jackrose-rescue-create-dry-run"
+check_file "usr/lib/jackrose/jackrose-rescue-boot-checklist"
+check_file "usr/lib/jackrose/jackrose-rescue-boot-risk"
+check_file "usr/lib/jackrose/jackrose-rescue-boot-validate"
+check_file "usr/lib/jackrose/jackrose-rescue-create"
+check_file "usr/lib/jackrose/jackrose-rescue-create-preflight"
+check_file "usr/lib/jackrose/jackrose-rescue-target-check"
+check_file "usr/lib/jackrose/jackrose-rescue-target-format"
+check_file "usr/lib/jackrose/jackrose-rescue-deploy-rootfs"
+check_file "usr/lib/jackrose/jackrose-rescue-install-metadata"
+check_file "usr/lib/jackrose/jackrose-rescue-create-verify"
+check_file "usr/lib/jackrose/jackrose-rescue-create-report"
+check_file "usr/lib/jackrose/jackrose-rescue-create-risk"
+check_file "usr/lib/jackrose/jackrose-rescue-create-clean"
+
+echo ""
+echo "Systemd:"
+check_file "etc/systemd/system/jackrose-firstboot-root.service"
+check_file "etc/systemd/system/jackrose-recovery-screen.service"
+check_file "etc/systemd/system/jackrose-safe-mode.service"
+check_file "etc/systemd/system/jackrose-emergency-banner.service"
+check_file "etc/systemd/system/jackrose-desktop-failure.target"
+check_file "etc/systemd/system/jackrose-safe-mode.target"
+check_file "etc/systemd/system/multi-user.target.wants/jackrose-firstboot-root.service"
+
+echo ""
+echo "State directories:"
+check_dir "var/lib/jackrose"
+check_dir "var/lib/jackrose/seed"
+check_dir "var/lib/jackrose/resume"
+check_dir "var/lib/jackrose/firstboot-root"
+check_dir "var/lib/jackrose/recovery-screen"
+check_dir "var/lib/jackrose/rescue"
+
+echo ""
+echo "Firstboot state (must be clean):"
+if [ -e "$rootfs_path/var/lib/jackrose/firstboot-root/completed" ]; then
+  _check FAIL "firstboot completed marker must NOT exist in image"
+else
+  _check OK "firstboot completed marker absent"
+fi
+if [ -e "$rootfs_path/var/lib/jackrose/firstboot-root/skipped" ]; then
+  _check FAIL "firstboot skipped marker must NOT exist in image"
+else
+  _check OK "firstboot skipped marker absent"
+fi
+
+if "$strict"; then
+  echo ""
+  echo "Strict checks:"
+  for script in \
+    jackrose-firstboot-root \
+    jackrose-oobe \
+    jackrose-firstboot-state \
+    jackrose-firstboot-handoff \
+    jackrose-seed \
+    jackrose-resume \
+    jackrose-preinstall \
+    jackrose-installer; do
+    full="$rootfs_path/usr/lib/jackrose/$script"
+    if [ -f "$full" ]; then
+      if [ -x "$full" ]; then
+        _check OK "$script is executable"
+      else
+        _check FAIL "$script is not executable"
+      fi
+    fi
+  done
+
+  symlink="$rootfs_path/etc/systemd/system/multi-user.target.wants/jackrose-firstboot-root.service"
+  if [ -L "$symlink" ]; then
+    _check OK "firstboot service symlink exists"
+  elif [ -f "$symlink" ]; then
+    _check WARN "firstboot service is a regular file, not a symlink"
+  fi
+fi
+
+echo ""
+echo "Summary: OK=$result_ok WARN=$result_warn FAIL=$result_fail"
+
+if [ "$result_fail" -gt 0 ]; then
+  exit 1
+fi

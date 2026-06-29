@@ -1,0 +1,39 @@
+#!/bin/sh
+set -eu
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+. "$SCRIPT_DIR/jackrose-macos-restore-common"
+
+output_file="$PWD/.local/state/jackrose/macos-rescue/current/macos-rescue-guide.md"
+
+usage() {
+  cat <<EOF
+Usage: jackrose-macos-rescue-guide [options]
+
+Options:
+  --output <file>
+  --help
+EOF
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --output) output_file="$2"; shift 2 ;;
+    --help) usage; exit 0 ;;
+    *) printf 'ERROR: unknown option: %s\n' "$1" >&2; usage >&2; exit 1 ;;
+  esac
+done
+
+jackrose_macos_restore_require_macos
+mkdir -p "$(dirname "$output_file")"
+cat > "$output_file" <<'EOF'
+# Jackrose macOS Rescue Guide
+
+- What Rescue Slot is: a separate minimal repair-oriented Linux environment
+- When to use it: when main Jackrose no longer boots far enough to show Recovery Screen
+- Required size: 6-12 GiB, with 8 GiB recommended
+- Why this release is read-only: disk layout and boot pairing need explicit planning first
+- Future guided creation: planned for later releases
+- Relation to macOS Restore Assistant: use Restore Assistant if Rescue planning is insufficient or you want to exit Jackrose entirely
+EOF
+printf '%s\n' "$output_file"

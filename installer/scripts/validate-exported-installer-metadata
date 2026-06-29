@@ -85,7 +85,7 @@ for ((i=0; i<images_count; i++)); do
     echo "  Exported metadata uses unsupported first_boot_mode: $img_mode." >&2
     echo "" >&2
     echo "Why it matters:" >&2
-    echo "  Cidre seed images must boot into the graphical desktop Welcome path." >&2
+    echo "  Jackrose seed images must boot into the graphical desktop Welcome path." >&2
     echo "" >&2
     echo "Next action:" >&2
     echo "  Fix the source metadata or export mapping." >&2

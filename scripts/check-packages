@@ -44,8 +44,8 @@ for arg in "$@"; do
 done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CIDRE_ROOT="$(dirname "$SCRIPT_DIR")"
-PACKAGES_DIR="${CIDRE_ROOT}/packages/arch"
+JACKROSE_ROOT="$(dirname "$SCRIPT_DIR")"
+PACKAGES_DIR="${JACKROSE_ROOT}/packages/arch"
 
 if [ "$ALL" = true ]; then
   SRCINFO=true

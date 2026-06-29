@@ -5,7 +5,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-TEST_TMPDIR="${CIDRE_TEST_TMPDIR:-/tmp/cidre-installer-boundary-probe-tests}"
+TEST_TMPDIR="${JACKROSE_TEST_TMPDIR:-/tmp/jackrose-installer-boundary-probe-tests}"
 rm -rf "$TEST_TMPDIR"
 mkdir -p "$TEST_TMPDIR/generated"
 mkdir -p "$TEST_TMPDIR/fetch"
@@ -33,8 +33,8 @@ echo "  [OK] Dangerous command string blocked by guard."
 
 # Test 2: Safe bootstrap probe setup
 echo "Test 2: Setting up mock HTTP server..."
-FIXTURE_DATA="$REPO_ROOT/installer/fixtures/cidre-seed-v0.integration.json"
-LOCAL_LAYOUT="$REPO_ROOT/installer/release/cidre-release-layout.localhost.json"
+FIXTURE_DATA="$REPO_ROOT/installer/fixtures/jackrose-seed-v0.integration.json"
+LOCAL_LAYOUT="$REPO_ROOT/installer/release/jackrose-release-layout.localhost.json"
 
 "$REPO_ROOT/installer/scripts/export-installer-metadata" \
   --metadata "$FIXTURE_DATA" \
@@ -48,7 +48,7 @@ LOCAL_LAYOUT="$REPO_ROOT/installer/release/cidre-release-layout.localhost.json"
 
 "$REPO_ROOT/installer/scripts/export-asahi-installer-data" \
   --input "$TEST_TMPDIR/dev-facing.json" \
-  --output "$TEST_TMPDIR/generated/asahi-installer-data.cidre.dev.json" \
+  --output "$TEST_TMPDIR/generated/asahi-installer-data.jackrose.dev.json" \
   --channel dev
 
 # Start mock HTTP server
@@ -68,7 +68,7 @@ sleep 2
 # Test 3: Run probe on safe input (expect C decision because package is .tar.zst, or A if modified)
 echo "Test 3: Running boundary probe on dev metadata URL..."
 "$REPO_ROOT/installer/scripts/controlled-installer-boundary-probe" \
-  --installer-data-url "http://127.0.0.1:8769/asahi-installer-data.cidre.dev.json" \
+  --installer-data-url "http://127.0.0.1:8769/asahi-installer-data.jackrose.dev.json" \
   --repo-base "http://127.0.0.1:8769" \
   --bootstrap-snapshot "$SAFE_FIXTURE" \
   --output "$TEST_TMPDIR/result.md"
@@ -82,7 +82,7 @@ echo "  [OK] Boundary probe completed successfully."
 # Test 4: Run probe on dangerous snapshot (expect B decision)
 echo "Test 4: Running boundary probe on dangerous bootstrap snapshot..."
 "$REPO_ROOT/installer/scripts/controlled-installer-boundary-probe" \
-  --installer-data-url "http://127.0.0.1:8769/asahi-installer-data.cidre.dev.json" \
+  --installer-data-url "http://127.0.0.1:8769/asahi-installer-data.jackrose.dev.json" \
   --repo-base "http://127.0.0.1:8769" \
   --bootstrap-snapshot "$DANGER_FIXTURE" \
   --output "$TEST_TMPDIR/result-danger.md"

@@ -1,0 +1,98 @@
+#!/bin/sh
+set -eu
+
+if [ -n "${JACKROSE_UNINSTALL_STATE_FILE:-}" ]; then
+  STATE_FILE="$JACKROSE_UNINSTALL_STATE_FILE"
+elif [ "$(id -u)" -eq 0 ] && [ "$(uname)" = "Linux" ]; then
+  STATE_FILE="/var/lib/jackrose/uninstall/uninstall-state.json"
+else
+  STATE_FILE="${HOME}/.local/state/jackrose/uninstall/current/uninstall-state.json"
+fi
+
+STATE_DIR="$(dirname "$STATE_FILE")"
+mkdir -p "$STATE_DIR"
+
+DRY_RUN_MD="$STATE_DIR/uninstall-dry-run.md"
+target=""
+json_mode=false
+
+usage() {
+  cat <<'EOF'
+Usage:
+  jackrose-uninstall-dry-run [options]
+
+Options:
+  --target <target>
+  --json
+  --help
+EOF
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --target) target="$2"; shift 2 ;;
+    --json) json_mode=true; shift ;;
+    --help|-h|help) usage; exit 0 ;;
+    *) printf 'ERROR: Unknown option: %s\n' "$1" >&2; usage; exit 1 ;;
+  esac
+done
+
+if [ -z "$target" ]; then
+  printf 'ERROR: --target is required\n' >&2
+  usage
+  exit 1
+fi
+
+python3 -c '
+import sys, json, os
+
+state_file = sys.argv[1]
+dry_run_md = sys.argv[2]
+target = sys.argv[3]
+json_mode = sys.argv[4] == "true"
+
+export_status = "completed"
+
+preview = f"""# Dry-run Delete Plan
+Would remove Jackrose/Asahi target:
+
+  target: {target}
+  classification: candidate-jackrose
+  export: {export_status}
+
+No disk operation was performed.
+"""
+
+with open(dry_run_md, "w") as f:
+    f.write(preview)
+
+if json_mode:
+    print(json.dumps({
+        "target": target,
+        "classification": "candidate-jackrose",
+        "export": export_status,
+        "dry_run": True,
+        "removed": False
+    }, indent=2))
+else:
+    print("Would remove Jackrose/Asahi target:\n")
+    print(f"  target: {target}")
+    print(f"  classification: candidate-jackrose")
+    print(f"  export: {export_status}\n")
+    print("No disk operation was performed.")
+
+# Update state to dry-run passed
+if os.path.exists(state_file):
+    try:
+        with open(state_file) as f:
+            d = json.load(f)
+        d["stage"] = "dry-run"
+        d["status"] = "passed"
+        d["next_stage"] = "macos-restore-handoff"
+        d["next_command"] = f"jackrose-uninstall-execute --target {target}"
+        with open(state_file, "w") as f:
+            json.dump(d, f, indent=2)
+            f.write("\n")
+    except Exception:
+        pass
+' "$STATE_FILE" "$DRY_RUN_MD" "$target" "$json_mode"

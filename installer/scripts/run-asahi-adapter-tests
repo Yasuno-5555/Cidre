@@ -5,15 +5,15 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-TEST_TMPDIR="${CIDRE_TEST_TMPDIR:-/tmp/cidre-asahi-adapter-tests}"
+TEST_TMPDIR="${JACKROSE_TEST_TMPDIR:-/tmp/jackrose-asahi-adapter-tests}"
 rm -rf "$TEST_TMPDIR"
 mkdir -p "$TEST_TMPDIR"
 
 echo "=== Running Asahi Adapter Tests ==="
 
-FIXTURE="$REPO_ROOT/installer/fixtures/cidre-seed-v0.integration.json"
+FIXTURE="$REPO_ROOT/installer/fixtures/jackrose-seed-v0.integration.json"
 UPSTREAM_SNAPSHOT="$REPO_ROOT/installer/compat/upstream/asahi-installer-data.snapshot.json"
-LOCAL_LAYOUT="$REPO_ROOT/installer/release/cidre-release-layout.localhost.json"
+LOCAL_LAYOUT="$REPO_ROOT/installer/release/jackrose-release-layout.localhost.json"
 
 # Staging initial local metadata format
 "$REPO_ROOT/installer/scripts/export-installer-metadata" \
@@ -49,7 +49,7 @@ echo "  [OK] Selection simulator passed."
 # Test 4: Three-way comparison shape checks
 echo "Test 4: Running comparative report..."
 "$REPO_ROOT/installer/scripts/compare-installer-metadata-shape" \
-  --cidre "$TEST_TMPDIR/dev-facing.json" \
+  --jackrose "$TEST_TMPDIR/dev-facing.json" \
   --asahi-like "$TEST_TMPDIR/asahi-like.json" \
   --upstream "$UPSTREAM_SNAPSHOT"
 echo "  [OK] Shape comparison completed."

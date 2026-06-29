@@ -1,0 +1,17 @@
+pkgbase = jackrose-update
+	pkgdesc = Jackrose desktop layer updater
+	pkgver = 1.0.0
+	pkgrel = 1
+	url = https://github.com/Yasuno-5555/Jackrose
+	arch = any
+	license = custom
+	depends = bash
+	depends = jq
+	depends = jackrose-snapshot
+	depends = jackrose-recovery
+	depends = jackrose-diagnostics
+	depends = jackrose-user-setup
+	source = jackrose-update
+	sha256sums = SKIP
+
+pkgname = jackrose-update

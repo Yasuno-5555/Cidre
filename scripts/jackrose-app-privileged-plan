@@ -1,0 +1,3 @@
+#!/bin/sh
+set -eu
+python3 -c 'import json; print(json.dumps({"schema_version":1,"command":"jackrose-app-privileged-plan","status":"pass","summary":"Authenticated helper execution is available after plan validation and confirmation.","helper_required":True,"enabled_operations":["partition-create","partition-delete","apfs-resize-container","apfs-delete-volume"],"blocked_operations":["whole-disk-erase","startup-volume-delete"]}, indent=2))'

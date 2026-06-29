@@ -1,0 +1,16 @@
+# Maintainer: Yasuno <yasuno@example.invalid>
+
+pkgname=jackrose-maintenance
+pkgver=1.0.0
+pkgrel=1
+pkgdesc='Jackrose daily maintenance utility'
+url='https://github.com/Yasuno-5555/Jackrose'
+arch=('any')
+license=('custom')
+depends=('bash' 'jq' 'jackrose-snapshot' 'jackrose-user-setup')
+source=('jackrose-maintenance')
+sha256sums=('SKIP')
+
+package() {
+  install -Dm755 "${srcdir}/jackrose-maintenance" "${pkgdir}/usr/bin/jackrose-maintenance"
+}

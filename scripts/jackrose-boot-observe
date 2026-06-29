@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# jackrose-boot-observe: Structuring human observation of controlled boot tests
+set -euo pipefail
+
+firstboot_visible="no"
+oobe_visible="no"
+handoff_visible="no"
+login_prompt_visible="no"
+error_text="none"
+note_text=""
+output_file=""
+
+usage() {
+  cat <<EOF
+Usage: jackrose-boot-observe [options]
+
+Record observation parameters from first boot tests.
+
+Options:
+  --firstboot-visible yes|no
+  --oobe-visible yes|no
+  --handoff-visible yes|no
+  --login-prompt-visible yes|no
+  --error <text>
+  --note <text>
+  --output <file>
+  --help
+EOF
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --firstboot-visible) firstboot_visible="$2"; shift 2 ;;
+    --oobe-visible) oobe_visible="$2"; shift 2 ;;
+    --handoff-visible) handoff_visible="$2"; shift 2 ;;
+    --login-prompt-visible) login_prompt_visible="$2"; shift 2 ;;
+    --error) error_text="$2"; shift 2 ;;
+    --note) note_text="$2"; shift 2 ;;
+    --output) output_file="$2"; shift 2 ;;
+    --help) usage; exit 0 ;;
+    *) echo "ERROR: unknown option: $1" >&2; usage >&2; exit 1 ;;
+  esac
+done
+
+if [ -z "$output_file" ]; then
+  echo "ERROR: --output file path is required" >&2
+  exit 1
+fi
+
+mkdir -p "$(dirname "$output_file")"
+
+cat > "$output_file" <<EOF
+# Jackrose Boot Observation
+
+- firstboot output visible: $firstboot_visible
+- OOBE visible: $oobe_visible
+- handoff visible: $handoff_visible
+- login prompt visible: $login_prompt_visible
+- error: $error_text
+- notes: $note_text
+EOF
+
+echo "Observation log created at: $output_file"
+EOF

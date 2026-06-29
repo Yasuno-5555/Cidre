@@ -1,0 +1,86 @@
+#!/bin/sh
+set -eu
+
+from_stage=""
+to_stage=""
+json_mode=false
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --from) from_stage="$2"; shift 2 ;;
+    --to) to_stage="$2"; shift 2 ;;
+    --json) json_mode=true; shift ;;
+    --help|-h) echo "Usage: jackrose-app-wizard-gate --from <stage> --to <stage> [--json]"; exit 0 ;;
+    *) echo "ERROR: unknown option: $1" >&2; exit 2 ;;
+  esac
+done
+
+[ -n "$from_stage" ] || { echo "ERROR: --from is required" >&2; exit 2; }
+[ -n "$to_stage" ] || { echo "ERROR: --to is required" >&2; exit 2; }
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+install_json="$("$SCRIPT_DIR/jackrose-app-gate-evaluate" --scope install --json 2>/dev/null || true)"
+finish_json="$("$SCRIPT_DIR/jackrose-app-finish-gate" --json 2>/dev/null || true)"
+shutdown_json="$("$SCRIPT_DIR/jackrose-app-before-shutdown-gate" --json 2>/dev/null || true)"
+jackrose_volume_ready="$(
+python3 - <<'PY'
+import plistlib
+import subprocess
+
+try:
+    completed = subprocess.run(["/usr/sbin/diskutil", "apfs", "list", "-plist"], capture_output=True, check=True)
+    apfs = plistlib.loads(completed.stdout)
+    for container in apfs.get("Containers", []):
+        for volume in container.get("Volumes", []):
+            name = volume.get("Name") or volume.get("VolumeName") or ""
+            if name == "Jackrose":
+                print("true")
+                raise SystemExit(0)
+except Exception:
+    pass
+print("false")
+PY
+)"
+
+python3 - "$from_stage" "$to_stage" "$json_mode" "$install_json" "$finish_json" "$shutdown_json" "$jackrose_volume_ready" <<'PY'
+import json, sys
+from_stage, to_stage, json_mode, install_raw, finish_raw, shutdown_raw, jackrose_volume_ready = sys.argv[1:]
+json_mode = json_mode == "true"
+install = json.loads(install_raw) if install_raw.strip() else {}
+finish = json.loads(finish_raw) if finish_raw.strip() else {}
+shutdown = json.loads(shutdown_raw) if shutdown_raw.strip() else {}
+jackrose_volume_ready = jackrose_volume_ready == "true"
+
+status = "passed"
+summary = "Wizard transition allowed."
+install_allowed_actions = set(install.get("allowed_actions") or [])
+if (
+    from_stage == "disk-planning"
+    and to_stage == "install-execution"
+    and not (
+        install.get("status") == "passed"
+        or "install-execution-test" in install_allowed_actions
+        or jackrose_volume_ready
+    )
+):
+    status = "blocked"
+    summary = "Installer killswitch is active or safety gate is not ready."
+elif from_stage == "install-execution" and to_stage == "finish" and finish.get("status") != "passed":
+    status = "blocked"
+    summary = "Boot safety gate must pass before entering Finish."
+elif from_stage == "finish" and to_stage == "shutdown" and shutdown.get("status") != "pass":
+    status = "blocked"
+    summary = "Before-shutdown gate must pass before shutdown."
+
+payload = {
+    "schema_version": 1,
+    "command": "jackrose-app-wizard-gate",
+    "status": status,
+    "summary": summary,
+    "from": from_stage,
+    "to": to_stage,
+    "exit_code": 0 if status == "passed" else 8,
+    "blocked_actions": [] if status == "passed" else [to_stage],
+}
+print(json.dumps(payload, indent=2) if json_mode else payload["summary"])
+sys.exit(payload["exit_code"])
+PY

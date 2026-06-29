@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "command": "cidre-app-live-drill-report",
+  "command": "jackrose-app-live-drill-report",
   "status": "passed",
   "summary": "Live drill report generated."
 }

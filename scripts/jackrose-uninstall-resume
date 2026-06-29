@@ -1,0 +1,77 @@
+#!/bin/sh
+set -eu
+
+if [ -n "${JACKROSE_UNINSTALL_STATE_FILE:-}" ]; then
+  STATE_FILE="$JACKROSE_UNINSTALL_STATE_FILE"
+elif [ "$(id -u)" -eq 0 ] && [ "$(uname)" = "Linux" ]; then
+  STATE_FILE="/var/lib/jackrose/uninstall/uninstall-state.json"
+else
+  STATE_FILE="${HOME}/.local/state/jackrose/uninstall/current/uninstall-state.json"
+fi
+
+usage() {
+  cat <<'EOF'
+Usage:
+  jackrose-uninstall-resume [options]
+
+Options:
+  --show
+  --run
+  --json
+  --help
+EOF
+}
+
+mode="show"
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --show) mode="show"; shift ;;
+    --run) mode="run"; shift ;;
+    --json) mode="json"; shift ;;
+    --help|-h|help) usage; exit 0 ;;
+    *) printf 'ERROR: Unknown option: %s\n' "$1" >&2; usage; exit 1 ;;
+  esac
+done
+
+python3 -c '
+import sys, json, os, subprocess
+
+state_file = sys.argv[1]
+mode = sys.argv[2]
+
+state_data = {}
+if os.path.exists(state_file):
+    try:
+        with open(state_file) as f:
+            state_data = json.load(f)
+    except Exception:
+        pass
+
+next_cmd = state_data.get("next_command", "jackrose-uninstall-preflight")
+
+if mode == "json":
+    print(json.dumps({
+        "next_command": next_cmd
+    }, indent=2))
+elif mode == "show":
+    print("Next uninstall command to run:")
+    print("  %s" % next_cmd)
+elif mode == "run":
+    if not next_cmd:
+        print("No further command is pending.")
+        sys.exit(0)
+    print("Executing: %s" % next_cmd)
+    # Parse and execute command
+    args = next_cmd.split()
+    cmd_name = args[0]
+    # Check if script exists in the relative path or scripts dir
+    repo_root = os.environ.get("JACKROSE_REPO_ROOT", "/home/yasuno/Projects/Jackrose")
+    scripts_dir = os.path.join(repo_root, "scripts")
+    script_path = os.path.join(scripts_dir, cmd_name)
+    if os.path.exists(script_path):
+        cmd_args = [script_path] + args[1:]
+    else:
+        cmd_args = args
+    
+    subprocess.run(cmd_args, check=True)
+' "$STATE_FILE" "$mode"

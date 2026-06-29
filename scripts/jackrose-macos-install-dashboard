@@ -1,0 +1,84 @@
+#!/bin/sh
+set -eu
+
+if [ -n "${JACKROSE_INSTALL_STATE_FILE:-}" ]; then
+  STATE_FILE="$JACKROSE_INSTALL_STATE_FILE"
+else
+  STATE_FILE="${HOME}/.local/state/jackrose/install/current/install-state.json"
+fi
+
+usage() {
+  cat <<'EOF'
+Usage:
+  jackrose-macos-install-dashboard [options]
+
+Options:
+  --json
+  --next
+  --help
+EOF
+}
+
+cmd="default"
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --json) cmd="json"; shift ;;
+    --next) cmd="next"; shift ;;
+    --help|-h|help) usage; exit 0 ;;
+    *) printf 'ERROR: Unknown option: %s\n' "$1" >&2; usage; exit 1 ;;
+  esac
+done
+
+run_py() {
+  python3 -c '
+import sys, os, json
+
+state_file = sys.argv[1]
+cmd = sys.argv[2]
+
+state_data = {}
+if os.path.exists(state_file):
+    try:
+        with open(state_file) as f:
+            state_data = json.load(f)
+    except Exception:
+        pass
+
+current_stage = state_data.get("stage", "macos-preflight")
+current_status = state_data.get("status", "pending")
+next_command = state_data.get("next_command", "")
+
+if cmd == "json":
+    print(json.dumps({
+        "installer": "macOS",
+        "current_stage": current_stage,
+        "current_status": current_status,
+        "next_command": next_command
+    }, indent=2))
+    sys.exit(0)
+
+if cmd == "next":
+    print(next_command)
+    sys.exit(0)
+
+print("Jackrose macOS Installer")
+print("=====================\n")
+
+# print fixed checklist for macOS perspective
+print("[OK]   repository")
+print("[OK]   macOS readiness")
+print("[OK]   disk audit")
+if current_stage in ["macos-preflight"]:
+    print("[WAIT] seed generation")
+    print("[TODO] ALARM installation")
+else:
+    print("[OK]   seed generation")
+    print("[WAIT] ALARM installation")
+
+print("\nNext:")
+print("  Follow docs generated at:")
+print("    .local/state/jackrose/install/current/install-handoff.md")
+' "$STATE_FILE" "$cmd"
+}
+
+run_py

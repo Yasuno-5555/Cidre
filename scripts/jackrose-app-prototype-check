@@ -1,0 +1,70 @@
+#!/bin/sh
+set -eu
+
+usage() {
+  cat <<'EOF'
+Usage:
+  jackrose-app-prototype-check [options]
+
+Options:
+  --json
+  --help
+EOF
+}
+
+json_mode=false
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --json) json_mode=true; shift ;;
+    --help|-h|help) usage; exit 0 ;;
+    *) printf 'ERROR: Unknown option: %s\n' "$1" >&2; usage; exit 2 ;;
+  esac
+done
+
+python3 -c '
+import sys, os, json
+
+json_mode = sys.argv[1] == "true"
+repo_root = os.environ.get("JACKROSE_REPO_ROOT", "/home/yasuno/Projects/Jackrose")
+
+checks = []
+passed = True
+
+def check_path(path, label, is_dir=False):
+    global passed
+    full = os.path.join(repo_root, path)
+    if is_dir:
+        ok = os.path.isdir(full)
+    else:
+        ok = os.path.isfile(full)
+    if not ok:
+        passed = False
+    checks.append({"name": label, "passed": ok, "path": path})
+
+check_path("apps/macos/JackroseApp", "App Directory Layout", is_dir=True)
+check_path("apps/macos/JackroseApp/Package.swift", "Package.swift Manifest")
+check_path("apps/macos/JackroseApp/Sources/JackroseApp", "SwiftUI Source Folder", is_dir=True)
+check_path("apps/macos/JackroseApp/Fixtures", "Mock Fixture Files Folder", is_dir=True)
+check_path("interface/command-manifest.json", "Command Manifest Config")
+check_path("interface/app-actions.json", "App Actions Config")
+check_path("docs/jackrose-app-prototype.md", "App Prototype Doc")
+check_path("scripts/jackrose-app-ui-validation", "UI Validation Script")
+check_path("docs/v0.33.0-jackrose-app-guided-action-ui.md", "v0.33 Release Notes Doc")
+
+
+res = {
+    "passed": passed,
+    "checks": checks
+}
+
+if json_mode:
+    print(json.dumps(res, indent=2))
+else:
+    print("Jackrose.app Prototype Checks:")
+    for c in checks:
+        status = "[OK]  " if c["passed"] else "[FAIL]"
+        print("  %s %s (%s)" % (status, c["name"], c["path"]))
+    print("Overall app prototype verification: %s" % ("PASSED" if passed else "FAILED"))
+    if not passed:
+        sys.exit(1)
+' "$([ "$json_mode" = "true" ] && echo "true" || echo "false")"

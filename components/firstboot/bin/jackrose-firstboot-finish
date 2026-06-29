@@ -1,0 +1,20 @@
+#!/bin/bash
+# jackrose-firstboot-finish: Finalizes the OOBE setup and transition to graphical login
+set -euo pipefail
+
+echo "Finalizing Jackrose Firstboot OOBE..."
+
+mkdir -p /var/lib/jackrose
+touch /var/lib/jackrose/firstboot.done
+
+if systemctl is-active --quiet jackrose-firstboot.service 2>/dev/null || systemctl is-enabled --quiet jackrose-firstboot.service 2>/dev/null; then
+  echo "Disabling jackrose-firstboot.service..."
+  systemctl disable jackrose-firstboot.service || true
+fi
+
+echo "Enabling greetd.service..."
+systemctl enable greetd.service || true
+
+echo "OOBE complete. Rebooting system in 3 seconds..."
+sleep 3
+reboot

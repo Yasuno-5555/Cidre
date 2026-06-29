@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "command": "cidre-app-disposable-target-check",
+  "command": "jackrose-app-disposable-target-check",
   "status": "failed",
   "summary": "The selected target is Apple_APFS_Recovery or another recovery partition.",
   "exit_code": 8,

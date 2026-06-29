@@ -1,0 +1,389 @@
+#!/bin/sh
+set -eu
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+REPO_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+OVERLAY_DIR="$REPO_ROOT/downstream/rootfs-overlay"
+OUTPUT_DIR_DEFAULT="$REPO_ROOT/.local/state/jackrose/image-build"
+OUTPUT_DIR="${JACKROSE_IMAGE_OUTPUT_DIR:-$OUTPUT_DIR_DEFAULT}"
+IMAGE_NAME="${JACKROSE_IMAGE_NAME:-jackrose-prototype}"
+PROFILE="${JACKROSE_IMAGE_PROFILE:-developer}"
+IMAGE_VERSION="${JACKROSE_IMAGE_VERSION:-}"
+BUILDER_DIR="${JACKROSE_ALARM_BUILDER_DIR:-}"
+DRY_RUN=0
+OVERLAY_ONLY=0
+SYNC_OVERLAY=0
+INSPECT_ARTIFACT=0
+CLEAN_OUTPUT=0
+NO_COMPRESS=0
+BOOT_READINESS=0
+BUILDER_STATUS=0
+BUILDER_CONFIG_INTEGRATE=0
+SYNC_RESCUE_OVERLAY=0
+RESCUE_OVERLAY_ONLY=0
+RESCUE_DIR="$REPO_ROOT/rescue"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  jackrose-image-build [options]
+
+Options:
+  --dry-run
+  --overlay-only
+  --sync-overlay
+  --sync-rescue-overlay
+  --rescue-overlay-only
+  --builder <path>
+  --builder-config
+  --output <dir>
+  --profile <name>
+  --inspect
+  --clean
+  --no-compress
+  --boot-readiness
+  --builder-status
+  -h, --help
+EOF
+}
+
+validate_profile() {
+  case "$1" in
+    desktop|developer|minimal|recovery) return 0 ;;
+    *) printf 'ERROR: unknown profile: %s\n' "$1" >&2; exit 1 ;;
+  esac
+}
+
+
+log() {
+  printf '%s\n' "$*"
+  if [ -n "${BUILD_LOG:-}" ] && [ "$DRY_RUN" -eq 0 ]; then
+    printf '%s\n' "$*" >> "$BUILD_LOG"
+  fi
+}
+
+sync_overlay_tree() {
+  overlay_jackrose_dir="$OVERLAY_DIR/usr/lib/jackrose"
+  overlay_systemd_dir="$OVERLAY_DIR/etc/systemd/system"
+  overlay_wants_dir="$overlay_systemd_dir/multi-user.target.wants"
+  overlay_state_dir="$OVERLAY_DIR/var/lib/jackrose"
+
+  mkdir -p "$overlay_jackrose_dir" "$overlay_systemd_dir" "$overlay_wants_dir" \
+    "$overlay_state_dir/seed" "$overlay_state_dir/resume" "$overlay_state_dir/firstboot-root" \
+    "$overlay_state_dir/recovery-screen" "$overlay_state_dir/rescue"
+
+  for subdir in seed resume firstboot-root recovery-screen rescue; do
+    keep_file="$overlay_state_dir/$subdir/.gitkeep"
+    [ -f "$keep_file" ] || : > "$keep_file"
+  done
+
+  for mapping in \
+    "scripts/jackrose-firstboot-root:jackrose-firstboot-root" \
+    "scripts/jackrose-oobe:jackrose-oobe" \
+    "scripts/jackrose-firstboot-state:jackrose-firstboot-state" \
+    "scripts/jackrose-firstboot-handoff:jackrose-firstboot-handoff" \
+    "scripts/jackrose-firstboot-diagnose:jackrose-firstboot-diagnose" \
+    "scripts/jackrose-firstboot-retry:jackrose-firstboot-retry" \
+    "scripts/jackrose-firstboot-repair:jackrose-firstboot-repair" \
+    "scripts/jackrose-firstboot-report:jackrose-firstboot-report" \
+    "scripts/jackrose-firstboot-console:jackrose-firstboot-console" \
+    "scripts/jackrose-user-handoff:jackrose-user-handoff" \
+    "scripts/jackrose-user-phase-state:jackrose-user-phase-state" \
+    "scripts/jackrose-user-phase-verify:jackrose-user-phase-verify" \
+    "scripts/jackrose-user-phase-report:jackrose-user-phase-report" \
+    "scripts/jackrose-user-phase-repair:jackrose-user-phase-repair" \
+    "scripts/jackrose-first-login:jackrose-first-login" \
+    "scripts/jackrose-seed:jackrose-seed" \
+    "scripts/jackrose-seed-verify:jackrose-seed-verify" \
+    "scripts/jackrose-seed-import:jackrose-seed-import" \
+    "scripts/jackrose-resume:jackrose-resume" \
+    "scripts/jackrose-doctor:jackrose-doctor" \
+    "scripts/jackrose-recovery:jackrose-recovery" \
+    "scripts/jackrose-recovery-common:jackrose-recovery-common" \
+    "scripts/jackrose-panic:jackrose-panic" \
+    "scripts/jackrose-recovery-screen:jackrose-recovery-screen" \
+    "scripts/jackrose-safe-mode:jackrose-safe-mode" \
+    "scripts/jackrose-safe-shell:jackrose-safe-shell" \
+    "scripts/jackrose-session-failure:jackrose-session-failure" \
+    "scripts/jackrose-desktop-failure-detect:jackrose-desktop-failure-detect" \
+    "scripts/jackrose-recovery-actions:jackrose-recovery-actions" \
+    "scripts/jackrose-emergency-banner:jackrose-emergency-banner" \
+    "scripts/jackrose-recovery-report:jackrose-recovery-report" \
+    "scripts/jackrose-rescue:jackrose-rescue" \
+    "scripts/jackrose-rescue-check:jackrose-rescue-check" \
+    "scripts/jackrose-rescue-plan:jackrose-rescue-plan" \
+    "scripts/jackrose-rescue-profile:jackrose-rescue-profile" \
+    "scripts/jackrose-rescue-image-build:jackrose-rescue-image-build" \
+    "scripts/jackrose-rescue-image-inspect:jackrose-rescue-image-inspect" \
+    "scripts/jackrose-rescue-manifest:jackrose-rescue-manifest" \
+    "scripts/jackrose-rescue-mount:jackrose-rescue-mount" \
+    "scripts/jackrose-rescue-export:jackrose-rescue-export" \
+    "scripts/jackrose-rescue-kernel-check:jackrose-rescue-kernel-check" \
+    "scripts/jackrose-rescue-report:jackrose-rescue-report" \
+    "scripts/jackrose-rescue-clean:jackrose-rescue-clean" \
+    "scripts/jackrose-rescue-boot-plan:jackrose-rescue-boot-plan" \
+    "scripts/jackrose-rescue-disk-check:jackrose-rescue-disk-check" \
+    "scripts/jackrose-rescue-slot-metadata:jackrose-rescue-slot-metadata" \
+    "scripts/jackrose-rescue-boot-guide:jackrose-rescue-boot-guide" \
+    "scripts/jackrose-rescue-boot-report:jackrose-rescue-boot-report" \
+    "scripts/jackrose-rescue-create-dry-run:jackrose-rescue-create-dry-run" \
+    "scripts/jackrose-rescue-boot-checklist:jackrose-rescue-boot-checklist" \
+    "scripts/jackrose-rescue-boot-risk:jackrose-rescue-boot-risk" \
+    "scripts/jackrose-rescue-boot-validate:jackrose-rescue-boot-validate" \
+    "scripts/jackrose-rescue-create:jackrose-rescue-create" \
+    "scripts/jackrose-rescue-create-preflight:jackrose-rescue-create-preflight" \
+    "scripts/jackrose-rescue-target-check:jackrose-rescue-target-check" \
+    "scripts/jackrose-rescue-target-format:jackrose-rescue-target-format" \
+    "scripts/jackrose-rescue-deploy-rootfs:jackrose-rescue-deploy-rootfs" \
+    "scripts/jackrose-rescue-install-metadata:jackrose-rescue-install-metadata" \
+    "scripts/jackrose-rescue-create-verify:jackrose-rescue-create-verify" \
+    "scripts/jackrose-rescue-create-report:jackrose-rescue-create-report" \
+    "scripts/jackrose-rescue-create-risk:jackrose-rescue-create-risk" \
+    "scripts/jackrose-rescue-create-clean:jackrose-rescue-create-clean" \
+    "scripts/jackrose-preinstall:jackrose-preinstall" \
+    "scripts/jackrose-installer:jackrose-installer"; do
+    src="${mapping%%:*}"
+    dst="${mapping##*:}"
+    cp "$REPO_ROOT/$src" "$overlay_jackrose_dir/$dst"
+    chmod +x "$overlay_jackrose_dir/$dst"
+  done
+
+  cp "$REPO_ROOT/systemd/jackrose-firstboot-root.service" "$overlay_systemd_dir/jackrose-firstboot-root.service"
+  cp "$REPO_ROOT/systemd/jackrose-recovery-screen.service" "$overlay_systemd_dir/jackrose-recovery-screen.service"
+  cp "$REPO_ROOT/systemd/jackrose-safe-mode.service" "$overlay_systemd_dir/jackrose-safe-mode.service"
+  cp "$REPO_ROOT/systemd/jackrose-emergency-banner.service" "$overlay_systemd_dir/jackrose-emergency-banner.service"
+  cp "$REPO_ROOT/systemd/jackrose-desktop-failure.target" "$overlay_systemd_dir/jackrose-desktop-failure.target"
+  cp "$REPO_ROOT/systemd/jackrose-safe-mode.target" "$overlay_systemd_dir/jackrose-safe-mode.target"
+  ln -sfn ../jackrose-firstboot-root.service "$overlay_wants_dir/jackrose-firstboot-root.service"
+}
+
+sync_rescue_overlay_tree() {
+  overlay_jackrose_dir="$RESCUE_DIR/overlay/usr/lib/jackrose"
+  overlay_etc_dir="$RESCUE_DIR/overlay/etc/jackrose"
+  overlay_state_dir="$RESCUE_DIR/overlay/var/lib/jackrose/rescue"
+  mkdir -p "$overlay_jackrose_dir" "$overlay_etc_dir" "$overlay_state_dir"
+  cp "$RESCUE_DIR/profile/profile.env" "$overlay_etc_dir/profile.env"
+  for script in \
+    jackrose-rescue \
+    jackrose-rescue-check \
+    jackrose-rescue-plan \
+    jackrose-rescue-profile \
+    jackrose-rescue-image-build \
+    jackrose-rescue-image-inspect \
+    jackrose-rescue-manifest \
+    jackrose-rescue-mount \
+    jackrose-rescue-export \
+    jackrose-rescue-kernel-check \
+    jackrose-rescue-report \
+    jackrose-rescue-clean \
+    jackrose-rescue-boot-plan \
+    jackrose-rescue-disk-check \
+    jackrose-rescue-slot-metadata \
+    jackrose-rescue-boot-guide \
+    jackrose-rescue-boot-report \
+    jackrose-rescue-create-dry-run \
+    jackrose-rescue-boot-checklist \
+    jackrose-rescue-boot-risk \
+    jackrose-rescue-boot-validate \
+    jackrose-rescue-create \
+    jackrose-rescue-create-preflight \
+    jackrose-rescue-target-check \
+    jackrose-rescue-target-format \
+    jackrose-rescue-deploy-rootfs \
+    jackrose-rescue-install-metadata \
+    jackrose-rescue-create-verify \
+    jackrose-rescue-create-report \
+    jackrose-rescue-create-risk \
+    jackrose-rescue-create-clean; do
+    cp "$REPO_ROOT/scripts/$script" "$overlay_jackrose_dir/$script"
+    chmod +x "$overlay_jackrose_dir/$script"
+  done
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --dry-run) DRY_RUN=1; shift ;;
+    --overlay-only) OVERLAY_ONLY=1; shift ;;
+    --sync-overlay) SYNC_OVERLAY=1; shift ;;
+    --sync-rescue-overlay) SYNC_RESCUE_OVERLAY=1; shift ;;
+    --rescue-overlay-only) RESCUE_OVERLAY_ONLY=1; shift ;;
+    --builder)
+      [ "$#" -ge 2 ] || { printf 'ERROR: --builder requires a path\n' >&2; exit 1; }
+      BUILDER_DIR="$2"
+      shift 2
+      ;;
+    --output)
+      [ "$#" -ge 2 ] || { printf 'ERROR: --output requires a path\n' >&2; exit 1; }
+      OUTPUT_DIR="$2"
+      shift 2
+      ;;
+    --profile)
+      [ "$#" -ge 2 ] || { printf 'ERROR: --profile requires a name\n' >&2; exit 1; }
+      PROFILE="$2"
+      validate_profile "$PROFILE"
+      shift 2
+      ;;
+    --inspect) INSPECT_ARTIFACT=1; shift ;;
+    --clean) CLEAN_OUTPUT=1; shift ;;
+    --no-compress) NO_COMPRESS=1; shift ;;
+    --boot-readiness) BOOT_READINESS=1; shift ;;
+    --builder-status) BUILDER_STATUS=1; shift ;;
+    --builder-config) BUILDER_CONFIG_INTEGRATE=1; shift ;;
+    --real-build)
+      # Delegate immediately to jackrose-real-image-build with all remaining arguments
+      exec "$SCRIPT_DIR/jackrose-real-image-build" "$@"
+      ;;
+    -h|--help) usage; exit 0 ;;
+    *) printf 'ERROR: unknown option: %s\n' "$1" >&2; usage; exit 1 ;;
+  esac
+done
+
+validate_profile "$PROFILE"
+[ -d "$OVERLAY_DIR" ] || { printf 'ERROR: overlay directory not found: %s\n' "$OVERLAY_DIR" >&2; exit 1; }
+
+if [ -z "$IMAGE_VERSION" ]; then
+  IMAGE_VERSION="$(git -C "$REPO_ROOT" describe --tags --always 2>/dev/null || git -C "$REPO_ROOT" rev-parse --short HEAD 2>/dev/null || printf 'unknown')"
+fi
+
+overlay_basename="jackrose-rootfs-overlay.tar.gz"
+if [ "$NO_COMPRESS" -eq 1 ]; then
+  overlay_basename="jackrose-rootfs-overlay.tar"
+fi
+overlay_artifact="$OUTPUT_DIR/$overlay_basename"
+manifest_path="$OUTPUT_DIR/jackrose-image-manifest.json"
+inspect_log="$OUTPUT_DIR/inspect.log"
+
+if [ "$DRY_RUN" -eq 1 ]; then
+  printf 'Jackrose image build dry-run\n\n'
+  printf '[OK] repo root: %s\n' "$REPO_ROOT"
+  printf '[OK] profile: %s\n' "$PROFILE"
+  printf '[OK] output dir: %s\n' "$OUTPUT_DIR"
+  printf '[OK] overlay dir: %s\n' "$OVERLAY_DIR"
+  if [ -n "$BUILDER_DIR" ]; then
+    printf '[OK] builder path: %s\n' "$BUILDER_DIR"
+  else
+    printf '[WARN] builder path not configured\n'
+  fi
+  if [ "$CLEAN_OUTPUT" -eq 1 ]; then
+    printf '[DRY-RUN] would clean output dir\n'
+  fi
+  if [ "$SYNC_OVERLAY" -eq 1 ] || [ "$OVERLAY_ONLY" -eq 1 ] || [ "$INSPECT_ARTIFACT" -eq 1 ] || [ "$SYNC_RESCUE_OVERLAY" -eq 1 ] || [ "$RESCUE_OVERLAY_ONLY" -eq 1 ]; then
+    printf '[DRY-RUN] would sync scripts and systemd units into the overlay\n'
+  fi
+  if [ "$SYNC_RESCUE_OVERLAY" -eq 1 ] || [ "$RESCUE_OVERLAY_ONLY" -eq 1 ]; then
+    printf '[DRY-RUN] would sync Rescue Slot overlay files\n'
+  fi
+  if [ "$OVERLAY_ONLY" -eq 1 ]; then
+    printf '[DRY-RUN] would write overlay artifact: %s\n' "$overlay_artifact"
+    printf '[DRY-RUN] would write checksum: %s.sha256\n' "$overlay_artifact"
+    printf '[DRY-RUN] would write manifest: %s\n' "$manifest_path"
+  fi
+  if [ "$INSPECT_ARTIFACT" -eq 1 ]; then
+    printf '[DRY-RUN] would inspect generated overlay artifact or overlay tree\n'
+  fi
+  if [ "$BUILDER_CONFIG_INTEGRATE" -eq 1 ]; then
+    printf '[DRY-RUN] would validate and stage overlay files into builder integration staging\n'
+  fi
+  if [ -n "$BUILDER_DIR" ]; then
+    printf '[DRY-RUN] would plan execution using ALARM builder at: %s\n' "$BUILDER_DIR"
+  fi
+  exit 0
+fi
+
+if [ "$CLEAN_OUTPUT" -eq 1 ]; then
+  JACKROSE_IMAGE_OUTPUT_DIR="$OUTPUT_DIR" "$SCRIPT_DIR/jackrose-image-clean" --yes
+fi
+
+mkdir -p "$OUTPUT_DIR"
+BUILD_LOG="$OUTPUT_DIR/build.log"
+: > "$BUILD_LOG"
+
+log "Jackrose image build"
+log "repo root: $REPO_ROOT"
+log "profile: $PROFILE"
+log "output dir: $OUTPUT_DIR"
+log "overlay dir: $OVERLAY_DIR"
+if [ -n "$BUILDER_DIR" ]; then
+  log "builder path: $BUILDER_DIR"
+else
+  log "builder path: not configured"
+fi
+
+if [ "$SYNC_OVERLAY" -eq 1 ] || [ "$OVERLAY_ONLY" -eq 1 ] || [ "$INSPECT_ARTIFACT" -eq 1 ]; then
+  sync_overlay_tree
+  log "overlay sync: completed"
+fi
+
+if [ "$SYNC_RESCUE_OVERLAY" -eq 1 ] || [ "$RESCUE_OVERLAY_ONLY" -eq 1 ]; then
+  sync_rescue_overlay_tree
+  log "rescue overlay sync: completed"
+fi
+
+if [ "$SYNC_OVERLAY" -eq 1 ] && [ "$OVERLAY_ONLY" -eq 0 ] && [ "$INSPECT_ARTIFACT" -eq 0 ] && [ "$SYNC_RESCUE_OVERLAY" -eq 0 ] && [ "$RESCUE_OVERLAY_ONLY" -eq 0 ]; then
+  log "[OK] overlay sync complete"
+  exit 0
+fi
+
+if [ "$SYNC_RESCUE_OVERLAY" -eq 1 ] && [ "$RESCUE_OVERLAY_ONLY" -eq 0 ] && [ "$SYNC_OVERLAY" -eq 0 ] && [ "$OVERLAY_ONLY" -eq 0 ] && [ "$INSPECT_ARTIFACT" -eq 0 ]; then
+  log "[OK] rescue overlay sync complete"
+  exit 0
+fi
+
+overlay_inspected=false
+if [ "$OVERLAY_ONLY" -eq 1 ]; then
+  rm -f "$overlay_artifact" "$overlay_artifact.sha256"
+  if [ "$NO_COMPRESS" -eq 1 ]; then
+    (cd "$OVERLAY_DIR" && tar -cf "$overlay_artifact" usr etc var)
+  else
+    (cd "$OVERLAY_DIR" && tar -czf "$overlay_artifact" usr etc var)
+  fi
+  log "overlay artifact: $overlay_artifact"
+  "$SCRIPT_DIR/jackrose-image-checksum" "$overlay_artifact" >> "$BUILD_LOG"
+
+  if [ "$INSPECT_ARTIFACT" -eq 1 ]; then
+    "$SCRIPT_DIR/jackrose-image-inspect" --tar "$overlay_artifact" | tee "$inspect_log"
+    overlay_inspected=true
+    log "inspection log: $inspect_log"
+  fi
+fi
+
+# Run builder configuration & staging if requested
+if [ "$BUILDER_CONFIG_INTEGRATE" -eq 1 ]; then
+  log "Running builder configuration validation..."
+  JACKROSE_ALARM_BUILDER_DIR="$BUILDER_DIR" "$SCRIPT_DIR/jackrose-builder-config" --validate >> "$BUILD_LOG"
+  log "Staging overlay files into ALARM builder integration staging..."
+  JACKROSE_ALARM_BUILDER_DIR="$BUILDER_DIR" JACKROSE_ROOTFS_OVERLAY_DIR="$OVERLAY_DIR" "$SCRIPT_DIR/jackrose-builder-integrate" --integrate >> "$BUILD_LOG"
+fi
+
+"$SCRIPT_DIR/jackrose-image-manifest" \
+  --output "$manifest_path" \
+  --image-name "$IMAGE_NAME" \
+  --profile "$PROFILE" \
+  --version "$IMAGE_VERSION" \
+  --builder "$BUILDER_DIR" \
+  --overlay "$(basename "$overlay_artifact")" \
+  --image "${IMAGE_NAME}-rootfs.img.zst" \
+  --checksum "$(basename "$overlay_artifact").sha256" \
+  --overlay-inspected "$overlay_inspected" \
+  --firstboot-oobe true \
+  --firstboot-autologin false \
+  --seed-resume true \
+  --public-image false \
+  --boot-tested false >> "$BUILD_LOG"
+
+log "manifest: $manifest_path"
+
+if [ "$BUILDER_STATUS" -eq 1 ]; then
+  "$SCRIPT_DIR/jackrose-builder-status"
+fi
+
+if [ "$BOOT_READINESS" -eq 1 ]; then
+  "$SCRIPT_DIR/jackrose-image-boot-readiness" \
+    --image "$overlay_artifact" \
+    --manifest "$manifest_path"
+fi
+
+if [ -n "$BUILDER_DIR" ]; then
+  log "Planning build execution using ALARM builder at: $BUILDER_DIR"
+  JACKROSE_ALARM_BUILDER_DIR="$BUILDER_DIR" JACKROSE_IMAGE_PROFILE="$PROFILE" "$SCRIPT_DIR/jackrose-builder-invoke" --dry-run >> "$BUILD_LOG"
+fi

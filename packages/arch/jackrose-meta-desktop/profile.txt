@@ -1,0 +1,11 @@
+Jackrose v1.0 desktop profile
+
+This package is a meta profile for the standard Jackrose desktop runtime.
+
+Expected ownership:
+- niri-jackrose
+- jackrose-session
+- jackrose-config
+- greetd
+- greetd-tuigreet
+- the standard Jackrose login/session path

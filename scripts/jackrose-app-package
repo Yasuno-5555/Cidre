@@ -1,0 +1,36 @@
+#!/bin/sh
+set -eu
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+REPO_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+APP_PACKAGE="$REPO_ROOT/apps/macos/JackroseApp"
+HELPER_PACKAGE="$APP_PACKAGE/Helper/JackrosePrivilegedHelper"
+DIST_DIR="${JACKROSE_DIST_DIR:-$REPO_ROOT/dist}"
+APP_BUNDLE="$DIST_DIR/Jackrose.app"
+CONTENTS="$APP_BUNDLE/Contents"
+BACKEND="$CONTENTS/Resources/JackroseBackend"
+
+swift build -c release --package-path "$APP_PACKAGE"
+swift build -c release --package-path "$HELPER_PACKAGE"
+app_bin_dir="$(swift build -c release --package-path "$APP_PACKAGE" --show-bin-path)"
+helper_bin_dir="$(swift build -c release --package-path "$HELPER_PACKAGE" --show-bin-path)"
+
+rm -rf "$APP_BUNDLE"
+mkdir -p "$CONTENTS/MacOS" "$CONTENTS/Resources" "$BACKEND/libexec"
+cp "$app_bin_dir/JackroseApp" "$CONTENTS/MacOS/JackroseApp"
+cp "$helper_bin_dir/JackrosePrivilegedHelper" "$BACKEND/libexec/JackrosePrivilegedHelper"
+cp -R "$REPO_ROOT/scripts" "$BACKEND/scripts"
+cp -R "$REPO_ROOT/interface" "$BACKEND/interface"
+cp -R "$REPO_ROOT/docs" "$BACKEND/docs"
+cp "$REPO_ROOT/README.md" "$BACKEND/README.md"
+mkdir -p "$BACKEND/.local/state/jackrose"
+if [ -d "$REPO_ROOT/.local/state/jackrose/incidents" ]; then
+  cp -R "$REPO_ROOT/.local/state/jackrose/incidents" "$BACKEND/.local/state/jackrose/incidents"
+fi
+touch "$BACKEND/.jackrose-backend"
+
+cp "$APP_PACKAGE/Resources/Info.plist" "$CONTENTS/Info.plist"
+
+chmod +x "$CONTENTS/MacOS/JackroseApp" "$BACKEND/libexec/JackrosePrivilegedHelper" "$BACKEND/scripts/"*
+/usr/bin/codesign --force --deep --sign - "$APP_BUNDLE"
+echo "$APP_BUNDLE"

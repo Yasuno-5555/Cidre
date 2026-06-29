@@ -11,8 +11,8 @@
 /packages/arch/*/pkg/
 /packages/arch/*/src/
 /packages/arch/*/*.pkg.tar.xz
-/packages/arch/niri-cidre/niri-cidre/
-/.local/state/cidre/
+/packages/arch/niri-jackrose/niri-jackrose/
+/.local/state/jackrose/
 /.local/test-system/
 /state/macos-bootstrap/
 m1n1/

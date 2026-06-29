@@ -1,0 +1,65 @@
+#!/bin/sh
+set -eu
+
+if [ "$(uname)" != "Darwin" ]; then
+  printf "ERROR: this command requires macOS.\nNo disk operation was performed.\n" >&2
+  exit 1
+fi
+
+usage() {
+  cat <<'EOF'
+Usage:
+  jackrose-macos-uninstall-target-review [options]
+
+Options:
+  --target <target>
+  --json
+  --help
+EOF
+}
+
+target=""
+json_mode=false
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --target) target="$2"; shift 2 ;;
+    --json) json_mode=true; shift ;;
+    --help|-h|help) usage; exit 0 ;;
+    *) printf 'ERROR: Unknown option: %s\n' "$1" >&2; usage; exit 1 ;;
+  esac
+done
+
+if [ -z "$target" ]; then
+  printf 'ERROR: --target is required\n' >&2
+  usage
+  exit 1
+fi
+
+python3 -c '
+import sys, json
+
+target = sys.argv[1]
+json_mode = sys.argv[2] == "true"
+
+blocked = False
+reason = ""
+
+if "disk0s1" in target or "Macintosh" in target:
+    blocked = True
+    reason = "protected macOS system volume"
+
+res = {
+    "target": target,
+    "blocked": blocked,
+    "reason": reason
+}
+
+if json_mode:
+    print(json.dumps(res, indent=2))
+else:
+    if blocked:
+        print("BLOCKED: Target review failed for %s. Reason: %s" % (target, reason))
+        sys.exit(1)
+    else:
+        print("PASSED: Target %s is safe for dry-run." % target)
+' "$target" "$json_mode"

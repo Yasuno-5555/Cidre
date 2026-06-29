@@ -1,0 +1,148 @@
+#!/bin/bash
+# jackrose-experience-upgrade: Orchestrates baseline graphical desktop to optimized desktop upgrade
+set -euo pipefail
+
+STATE_FILE="/var/lib/jackrose/experience-upgrade.state"
+LOG_DIR="/var/log/jackrose"
+LOG_FILE="$LOG_DIR/experience-upgrade.log"
+OPTIMIZED_DONE="/var/lib/jackrose/optimized.done"
+
+MODE=""
+DRY_RUN=0
+
+usage() {
+  echo "Usage: $0 [--status | --dry-run | --run | --resume | --reset-state]"
+  exit 1
+}
+
+if [ $# -eq 0 ]; then
+  usage
+fi
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --status) MODE="status"; shift ;;
+    --dry-run) DRY_RUN=1; shift ;;
+    --run) MODE="run"; shift ;;
+    --resume) MODE="resume"; shift ;;
+    --reset-state) MODE="reset-state"; shift ;;
+    *) echo "ERROR: Unknown option: $1" >&2; usage ;;
+  esac
+done
+
+_read_state() {
+  local key="$1"
+  if [ -f "$STATE_FILE" ]; then
+    grep "^${key}=" "$STATE_FILE" | cut -d= -f2 || echo "missing"
+  else
+    echo "missing"
+  fi
+}
+
+_write_state() {
+  local key="$1"
+  local val="$2"
+  mkdir -p "$(dirname "$STATE_FILE")"
+  if [ -f "$STATE_FILE" ]; then
+    # remove existing
+    sed -i "/^${key}=/d" "$STATE_FILE"
+  fi
+  echo "${key}=${val}" >> "$STATE_FILE"
+}
+
+if [ "$MODE" = "reset-state" ]; then
+  echo "Resetting upgrade state..."
+  rm -f "$STATE_FILE" "$OPTIMIZED_DONE"
+  echo "State reset complete."
+  exit 0
+fi
+
+if [ "$MODE" = "status" ]; then
+  echo "=== Jackrose Upgrade Status ==="
+  echo "  Ghostty:    $(_read_state ghostty)"
+  echo "  Fish Shell: $(_read_state fish)"
+  echo "  niri-jackrose: $(_read_state niri_jackrose)"
+  if [ -f "$OPTIMIZED_DONE" ]; then
+    echo "  Status: Optimized experience upgrade is COMPLETE."
+  else
+    echo "  Status: Upgrade is PENDING or PARTIAL."
+  fi
+  exit 0
+fi
+
+if [ "$DRY_RUN" -eq 1 ]; then
+  echo "=== Jackrose Upgrade [DRY-RUN SIMULATION] ==="
+  echo "  [DRY-RUN] would verify network connectivity (pings archlinux.org)..."
+  echo "  [DRY-RUN] would invoke: jackrose-build-ghostty --dry-run"
+  echo "  [DRY-RUN] would invoke: jackrose-setup-fish --dry-run"
+  echo "  [DRY-RUN] would invoke: jackrose-build-niri-jackrose --dry-run"
+  echo "  [DRY-RUN] would update session settings and touch $OPTIMIZED_DONE upon completion."
+  echo "  Simulation complete. No configurations changed."
+  exit 0
+fi
+
+if [ "$MODE" != "run" ] && [ "$MODE" != "resume" ]; then
+  echo "ERROR: Use --run or --resume to perform upgrades explicitly." >&2
+  exit 1
+fi
+
+# Run mode execution
+echo "Starting Jackrose optimized experience upgrade pipeline..."
+mkdir -p "$LOG_DIR"
+echo "=== Upgrade run started at $(date) ===" >> "$LOG_FILE"
+
+# 1. Network check
+if ! ping -c 1 archlinux.org >/dev/null 2>&1; then
+  echo "" >&2
+  echo "What happened:" >&2
+  echo "  Network connection is unavailable." >&2
+  echo "" >&2
+  echo "Why it matters:" >&2
+  echo "  Ghostty and niri-jackrose require git and toolchains dependencies compilation." >&2
+  echo "" >&2
+  echo "Next step:" >&2
+  echo "  Configure network connection via nmtui-connect and retry." >&2
+  exit 1
+fi
+
+# 2. Build Ghostty
+echo "Deploying Ghostty terminal..."
+_write_state ghostty "building"
+if jackrose-build-ghostty --run >> "$LOG_FILE" 2>&1; then
+  _write_state ghostty "done"
+  echo "  Ghostty setup completed."
+else
+  _write_state ghostty "failed"
+  echo "  ERROR: Ghostty compilation failed. Check logs at $LOG_FILE" >&2
+  exit 2
+fi
+
+# 3. Setup Fish Shell
+echo "Deploying Fish Shell..."
+_write_state fish "building"
+if jackrose-setup-fish --run >> "$LOG_FILE" 2>&1; then
+  _write_state fish "configured"
+  echo "  Fish Shell setup completed."
+else
+  _write_state fish "failed"
+  echo "  ERROR: Fish Shell setup failed. Check logs at $LOG_FILE" >&2
+  exit 2
+fi
+
+# 4. Build niri-jackrose
+echo "Deploying optimized niri-jackrose..."
+_write_state niri_jackrose "building"
+if jackrose-build-niri-jackrose --run >> "$LOG_FILE" 2>&1; then
+  _write_state niri_jackrose "done"
+  echo "  niri-jackrose setup completed."
+else
+  _write_state niri_jackrose "failed"
+  echo "  ERROR: niri-jackrose compilation failed. Check logs at $LOG_FILE" >&2
+  exit 2
+fi
+
+# Upgrade successfully finished
+touch "$OPTIMIZED_DONE"
+echo "Jackrose Optimized Experience successfully installed!"
+echo "Please restart your Wayland graphical session to apply changes."
+echo "=== Upgrade completed successfully at $(date) ===" >> "$LOG_FILE"

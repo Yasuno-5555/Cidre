@@ -30,8 +30,8 @@ echo "=== Running Installer Compatibility Study Tests ==="
 ASAHI_SNAPSHOT="$REPO_ROOT/installer/compat/upstream/asahi-installer-data.snapshot.json"
 ALARM_SNAPSHOT="$REPO_ROOT/installer/compat/upstream/alarm-installer-data.snapshot.json"
 MINIMAL_FIXTURE="$REPO_ROOT/installer/compat/fixtures/minimal-asahi-like-installer-data.json"
-MAPPING_DRAFT="$REPO_ROOT/installer/compat/fixtures/cidre-asahi-mapping-draft.json"
-CIDRE_DEV_METADATA="$REPO_ROOT/installer/generated/cidre-installer-data.dev.json"
+MAPPING_DRAFT="$REPO_ROOT/installer/compat/fixtures/jackrose-asahi-mapping-draft.json"
+JACKROSE_DEV_METADATA="$REPO_ROOT/installer/generated/jackrose-installer-data.dev.json"
 
 # Test 1: Validate local mapping fixtures format
 echo "Test 1: Validating local compatibility JSON files..."
@@ -70,13 +70,13 @@ echo "Test 4: Inspecting upstream snapshots..."
 # Test 5: Comparison report runner
 echo "Test 5: Comparing metadata shapes..."
 # Ensure dev metadata is generated, otherwise mock a path
-target_dev="$CIDRE_DEV_METADATA"
+target_dev="$JACKROSE_DEV_METADATA"
 if [ ! -f "$target_dev" ]; then
-  target_dev="$REPO_ROOT/installer/generated/cidre-installer-data.local.json"
+  target_dev="$REPO_ROOT/installer/generated/jackrose-installer-data.local.json"
 fi
 
 "$REPO_ROOT/installer/scripts/compare-installer-metadata-shape" \
-  --cidre "$target_dev" \
+  --jackrose "$target_dev" \
   --upstream "$ASAHI_SNAPSHOT"
 
 # --- Negative Tests Section ---

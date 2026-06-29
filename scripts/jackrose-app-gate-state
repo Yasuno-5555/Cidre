@@ -1,0 +1,61 @@
+#!/bin/sh
+set -eu
+
+mode="show"
+scope="install"
+status_value=""
+json_mode=false
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --show) mode="show"; shift ;;
+    --write) mode="write"; shift ;;
+    --scope) scope="$2"; shift 2 ;;
+    --status) status_value="$2"; shift 2 ;;
+    --json) json_mode=true; shift ;;
+    --help|-h) echo "Usage: jackrose-app-gate-state --show|--write [--scope install] [--status blocked] [--json]"; exit 0 ;;
+    *) echo "ERROR: unknown option: $1" >&2; exit 2 ;;
+  esac
+done
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+REPO_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+STATE_FILE="$REPO_ROOT/.local/state/jackrose/boot-safety/current/gate-state.json"
+mkdir -p "$(dirname "$STATE_FILE")"
+
+python3 - "$STATE_FILE" "$mode" "$scope" "$status_value" "$json_mode" <<'PY'
+import json
+import os
+import sys
+from datetime import datetime, timezone
+
+state_file, mode, scope, status_value, json_mode = sys.argv[1:]
+json_mode = json_mode == "true"
+
+state = {"schema_version": 1, "scopes": {}}
+if os.path.exists(state_file):
+    try:
+        with open(state_file, "r", encoding="utf-8") as handle:
+            state = json.load(handle)
+    except Exception:
+        pass
+
+if mode == "write":
+    state.setdefault("scopes", {})[scope] = {
+        "status": status_value or "unknown",
+        "updated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+    }
+    with open(state_file, "w", encoding="utf-8") as handle:
+        json.dump(state, handle, indent=2)
+        handle.write("\n")
+
+payload = {
+    "schema_version": 1,
+    "command": "jackrose-app-gate-state",
+    "status": "passed",
+    "summary": "Gate state available.",
+    "state_file": state_file,
+    "state": state,
+}
+print(json.dumps(payload, indent=2) if json_mode else payload["summary"])
+PY

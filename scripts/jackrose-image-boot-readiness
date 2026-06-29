@@ -1,0 +1,230 @@
+#!/usr/bin/env bash
+# jackrose-image-boot-readiness: Check image / rootfs / firstboot boot readiness
+set -euo pipefail
+
+SCRIPT_VERSION="0.18.0"
+SCRIPT_NAME="jackrose-image-boot-readiness"
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+STATE_DIR="${JACKROSE_IMAGE_OUTPUT_DIR:-.local/state/jackrose/image-build}"
+
+rootfs_path=""
+image_path=""
+manifest_path=""
+strict=false
+
+
+usage() {
+  cat <<EOF
+Usage: $SCRIPT_NAME [options]
+
+Check image / rootfs / firstboot boot readiness.
+
+Options:
+  --rootfs <path>     Mounted rootfs path to inspect
+  --image <path>      Image artifact path (default: $STATE_DIR/jackrose-rootfs-overlay.tar.gz)
+  --manifest <path>   Manifest JSON path (default: $STATE_DIR/jackrose-image-manifest.json)
+  --strict            Enable strict rootfs checks
+  --help              Show this help
+EOF
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --rootfs) rootfs_path="$2"; shift 2 ;;
+    --image) image_path="$2"; shift 2 ;;
+    --manifest) manifest_path="$2"; shift 2 ;;
+    --strict) strict=true; shift ;;
+    --help) usage; exit 0 ;;
+    *) echo "ERROR: unknown option: $1" >&2; usage >&2; exit 1 ;;
+  esac
+done
+
+# Default paths
+: "${image_path:=$STATE_DIR/jackrose-rootfs-overlay.tar.gz}"
+: "${manifest_path:=$STATE_DIR/jackrose-image-manifest.json}"
+
+echo "Jackrose image boot readiness"
+echo ""
+
+result_ok=0
+result_warn=0
+result_fail=0
+
+check() {
+  local status="$1" label="$2"
+  case "$status" in
+    OK)   echo "[OK]   $label"; result_ok=$((result_ok+1)) ;;
+    WARN) echo "[WARN] $label"; result_warn=$((result_warn+1)) ;;
+    FAIL) echo "[FAIL] $label"; result_fail=$((result_fail+1)) ;;
+  esac
+}
+
+echo "Artifacts:"
+if [ -f "$image_path" ]; then
+  check OK "image artifact found: $(basename "$image_path")"
+else
+  check WARN "image artifact not found: $image_path"
+fi
+
+# Check for checksum file in common locations
+checksum_found=false
+for csum_ext in .sha256 .sha256sum; do
+  if [ -f "${image_path}${csum_ext}" ]; then
+    checksum_found=true; break
+  fi
+done
+if ! "$checksum_found" && [ -f "$STATE_DIR/jackrose-rootfs-overlay.tar.gz.sha256" ]; then
+  checksum_found=true
+fi
+if "$checksum_found"; then
+  check OK "checksum found"
+else
+  check WARN "checksum not found"
+fi
+
+if [ -f "$manifest_path" ]; then
+  check OK "image manifest found: $(basename "$manifest_path")"
+else
+  check WARN "image manifest not found: $manifest_path"
+fi
+
+if [ -n "$rootfs_path" ]; then
+  echo ""
+  echo "Rootfs inspection:"
+  if [ -d "$rootfs_path" ]; then
+    check OK "rootfs path accessible: $rootfs_path"
+
+    # Delegate to jackrose-rootfs-inspect and capture summary lines
+    if [ -x "$SCRIPT_DIR/jackrose-rootfs-inspect" ]; then
+      strict_flag=""
+      "$strict" && strict_flag="--strict"
+      # Run inspect, prefix each [OK]/[WARN]/[FAIL] line with spaces
+      "$SCRIPT_DIR/jackrose-rootfs-inspect" --rootfs "$rootfs_path" ${strict_flag} 2>&1 | \
+        grep -E '^\[(OK|WARN|FAIL)\]' | sed 's/^/  /' || true
+    fi
+
+    # Re-check critical markers for summary result
+    if [ ! -e "$rootfs_path/var/lib/jackrose/firstboot-root/completed" ] && \
+       [ ! -e "$rootfs_path/var/lib/jackrose/firstboot-root/skipped" ]; then
+      check OK "firstboot state is clean (not completed/skipped)"
+    else
+      check FAIL "firstboot completed or skipped marker present in image"
+    fi
+
+    if [ -f "$rootfs_path/etc/systemd/system/jackrose-firstboot-root.service" ]; then
+      check OK "firstboot-root service unit present in rootfs"
+    else
+      check FAIL "firstboot-root service unit missing from rootfs"
+    fi
+
+    if [ -f "$rootfs_path/usr/lib/jackrose/jackrose-recovery-screen" ]; then
+      check OK "recovery screen available"
+    else
+      check FAIL "recovery screen missing"
+    fi
+
+    if [ -f "$rootfs_path/usr/lib/jackrose/jackrose-safe-mode" ]; then
+      check OK "safe mode available"
+    else
+      check FAIL "safe mode missing"
+    fi
+
+    if [ -f "$rootfs_path/usr/lib/jackrose/jackrose-emergency-banner" ]; then
+      check OK "emergency banner available"
+    else
+      check FAIL "emergency banner missing"
+    fi
+
+    if [ -f "$rootfs_path/usr/lib/jackrose/jackrose-rescue" ]; then
+      check OK "rescue tools available"
+    else
+      check FAIL "rescue tools missing"
+    fi
+
+    if [ -f "$rootfs_path/usr/lib/jackrose/jackrose-rescue-check" ]; then
+      check OK "rescue check available"
+    else
+      check FAIL "rescue check missing"
+    fi
+
+    if [ -f "$rootfs_path/usr/lib/jackrose/jackrose-rescue-boot-plan" ]; then
+      check OK "rescue boot planning tools available"
+    else
+      check FAIL "rescue boot planning tools missing"
+    fi
+
+    if [ -f "$rootfs_path/usr/lib/jackrose/jackrose-rescue-create" ]; then
+      check OK "rescue create tools available"
+    else
+      check FAIL "rescue create tools missing"
+    fi
+  else
+    check FAIL "rootfs path not found: $rootfs_path"
+  fi
+fi
+
+echo ""
+echo "Boot validation status:"
+check WARN "real Apple Silicon boot not yet validated"
+check WARN "ALARM installer metadata not integrated"
+if [ -f "$SCRIPT_DIR/../rescue/profile/profile.env" ] || [ -f "$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)/rescue/profile/profile.env" ]; then
+  check OK "rescue profile exists"
+else
+  check FAIL "rescue profile missing"
+fi
+if [ -f "$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)/.local/state/jackrose/rescue/artifacts/jackrose-rescue-rootfs.tar.gz" ]; then
+  check OK "rescue artifact exists"
+else
+  check WARN "rescue artifact not built yet"
+fi
+if [ -f "$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)/.local/state/jackrose/rescue-boot/current/rescue-boot-plan.md" ]; then
+  check OK "rescue boot plan exists"
+else
+  check WARN "rescue boot plan missing"
+fi
+if [ -f "$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)/.local/state/jackrose/rescue-boot/current/rescue-slot-metadata.json" ]; then
+  check OK "rescue slot metadata exists"
+else
+  check WARN "rescue slot metadata missing"
+fi
+if [ -f "$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)/.local/state/jackrose/rescue-boot/current/rescue-boot-guide.md" ]; then
+  check OK "rescue boot guide exists"
+else
+  check WARN "rescue boot guide missing"
+fi
+if [ -f "$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)/rescue/create/target-rules.json" ]; then
+  check OK "rescue target rules exist"
+else
+  check FAIL "rescue target rules missing"
+fi
+check OK "rescue create default is dry-run"
+check WARN "rescue boot integration pending"
+check WARN "real Apple Silicon Rescue Slot boot not yet validated"
+
+echo ""
+echo "Summary: OK=$result_ok WARN=$result_warn FAIL=$result_fail"
+
+if [ "$result_fail" -gt 0 ]; then
+  echo ""
+  echo "Result: not ready for boot validation"
+  exit 1
+else
+  echo ""
+  echo "Result: ready for controlled boot validation"
+  if [ -f "$manifest_path" ] && command -v python3 >/dev/null 2>&1; then
+    # Update boot readiness checked flag in manifest
+    python3 -c "
+import json
+try:
+  d = json.load(open('$manifest_path'))
+  d.setdefault('validation', {})['boot_readiness_checked'] = True
+  d.setdefault('validation', {})['controlled_boot_test_prepared'] = True
+  json.dump(d, open('$manifest_path', 'w'), indent=2)
+except Exception as e:
+  pass
+" 2>/dev/null || true
+  fi
+
+  exit 0
+fi

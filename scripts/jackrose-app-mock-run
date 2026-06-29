@@ -1,0 +1,92 @@
+#!/bin/sh
+set -eu
+
+usage() {
+  cat <<'EOF'
+Usage:
+  jackrose-app-mock-run [options]
+
+Options:
+  --action <id>
+  --json
+  --help
+EOF
+}
+
+action_id=""
+json_mode=false
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --action) action_id="$2"; shift 2 ;;
+    --json) json_mode=true; shift ;;
+    --help|-h|help) usage; exit 0 ;;
+    *) printf 'ERROR: Unknown option: %s\n' "$1" >&2; usage; exit 2 ;;
+  esac
+done
+
+if [ -z "$action_id" ]; then
+  printf 'ERROR: --action is required\n' >&2
+  usage
+  exit 2
+fi
+
+python3 -c '
+import sys, json
+
+action_id = sys.argv[1]
+json_mode = sys.argv[2] == "true"
+
+# Define mock results based on action_id
+res = {}
+if action_id == "install-preflight" or action_id == "preflight":
+    res = {
+      "schema_version": 1,
+      "command": "jackrose-install-preflight",
+      "status": "pass",
+      "summary": "Guided preflight checks completed successfully.",
+      "exit_code": 0,
+      "warnings": [],
+      "errors": []
+    }
+elif "uninstall-execute" in action_id or "execute" in action_id:
+    res = {
+      "schema_version": 1,
+      "command": "jackrose-uninstall-execute",
+      "status": "blocked",
+      "reason": "confirmation-required",
+      "exit_code": 8,
+      "warnings": [],
+      "errors": [
+        {
+          "code": "confirmation-required",
+          "message": "Explicit confirmation phrase is required."
+        }
+      ],
+      "required_confirmation": "I UNDERSTAND THIS DELETES JACKROSE",
+      "next_actions": [
+        {
+          "label": "Review uninstall dry-run",
+          "command": "scripts/jackrose-uninstall-dry-run --target <target>"
+        }
+      ]
+    }
+else:
+    res = {
+      "schema_version": 1,
+      "command": action_id,
+      "status": "pass",
+      "summary": "Mock action %s completed." % action_id,
+      "exit_code": 0,
+      "warnings": [],
+      "errors": []
+    }
+
+if json_mode:
+    print(json.dumps(res, indent=2))
+else:
+    print("Action Result summary:")
+    print("  Command: %s" % res["command"])
+    print("  Status:  %s" % res["status"])
+    print("  Summary: %s" % res["summary"])
+' "$action_id" "$([ "$json_mode" = "true" ] && echo "true" || echo "false")"

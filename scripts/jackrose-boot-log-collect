@@ -1,0 +1,231 @@
+#!/usr/bin/env bash
+# jackrose-boot-log-collect: Collect boot validation logs after a Jackrose first boot
+set -euo pipefail
+
+SCRIPT_VERSION="0.17.0"
+SCRIPT_NAME="jackrose-boot-log-collect"
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+DEFAULT_OUTPUT_DIR=".local/state/jackrose/boot-validation"
+
+output_dir="$DEFAULT_OUTPUT_DIR"
+no_journal=false
+dry_run=false
+
+usage() {
+  cat <<EOF
+Usage: $SCRIPT_NAME [options]
+
+Collect boot validation logs after a Jackrose first boot.
+
+Options:
+  --output <dir>    Output directory (default: $DEFAULT_OUTPUT_DIR)
+  --no-journal      Skip journalctl collection
+  --dry-run         Show what would be collected without collecting
+  --help            Show this help
+EOF
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --output) output_dir="$2"; shift 2 ;;
+    --boot-test-state) output_dir="$2"; shift 2 ;;
+    --no-journal) no_journal=true; shift ;;
+    --dry-run) dry_run=true; shift ;;
+    --help) usage; exit 0 ;;
+    *) echo "ERROR: unknown option: $1" >&2; usage >&2; exit 1 ;;
+  esac
+done
+
+if "$dry_run"; then
+  echo "Jackrose boot log collection (dry-run)"
+  echo ""
+  echo "Would collect to: $output_dir/"
+  echo ""
+  echo "Collection plan:"
+  if ! "$no_journal"; then
+    echo "  journalctl -b              -> $output_dir/journal.txt"
+  fi
+  echo "  systemctl status jackrose-firstboot-root.service"
+  echo "                             -> $output_dir/jackrose-firstboot-root.service.txt"
+  echo "  /var/lib/jackrose/firstboot-root/firstboot.log"
+  echo "                             -> $output_dir/firstboot.log"
+  echo "  /var/lib/jackrose/firstboot-root/handoff.txt"
+  echo "                             -> $output_dir/handoff.txt"
+  echo "  scripts/jackrose-doctor --firstboot"
+  echo "                             -> $output_dir/doctor-firstboot.txt"
+  echo "  scripts/jackrose-recovery firstboot-status"
+  echo "                             -> $output_dir/recovery-firstboot-status.txt"
+  echo "  ~/.local/state/jackrose/exit/current/uninstall-check.log"
+  echo "                             -> $output_dir/uninstall-check.log"
+  echo "  ~/.local/state/jackrose/exit/current/partition-audit.txt"
+  echo "                             -> $output_dir/partition-audit.txt"
+  echo "  ~/.local/state/jackrose/exit/current/exit-plan.md"
+  echo "                             -> $output_dir/exit-plan.md"
+  echo "  ~/.local/state/jackrose/exit/current/uninstall-risk.json"
+  echo "                             -> $output_dir/uninstall-risk.json"
+  echo "  ~/.local/state/jackrose/rescue/"
+  echo "                             -> $output_dir/rescue/"
+  echo "  ~/.local/state/jackrose/rescue-boot/"
+  echo "                             -> $output_dir/rescue-boot/"
+  echo "  ~/.local/state/jackrose/macos-rescue/"
+  echo "                             -> $output_dir/macos-rescue/"
+  echo "  ~/.local/state/jackrose/rescue-create/"
+  echo "                             -> $output_dir/rescue-create/"
+  echo ""
+  echo "No files written (dry-run)."
+  exit 0
+fi
+
+mkdir -p "$output_dir"
+
+_collect() {
+  local label="$1" dest="$2"
+  shift 2
+  echo "  Collecting: $label"
+  if "$@" > "$output_dir/$dest" 2>&1; then
+    echo "    -> $output_dir/$dest"
+  else
+    echo "    -> $output_dir/$dest (command exited non-zero; output may be partial)"
+  fi
+}
+
+echo "Jackrose boot log collection"
+echo "output: $output_dir"
+echo ""
+
+if ! "$no_journal"; then
+  if command -v journalctl >/dev/null 2>&1; then
+    _collect "journalctl -b" "journal.txt" journalctl -b --no-pager
+  else
+    echo "  [SKIP] journalctl not available"
+  fi
+fi
+
+if command -v systemctl >/dev/null 2>&1; then
+  _collect "systemctl status jackrose-firstboot-root.service" \
+    "jackrose-firstboot-root.service.txt" \
+    systemctl status jackrose-firstboot-root.service --no-pager
+else
+  echo "  [SKIP] systemctl not available"
+fi
+
+if [ -f "/var/lib/jackrose/firstboot-root/firstboot.log" ]; then
+  cp "/var/lib/jackrose/firstboot-root/firstboot.log" "$output_dir/firstboot.log"
+  echo "  -> $output_dir/firstboot.log"
+else
+  echo "  [SKIP] /var/lib/jackrose/firstboot-root/firstboot.log not found"
+fi
+
+if [ -f "/var/lib/jackrose/firstboot-root/handoff.txt" ]; then
+  cp "/var/lib/jackrose/firstboot-root/handoff.txt" "$output_dir/handoff.txt"
+  echo "  -> $output_dir/handoff.txt"
+else
+  echo "  [SKIP] /var/lib/jackrose/firstboot-root/handoff.txt not found"
+fi
+
+if [ -x "$SCRIPT_DIR/jackrose-doctor" ]; then
+  _collect "jackrose-doctor --firstboot" "doctor-firstboot.txt" \
+    "$SCRIPT_DIR/jackrose-doctor" --firstboot
+else
+  echo "  [SKIP] jackrose-doctor not found"
+fi
+
+if [ -x "$SCRIPT_DIR/jackrose-recovery" ]; then
+  _collect "jackrose-recovery firstboot-status" "recovery-firstboot-status.txt" \
+    "$SCRIPT_DIR/jackrose-recovery" firstboot-status
+else
+  echo "  [SKIP] jackrose-recovery not found"
+fi
+
+# Collect firstboot fixup diagnostic details (v0.21.0)
+if [ -x "$SCRIPT_DIR/jackrose-firstboot-diagnose" ]; then
+  _collect "jackrose-firstboot-diagnose" "firstboot-diagnose.txt" \
+    "$SCRIPT_DIR/jackrose-firstboot-diagnose"
+fi
+
+if [ -f "/var/lib/jackrose/firstboot-root/report.md" ]; then
+  cp "/var/lib/jackrose/firstboot-root/report.md" "$output_dir/firstboot-report.md"
+  echo "  -> $output_dir/firstboot-report.md"
+fi
+
+if [ -x "$SCRIPT_DIR/jackrose-firstboot-console" ]; then
+  _collect "jackrose-firstboot-console --status" "firstboot-console.txt" \
+    "$SCRIPT_DIR/jackrose-firstboot-console" --status
+fi
+
+if command -v systemctl >/dev/null 2>&1; then
+  _collect "systemctl cat jackrose-firstboot-root.service" "firstboot-service-unit.txt" \
+    systemctl cat jackrose-firstboot-root.service
+fi
+
+# Collect user phase metrics (v0.22.0)
+USER_STATE_DIR_COLLECT="${HOME}/.local/state/jackrose/user-phase"
+if [ -d "$USER_STATE_DIR_COLLECT" ]; then
+  mkdir -p "$output_dir/user-phase"
+  cp -r "$USER_STATE_DIR_COLLECT"/* "$output_dir/user-phase/" 2>/dev/null || true
+  echo "  -> Collected user phase state files to user-phase/"
+fi
+
+if [ -x "$SCRIPT_DIR/jackrose-doctor" ]; then
+  _collect "jackrose-doctor --user-phase" "doctor-user-phase.txt" \
+    "$SCRIPT_DIR/jackrose-doctor" --user-phase
+fi
+
+if [ -x "$SCRIPT_DIR/jackrose-recovery" ]; then
+  _collect "jackrose-recovery user-phase-status" "recovery-user-phase-status.txt" \
+    "$SCRIPT_DIR/jackrose-recovery" user-phase-status
+fi
+
+EXIT_STATE_DIR="${HOME}/.local/state/jackrose/exit/current"
+for artifact in uninstall-check.log partition-audit.txt exit-plan.md uninstall-risk.json; do
+  if [ -f "$EXIT_STATE_DIR/$artifact" ]; then
+    cp "$EXIT_STATE_DIR/$artifact" "$output_dir/$artifact"
+    echo "  -> $output_dir/$artifact"
+  fi
+done
+
+RECOVERY_STATE_DIR="${HOME}/.local/state/jackrose/recovery-screen"
+if [ -d "$RECOVERY_STATE_DIR" ]; then
+  mkdir -p "$output_dir/recovery-screen"
+  cp -r "$RECOVERY_STATE_DIR"/* "$output_dir/recovery-screen/" 2>/dev/null || true
+  echo "  -> Collected recovery screen state files"
+fi
+
+if [ -d "/var/lib/jackrose/recovery-screen" ]; then
+  mkdir -p "$output_dir/recovery-screen-system"
+  cp -r /var/lib/jackrose/recovery-screen/* "$output_dir/recovery-screen-system/" 2>/dev/null || true
+  echo "  -> Collected system recovery screen state files"
+fi
+
+RESCUE_STATE_DIR="${HOME}/.local/state/jackrose/rescue"
+if [ -d "$RESCUE_STATE_DIR" ]; then
+  mkdir -p "$output_dir/rescue"
+  cp -r "$RESCUE_STATE_DIR"/* "$output_dir/rescue/" 2>/dev/null || true
+  echo "  -> Collected rescue state files"
+fi
+
+RESCUE_BOOT_STATE_DIR="${HOME}/.local/state/jackrose/rescue-boot"
+if [ -d "$RESCUE_BOOT_STATE_DIR" ]; then
+  mkdir -p "$output_dir/rescue-boot"
+  cp -r "$RESCUE_BOOT_STATE_DIR"/* "$output_dir/rescue-boot/" 2>/dev/null || true
+  echo "  -> Collected rescue boot state files"
+fi
+
+MACOS_RESCUE_STATE_DIR="${HOME}/.local/state/jackrose/macos-rescue"
+if [ -d "$MACOS_RESCUE_STATE_DIR" ]; then
+  mkdir -p "$output_dir/macos-rescue"
+  cp -r "$MACOS_RESCUE_STATE_DIR"/* "$output_dir/macos-rescue/" 2>/dev/null || true
+  echo "  -> Collected macOS rescue state files"
+fi
+
+RESCUE_CREATE_STATE_DIR="${HOME}/.local/state/jackrose/rescue-create"
+if [ -d "$RESCUE_CREATE_STATE_DIR" ]; then
+  mkdir -p "$output_dir/rescue-create"
+  cp -r "$RESCUE_CREATE_STATE_DIR"/* "$output_dir/rescue-create/" 2>/dev/null || true
+  echo "  -> Collected rescue create state files"
+fi
+
+echo ""
+echo "Collection complete: $output_dir/"
+ls -1 "$output_dir/" 2>/dev/null | sed 's/^/  /'

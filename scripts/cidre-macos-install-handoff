@@ -1,5 +1,0 @@
-#!/bin/sh
-set -eu
-
-# Wrapper that runs the handoff generator from macos-handoff stage to alarm-install
-exec "$(dirname "$0")/cidre-install-handoff" --from macos-handoff --to alarm-install "$@"

@@ -1,0 +1,3 @@
+[Unit]
+Description=Jackrose Safe Mode Target
+AllowIsolate=yes

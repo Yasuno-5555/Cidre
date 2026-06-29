@@ -1,0 +1,15 @@
+#!/bin/bash
+# jackrose-firstboot-prep: Sets up basic state folders on first graphical boot
+set -euo pipefail
+
+echo "Initializing Jackrose state directories..."
+
+# Prepare state directories
+mkdir -p /var/lib/jackrose
+mkdir -p /var/log/jackrose
+
+# Permissions safety check
+chmod 755 /var/lib/jackrose /var/log/jackrose
+
+echo "Initialization completed successfully. Greetd graphical session is ready to spawn."
+exit 0

@@ -1,0 +1,21 @@
+# Maintainer: Yasuno <yasuno@example.invalid>
+
+pkgname=jackrose-healthcheck
+pkgver=1.0.0
+pkgrel=1
+pkgdesc='Jackrose environment health check diagnostic tool'
+url='https://github.com/Yasuno-5555/Jackrose'
+arch=('any')
+license=('custom')
+depends=('bash' 'jackrose-diagnostics')
+source=()
+sha256sums=()
+
+# Monorepo-local packaging path.
+# This will be replaced by source=() when packages move to jackrose-packages.
+_repo_root="${startdir}/../../.."
+
+package() {
+  install -Dm755 "${_repo_root}/components/healthcheck/bin/jackrose-healthcheck" \
+    "${pkgdir}/usr/bin/jackrose-healthcheck"
+}

@@ -5,15 +5,15 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-TEST_TMPDIR="${CIDRE_TEST_TMPDIR:-/tmp/cidre-installer-wiring-tests}"
+TEST_TMPDIR="${JACKROSE_TEST_TMPDIR:-/tmp/jackrose-installer-wiring-tests}"
 rm -rf "$TEST_TMPDIR"
 mkdir -p "$TEST_TMPDIR"
 
 echo "=== Running Installer Metadata Wiring Integration Tests ==="
 echo "Staging tests files under $TEST_TMPDIR..."
 
-FIXTURE="$REPO_ROOT/installer/fixtures/cidre-seed-v0.integration.json"
-PRIMARY_METADATA="$REPO_ROOT/installer/metadata/cidre-seed.local.json"
+FIXTURE="$REPO_ROOT/installer/fixtures/jackrose-seed-v0.integration.json"
+PRIMARY_METADATA="$REPO_ROOT/installer/metadata/jackrose-seed.local.json"
 
 # Test 1: Positive export, validation, and fetch
 echo "Test 1: Exporting internal metadata..."

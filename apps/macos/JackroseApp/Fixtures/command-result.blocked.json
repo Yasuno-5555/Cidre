@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "command": "jackrose-uninstall-execute",
+  "status": "blocked",
+  "reason": "confirmation-required",
+  "exit_code": 8,
+  "warnings": [],
+  "errors": [
+    {
+      "code": "confirmation-required",
+      "message": "Explicit confirmation phrase is required."
+    }
+  ],
+  "required_confirmation": "I UNDERSTAND THIS DELETES JACKROSE",
+  "next_actions": [
+    {
+      "label": "Review uninstall dry-run",
+      "command": "scripts/jackrose-uninstall-dry-run --target <target>"
+    }
+  ]
+}

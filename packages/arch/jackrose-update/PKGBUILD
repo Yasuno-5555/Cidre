@@ -1,0 +1,16 @@
+# Maintainer: Yasuno <yasuno@example.invalid>
+
+pkgname=jackrose-update
+pkgver=1.0.0
+pkgrel=1
+pkgdesc='Jackrose desktop layer updater'
+url='https://github.com/Yasuno-5555/Jackrose'
+arch=('any')
+license=('custom')
+depends=('bash' 'jq' 'jackrose-snapshot' 'jackrose-recovery' 'jackrose-diagnostics' 'jackrose-user-setup')
+source=('jackrose-update')
+sha256sums=('SKIP')
+
+package() {
+  install -Dm755 "${srcdir}/jackrose-update" "${pkgdir}/usr/bin/jackrose-update"
+}

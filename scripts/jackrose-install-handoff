@@ -1,0 +1,104 @@
+#!/bin/sh
+set -eu
+
+JACKROSE_REPO_ROOT="${JACKROSE_REPO_ROOT:-/home/yasuno/Projects/Jackrose}"
+TEMPLATE_FILE="$JACKROSE_REPO_ROOT/installer/handoff-template.md"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  jackrose-install-handoff [options]
+
+Options:
+  --from <stage>
+  --to <stage>
+  --output <file>
+  --help
+EOF
+}
+
+from_stage=""
+to_stage=""
+output_file=""
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --from) from_stage="$2"; shift 2 ;;
+    --to) to_stage="$2"; shift 2 ;;
+    --output) output_file="$2"; shift 2 ;;
+    --help|-h|help) usage; exit 0 ;;
+    *) printf 'ERROR: Unknown option: %s\n' "$1" >&2; usage; exit 1 ;;
+  esac
+done
+
+if [ -z "$from_stage" ] || [ -z "$to_stage" ]; then
+  printf 'ERROR: --from and --to are required\n' >&2
+  usage
+  exit 1
+fi
+
+run_py() {
+  python3 -c '
+import sys, os
+
+template_path = sys.argv[1]
+from_stage = sys.argv[2]
+to_stage = sys.argv[3]
+out_file = sys.argv[4]
+
+if not os.path.exists(template_path):
+    print(f"ERROR: Template file {template_path} not found", file=sys.stderr)
+    sys.exit(1)
+
+with open(template_path) as f:
+    content = f.read()
+
+# Define descriptions and instructions
+instructions = "Please proceed to the next stage by running the designated command below."
+next_command = ""
+from_phase = "unknown"
+to_phase = "unknown"
+
+# Deduce phases
+if "macos" in from_stage:
+    from_phase = "macos"
+elif "root" in from_stage:
+    from_phase = "root"
+elif "user" in from_stage:
+    from_phase = "user"
+
+if "root" in to_stage or "preinstall" in to_stage:
+    to_phase = "root"
+    next_command = "./preinstall --resume"
+    instructions = "Boot into your newly installed ALARM root environment, clone or navigate to the Jackrose repository, and run the preinstall tool."
+elif "user" in to_stage or "install" in to_stage:
+    to_phase = "user"
+    next_command = "./install --resume"
+    instructions = "Switch to your normal user account and run the main installer tool."
+elif "firstboot" in to_stage:
+    to_phase = "firstboot"
+    next_command = "sudo reboot"
+    instructions = "Reboot the system to trigger firstboot service configuration."
+elif "desktop" in to_stage:
+    to_phase = "desktop"
+    next_command = "./install --verify"
+    instructions = "Log in to the Jackrose desktop session and execute the verification checks."
+
+content = content.replace("@FROM_STAGE@", from_stage)
+content = content.replace("@TO_STAGE@", to_stage)
+content = content.replace("@FROM_PHASE@", from_phase)
+content = content.replace("@TO_PHASE@", to_phase)
+content = content.replace("@INSTRUCTIONS@", instructions)
+content = content.replace("@NEXT_COMMAND@", next_command)
+
+if out_file:
+    os.makedirs(os.path.dirname(os.path.abspath(out_file)), exist_ok=True)
+    with open(out_file, "w") as f:
+        f.write(content)
+    print(f"[OK] Handoff instructions written to {out_file}")
+else:
+    print(content)
+' "$TEMPLATE_FILE" "$from_stage" "$to_stage" "$output_file"
+}
+
+run_py

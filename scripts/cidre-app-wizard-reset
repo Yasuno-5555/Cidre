@@ -1,6 +1,0 @@
-#!/bin/sh
-set -eu
-SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
-REPO_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
-rm -rf "$REPO_ROOT/.local/state/cidre/app-wizard/current"
-echo "Wizard state reset."

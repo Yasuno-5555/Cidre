@@ -1,7 +1,7 @@
 {
   "policy_version": "0.1",
   "phase": "26",
-  "strategy": "cidre-owned-wrapper",
+  "strategy": "jackrose-owned-wrapper",
   "upstream_bootstrap_direct_execution": "forbidden",
   "real_installer_execution": "forbidden",
   "disk_mutation": "forbidden",

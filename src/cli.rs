@@ -28,7 +28,7 @@ pub struct Cli {
     pub session: bool,
     /// Start in safe mode, disabling scripts, gestures, and expensive effects.
     ///
-    /// Useful for recovering from a misbehaving config or script that causes niri-cidre
+    /// Useful for recovering from a misbehaving config or script that causes niri-jackrose
     /// to crash on startup. Safe mode can also be toggled at runtime with the
     /// `toggle-safe-mode` action.
     #[arg(long)]
@@ -44,7 +44,7 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Sub {
-    /// Communicate with the running niri-cidre instance.
+    /// Communicate with the running niri-jackrose instance.
     Msg {
         #[command(subcommand)]
         msg: Msg,
@@ -109,7 +109,7 @@ pub enum Msg {
     },
     /// Start continuously receiving events from the compositor.
     EventStream,
-    /// Print the version of the running niri-cidre instance.
+    /// Print the version of the running niri-jackrose instance.
     Version,
     /// Request an error from the running niri instance.
     RequestError,

@@ -1,0 +1,14 @@
+[Unit]
+Description=Jackrose Appliance Bootstrap (non-interactive)
+After=jackrose-firstboot-root.service network.target NetworkManager.service
+Wants=network.target NetworkManager.service
+ConditionPathExists=!/var/lib/jackrose/bootstrap/complete
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/jackrose/jackrose-bootstrap-auto
+StandardOutput=journal+console
+StandardError=journal+console
+
+[Install]
+WantedBy=multi-user.target

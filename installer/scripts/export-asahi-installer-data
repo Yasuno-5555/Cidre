@@ -1,12 +1,12 @@
 #!/bin/bash
-# export-asahi-installer-data: Converts Cidre metadata into Asahi-like candidate formats
+# export-asahi-installer-data: Converts Jackrose metadata into Asahi-like candidate formats
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INPUT=""
 OUTPUT=""
 CHANNEL=""
-ID="cidre-seed-aarch64"
+ID="jackrose-seed-aarch64"
 REPO_BASE=""
 STRICT=0
 ASSET_POLICY=""
@@ -103,7 +103,7 @@ if ! jq . "$INPUT" >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "Resolving Cidre candidate entry '$ID' in $INPUT..."
+echo "Resolving Jackrose candidate entry '$ID' in $INPUT..."
 img_entry=$(jq -r ".images[] | select(.id == \"$ID\")" "$INPUT")
 if [ -z "$img_entry" ] || [ "$img_entry" = "null" ]; then
   echo "ERROR: Target entry '$ID' not found in $INPUT." >&2
@@ -151,8 +151,8 @@ fi
 
 echo "Transforming metadata to Asahi-like candidate shape..."
 jq -n \
-  --arg warn "Prototype Cidre-generated Asahi-like installer data. Do not use with the real installer." \
-  --arg format_version "cidre-asahi-like-0.1" \
+  --arg warn "Prototype Jackrose-generated Asahi-like installer data. Do not use with the real installer." \
+  --arg format_version "jackrose-asahi-like-0.1" \
   --arg channel "$CHANNEL" \
   --arg repo_base "$derived_repo_base" \
   --arg name "$os_label" \
@@ -184,15 +184,15 @@ jq -n \
          "first_boot_mode": $first_boot,
          "features": [
            "desktop-first",
-           "cidre-welcome",
+           "jackrose-welcome",
            "niri",
            "foot-fallback",
            "japanese-input",
            "optimized-upgrade"
          ],
-         "_cidre_notes": [
+         "_jackrose_notes": [
            "This output is Asahi-like, not confirmed upstream-compatible.",
-           "Cidre currently models the seed artifact as a tar.zst image.",
+           "Jackrose currently models the seed artifact as a tar.zst image.",
            "The real installer may expect package.zip or REPO_BASE-relative package entries."
          ]
        }

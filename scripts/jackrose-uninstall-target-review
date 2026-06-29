@@ -1,0 +1,174 @@
+#!/bin/sh
+set -eu
+
+if [ -n "${JACKROSE_UNINSTALL_STATE_FILE:-}" ]; then
+  STATE_FILE="$JACKROSE_UNINSTALL_STATE_FILE"
+elif [ "$(id -u)" -eq 0 ] && [ "$(uname)" = "Linux" ]; then
+  STATE_FILE="/var/lib/jackrose/uninstall/uninstall-state.json"
+else
+  STATE_FILE="${HOME}/.local/state/jackrose/uninstall/current/uninstall-state.json"
+fi
+
+STATE_DIR="$(dirname "$STATE_FILE")"
+mkdir -p "$STATE_DIR"
+
+SCAN_JSON="$STATE_DIR/target-scan.json"
+REVIEW_MD="$STATE_DIR/target-review.md"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  jackrose-uninstall-target-review [options]
+
+Options:
+  --target <target>
+  --json
+  --strict
+  --help
+EOF
+}
+
+target=""
+json_mode=false
+strict_mode=false
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --target) target="$2"; shift 2 ;;
+    --json) json_mode=true; shift ;;
+    --strict) strict_mode=true; shift ;;
+    --help|-h|help) usage; exit 0 ;;
+    *) printf 'ERROR: Unknown option: %s\n' "$1" >&2; usage; exit 1 ;;
+  esac
+done
+
+if [ -z "$target" ]; then
+  printf 'ERROR: --target is required\n' >&2
+  usage
+  exit 1
+fi
+
+python3 -c '
+import sys, json, os, subprocess, platform
+
+state_file = sys.argv[1]
+scan_json = sys.argv[2]
+review_md = sys.argv[3]
+target = sys.argv[4]
+json_mode = sys.argv[5] == "true"
+strict_mode = sys.argv[6] == "true"
+
+# Read state export status
+export_completed = False
+if os.path.exists(state_file):
+    try:
+        with open(state_file) as f:
+            d = json.load(f)
+            # Checked if state-export stage was passed
+            if d.get("stage") == "state-export" and d.get("status") == "passed":
+                export_completed = True
+    except Exception:
+        pass
+
+# Also check filesystem indicator
+if os.path.exists("/var/lib/jackrose/uninstall/export-completed"):
+    export_completed = True
+
+# Read scan results
+targets = []
+if os.path.exists(scan_json):
+    try:
+        with open(scan_json) as f:
+            data = json.load(f)
+            targets = data.get("targets", [])
+    except Exception:
+        pass
+
+# Find the target
+target_entry = None
+for t in targets:
+    if t["device"] == target or t["name"] == target:
+        target_entry = t
+        break
+
+# Safety Rules Check
+blocked = False
+reason = ""
+
+# Handle current root check explicitly
+is_linux = platform.system() == "Linux"
+current_root = ""
+if is_linux:
+    try:
+        current_root = subprocess.check_output(["findmnt", "-n", "-o", "SOURCE", "/"], text=True).strip()
+    except Exception:
+        pass
+
+if target == "/" or target == current_root:
+    blocked = True
+    reason = "current root target"
+elif not target_entry and strict_mode:
+    blocked = True
+    reason = "target not found in scan results"
+elif target_entry:
+    c = target_entry["classification"]
+    if "protected" in c:
+        blocked = True
+        reason = "protected target (%s)" % c
+    elif c == "ambiguous":
+        blocked = True
+        reason = "ambiguous target classification"
+    elif c == "external-backup":
+        blocked = True
+        reason = "external backup target"
+
+if not blocked and not export_completed and strict_mode:
+    blocked = True
+    reason = "state export required before review"
+
+# Write review report
+report_content = f"""# Target Review: {target}
+Status: {"BLOCKED" if blocked else "PASSED"}
+Reason: {reason if blocked else "Safe for dry-run/deletion planning"}
+"""
+
+with open(review_md, "w") as f:
+    f.write(report_content)
+
+result = {
+    "target": target,
+    "blocked": blocked,
+    "reason": reason,
+    "export_completed": export_completed
+}
+
+if json_mode:
+    print(json.dumps(result, indent=2))
+else:
+    if blocked:
+        print("BLOCKED:")
+        print("  %s" % reason)
+        sys.exit(1)
+    else:
+        print("PASSED: Target %s is safe for dry-run." % target)
+
+# Update state
+if os.path.exists(state_file):
+    try:
+        with open(state_file) as f:
+            d = json.load(f)
+        if blocked:
+            d["status"] = "blocked"
+            d["failure_reason"] = reason
+            d["next_command"] = f"jackrose-uninstall-target-review --target <exact-target>"
+        else:
+            d["stage"] = "target-review"
+            d["status"] = "passed"
+            d["next_stage"] = "risk-check"
+            d["next_command"] = f"jackrose-uninstall-plan --target {target}"
+        with open(state_file, "w") as f:
+            json.dump(d, f, indent=2)
+            f.write("\n")
+    except Exception:
+        pass
+' "$STATE_FILE" "$SCAN_JSON" "$REVIEW_MD" "$target" "$json_mode" "$strict_mode"

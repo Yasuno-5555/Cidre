@@ -1,0 +1,69 @@
+#!/bin/sh
+set -eu
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+. "$SCRIPT_DIR/jackrose-macos-restore-common"
+
+dry_run=false
+create_mode=false
+guide_mode=false
+report_mode=false
+target=""
+size_gib="8"
+artifact=""
+confirmed=false
+
+usage() {
+  cat <<EOF
+Usage: jackrose-macos-rescue-create [options]
+
+Options:
+  --dry-run
+  --create
+  --size <GiB>
+  --target <identifier>
+  --artifact <path>
+  --guide
+  --report
+  --i-understand-this-modifies-disk
+  --help
+EOF
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --dry-run) dry_run=true; shift ;;
+    --create) create_mode=true; shift ;;
+    --size) size_gib="$2"; shift 2 ;;
+    --target) target="$2"; shift 2 ;;
+    --artifact) artifact="$2"; shift 2 ;;
+    --guide) guide_mode=true; shift ;;
+    --report) report_mode=true; shift ;;
+    --i-understand-this-modifies-disk) confirmed=true; shift ;;
+    --help) usage; exit 0 ;;
+    *) printf 'ERROR: unknown option: %s\n' "$1" >&2; exit 1 ;;
+  esac
+done
+
+jackrose_macos_restore_require_macos
+
+if [ "$guide_mode" = "true" ]; then
+  exec "$SCRIPT_DIR/jackrose-macos-rescue-create-guide"
+fi
+if [ "$report_mode" = "true" ]; then
+  exec "$SCRIPT_DIR/jackrose-macos-rescue-create-report"
+fi
+
+if [ "$dry_run" = "true" ] || [ "$create_mode" != "true" ]; then
+  printf 'Jackrose macOS rescue create (dry-run)\n\n'
+  printf 'size: %s GiB\n' "$size_gib"
+  [ -n "$target" ] && printf 'target: %s\n' "$target"
+  [ -n "$artifact" ] && printf 'artifact: %s\n' "$artifact"
+  printf 'macOS-side real partition creation remains disabled by default.\n'
+  printf 'Use prepared target guide generation and exact target validation.\n'
+  exit 0
+fi
+
+[ "$confirmed" = "true" ] || { printf 'ERROR: missing confirmation phrase\n' >&2; exit 1; }
+printf 'ERROR: macOS-side direct rescue creation remains disabled in v0.28.0.\n' >&2
+exit 1
