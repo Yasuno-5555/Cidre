@@ -1,0 +1,16 @@
+# Maintainer: Yasuno <yasuno@example.invalid>
+
+pkgname=jackrose-shortcuts
+pkgver=1.0.0
+pkgrel=1
+pkgdesc='Jackrose optional jr shortcut command'
+url='https://github.com/Yasuno-5555/Jackrose'
+arch=('any')
+license=('custom')
+depends=('jackrose-meta-core')
+source=('jr')
+sha256sums=('SKIP')
+
+package() {
+  install -Dm755 "${srcdir}/jr" "${pkgdir}/usr/bin/jr"
+}

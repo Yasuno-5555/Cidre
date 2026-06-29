@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+echo "warning: Cidre has been renamed to Jackrose. Use 'jackrose' instead." >&2
+exec jackrose "$@"

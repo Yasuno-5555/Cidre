@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+echo "warning: cidre-doctor has been renamed to jackrose-doctor." >&2
+exec jackrose-doctor "$@"

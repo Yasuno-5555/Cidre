@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+migrate_dir() {
+  local old="$1"
+  local new="$2"
+
+  if [ -d "$old" ] && [ ! -e "$new" ]; then
+    mkdir -p "$(dirname "$new")"
+    mv "$old" "$new"
+    echo "Migrated: $old -> $new"
+  elif [ -d "$old" ] && [ -d "$new" ]; then
+    echo "Both old and new directories exist ($old and $new); leaving old path untouched"
+  fi
+}
+
+# User level migrations
+if [ -n "${HOME:-}" ]; then
+  migrate_dir "$HOME/.config/cidre" "$HOME/.config/jackrose"
+  migrate_dir "$HOME/.local/share/cidre" "$HOME/.local/share/jackrose"
+fi
+
+# System level migrations (require root, run when applicable)
+if [ "$(id -u)" -eq 0 ]; then
+  migrate_dir "/etc/cidre" "/etc/jackrose"
+  migrate_dir "/var/lib/cidre" "/var/lib/jackrose"
+fi

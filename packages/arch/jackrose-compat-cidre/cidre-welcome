@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+echo "warning: cidre-welcome has been renamed to jackrose-welcome." >&2
+exec jackrose-welcome "$@"

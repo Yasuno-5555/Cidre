@@ -1,0 +1,22 @@
+# Maintainer: Yasuno <yasuno@example.invalid>
+
+pkgname=jackrose-compat-cidre
+pkgver=1.0.0
+pkgrel=1
+pkgdesc='Jackrose compatibility wrappers for deprecated Cidre commands'
+url='https://github.com/Yasuno-5555/Jackrose'
+arch=('any')
+license=('custom')
+depends=('jackrose-meta-core' 'jackrose-diagnostics' 'jackrose-welcome')
+source=(
+  'cidre'
+  'cidre-doctor'
+  'cidre-welcome'
+)
+sha256sums=('SKIP' 'SKIP' 'SKIP')
+
+package() {
+  install -Dm755 "${srcdir}/cidre" "${pkgdir}/usr/bin/cidre"
+  install -Dm755 "${srcdir}/cidre-doctor" "${pkgdir}/usr/bin/cidre-doctor"
+  install -Dm755 "${srcdir}/cidre-welcome" "${pkgdir}/usr/bin/cidre-welcome"
+}
