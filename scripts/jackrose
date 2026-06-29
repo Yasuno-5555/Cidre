@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # jackrose — main entrypoint redirector
+export PATH="$(dirname "$0"):$PATH"
 
 if [ $# -eq 0 ]; then
   echo "Jackrose core system components"
@@ -16,6 +17,12 @@ case "$subcommand" in
     ;;
   welcome)
     exec jackrose-welcome "$@"
+    ;;
+  help|--help|-h)
+    echo "Jackrose core system components"
+    echo "Usage: jackrose <subcommand> [args]"
+    echo "Available subcommands: doctor, welcome"
+    exit 0
     ;;
   *)
     echo "Unknown subcommand: $subcommand" >&2

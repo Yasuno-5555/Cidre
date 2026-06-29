@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# check-jackrose-rename-residue — check for unexpected residual Cidre references
+set -euo pipefail
+
+matches="$(git grep -n -i 'cidre' -- \
+  ':!docs/migration-from-cidre.md' \
+  ':!docs/rename-cidre-to-jackrose.md' \
+  ':!packages/arch/jackrose-compat-cidre/*' \
+  ':!packages/arch/*/PKGBUILD' \
+  ':!scripts/jackrose-migrate' \
+  ':!dist/Jackrose.app/Contents/MacOS/JackroseApp' \
+  || true)"
+
+if [ -n "$matches" ]; then
+  echo "Unexpected residual Cidre references found:"
+  echo "$matches"
+  exit 1
+else
+  echo "[OK] No unexpected residual Cidre references found."
+  exit 0
+fi

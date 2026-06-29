@@ -1,3 +1,4 @@
 #!/usr/bin/env bash
+export PATH="$(dirname "$0"):$(dirname "$0")/../../../scripts:$PATH"
 echo "warning: Cidre has been renamed to Jackrose. Use 'jackrose' instead." >&2
 exec jackrose "$@"

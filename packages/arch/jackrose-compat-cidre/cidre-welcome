@@ -1,3 +1,4 @@
 #!/usr/bin/env bash
+export PATH="$(dirname "$0"):$(dirname "$0")/../../../scripts:$(dirname "$0")/../../../components/welcome/bin:$PATH"
 echo "warning: cidre-welcome has been renamed to jackrose-welcome." >&2
 exec jackrose-welcome "$@"
