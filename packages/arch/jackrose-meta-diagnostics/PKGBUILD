@@ -8,6 +8,10 @@ url='https://github.com/Yasuno-5555/Jackrose'
 arch=('aarch64')
 license=('custom')
 depends=(
+provides=('cidre-meta-diagnostics')
+conflicts=('cidre-meta-diagnostics')
+replaces=('cidre-meta-diagnostics')
+
   'bpftrace'
   'drm-info'
   'dtc'

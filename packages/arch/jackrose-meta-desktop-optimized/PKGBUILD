@@ -8,6 +8,10 @@ url='https://github.com/Yasuno-5555/Jackrose'
 arch=('any')
 license=('custom')
 depends=(
+provides=('cidre-meta-desktop-optimized')
+conflicts=('cidre-meta-desktop-optimized')
+replaces=('cidre-meta-desktop-optimized')
+
   'jackrose-meta-desktop-baseline'
   'jackrose-experience-upgrade'
 )

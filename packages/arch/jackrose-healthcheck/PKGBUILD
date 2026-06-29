@@ -8,6 +8,10 @@ url='https://github.com/Yasuno-5555/Jackrose'
 arch=('any')
 license=('custom')
 depends=('bash' 'jackrose-diagnostics')
+provides=('cidre-healthcheck')
+conflicts=('cidre-healthcheck')
+replaces=('cidre-healthcheck')
+
 source=()
 sha256sums=()
 

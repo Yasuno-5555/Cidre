@@ -8,6 +8,10 @@ url='https://github.com/Yasuno-5555/Jackrose'
 arch=('any')
 license=('custom')
 depends=()
+provides=('cidre-wallpapers')
+conflicts=('cidre-wallpapers')
+replaces=('cidre-wallpapers')
+
 source=('jackrose-wallpaper.png')
 sha256sums=('SKIP')
 

@@ -8,6 +8,10 @@ url='https://github.com/Yasuno-5555/Jackrose'
 arch=('any')
 license=('custom')
 depends=(
+provides=('cidre-experience-upgrade')
+conflicts=('cidre-experience-upgrade')
+replaces=('cidre-experience-upgrade')
+
   'bash'
   'git'
   'base-devel'

@@ -8,6 +8,10 @@ url='https://github.com/Yasuno-5555/Jackrose'
 arch=('any')
 license=('custom')
 depends=(
+provides=('cidre-meta-desktop-baseline')
+conflicts=('cidre-meta-desktop-baseline')
+replaces=('cidre-meta-desktop-baseline')
+
   'niri'
   'foot'
   'fuzzel'

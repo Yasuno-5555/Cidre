@@ -8,6 +8,10 @@ url='https://github.com/Yasuno-5555/Jackrose'
 arch=('aarch64')
 license=('custom')
 depends=(
+provides=('cidre-meta-dev')
+conflicts=('cidre-meta-dev')
+replaces=('cidre-meta-dev')
+
   'git'
   'paru'
   'bat'

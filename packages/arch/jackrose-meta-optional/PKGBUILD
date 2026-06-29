@@ -8,6 +8,10 @@ url='https://github.com/Yasuno-5555/Jackrose'
 arch=('aarch64')
 license=('custom')
 depends=(
+provides=('cidre-meta-optional')
+conflicts=('cidre-meta-optional')
+replaces=('cidre-meta-optional')
+
   'flatpak'
   'github-cli'
   'pandoc-bin'

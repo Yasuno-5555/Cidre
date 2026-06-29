@@ -8,6 +8,10 @@ url='https://github.com/Yasuno-5555/Jackrose'
 arch=('any')
 license=('custom')
 depends=('bash' 'pacman' 'sudo')
+provides=('cidre-preinstall')
+conflicts=('cidre-preinstall')
+replaces=('cidre-preinstall')
+
 optdepends=(
   'dialog: preferred TUI backend for guided preinstall'
   'libnewt: whiptail backend for guided preinstall'

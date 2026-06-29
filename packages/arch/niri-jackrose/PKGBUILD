@@ -8,6 +8,10 @@ url='https://github.com/Yasuno-5555/Jackrose'
 arch=('aarch64')
 license=('GPL-3.0-or-later')
 depends=(
+provides=('niri-cidre')
+conflicts=('niri-cidre')
+replaces=('niri-cidre')
+
   'libdisplay-info'
   'libinput'
   'libxkbcommon'

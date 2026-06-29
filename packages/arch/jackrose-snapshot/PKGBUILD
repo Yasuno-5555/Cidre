@@ -8,6 +8,10 @@ url='https://github.com/Yasuno-5555/Jackrose'
 arch=('any')
 license=('custom')
 depends=('bash' 'jq')
+provides=('cidre-snapshot')
+conflicts=('cidre-snapshot')
+replaces=('cidre-snapshot')
+
 source=('jackrose-snapshot')
 sha256sums=('SKIP')
 

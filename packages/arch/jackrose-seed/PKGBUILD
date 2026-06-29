@@ -8,6 +8,10 @@ url='https://github.com/Yasuno-5555/Jackrose'
 arch=('any')
 license=('custom')
 depends=(
+provides=('cidre-seed')
+conflicts=('cidre-seed')
+replaces=('cidre-seed')
+
   'jackrose-firstboot'
   'jackrose-welcome'
   'jackrose-healthcheck'
