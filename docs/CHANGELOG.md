@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.38.0] - 2026-06-29
+
+### Added — Jackrose Rename
+
+- **Project Renamed**: Renamed the project from Cidre to Jackrose.
+- **`jackrose` CLI Dispatcher**: Added main `jackrose` CLI entry point redirector.
+- **Compatibility Wrappers**: Added compatibility wrappers for public `cidre` commands (`cidre`, `cidre-doctor`, `cidre-welcome`).
+- **`jackrose-compat-cidre` package**: Introduced a separate optional compatibility package containing legacy wrappers.
+- **`jackrose-shortcuts` package**: Added optional shortcuts package containing `jr` shortcut.
+- **Idempotent Migration**: Added idempotent migration script (`jackrose-migrate`) for legacy Cidre configuration paths.
+- **CI Guard**: Added `check-jackrose-rename-residue` CI tool to prevent old name regressions.
+
 ## [0.36.1] - 2026-06-25
 
 ### Fixed — Bootstrap Reality Fix Pack

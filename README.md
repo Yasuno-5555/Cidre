@@ -1,5 +1,8 @@
 # Jackrose (v0.35.6 Controlled Manual-Boot Install Pack)
 
+> [!NOTE]
+> Jackrose was formerly known as Cidre. Legacy `cidre` commands are temporarily supported through the `jackrose-compat-cidre` package.
+
 Jackrose is an Apple Silicon Mac-oriented Linux experience layer built on ALARM (Arch Linux ARM) / Asahi Linux.
 
 This repository contains the Jackrose environment, including installer, recovery, rescue tooling, documentation, package metadata, and the `niri-jackrose` desktop layer.
